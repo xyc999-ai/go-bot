@@ -78,6 +78,11 @@ The Web Controller serves bundled JavaScript dependency notices at
 `/assets/licenses.txt`. Vite generates the file from the installed packages,
 including the ISC notice for Lucide icons.
 
+The Web interface self-hosts Inter via `@fontsource-variable/inter` (SIL Open
+Font License 1.1); its copyright and license are included in the generated
+browser notices. File-format icons reuse vscode-icons (MIT), with the original
+notice at `frontend/src/assets/file-icons/LICENSE`.
+
 The agent-browser plugin installs the official CLI and contributes original Skill files from
 https://github.com/vercel-labs/agent-browser (Apache-2.0). The image includes
 the upstream license at `/usr/share/go-bot/plugins/agent-browser/UPSTREAM_LICENSE`.
@@ -120,3 +125,38 @@ The wrapper uses `yaml` (ISC) for the upstream native configuration format.
 Its icon is the official Google AI Studio mark from
 https://www.gstatic.com/images/branding/productlogos/ai_studio/v1/web-512dp/logo_ai_studio_color_1x_web_512dp.png.
 Google names and marks belong to Google.
+
+## Mobile image masks
+
+The mobile interface uses `@react-native-masked-view/masked-view` (MIT) to fade
+scrolling image previews against the existing background. The package includes
+its original MIT license: https://github.com/react-native-masked-view/masked-view.
+
+MIT License
+
+Copyright (c) 2015-present, Facebook, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Mobile clipboard
+
+`expo-clipboard` 58.0.4 uses the MIT-licensed Expo modules from
+https://github.com/expo/expo. Its original MIT notice is retained in the
+installed package and mobile dependency tree. It provides the native copy
+operation for Markdown table and code source.

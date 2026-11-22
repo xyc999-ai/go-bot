@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { applySessionEvent, applyStreamEvent, attemptMessage, emptyTranscript, groupAssistantReplies, groupDisplayBlocks, messageText, textMessage, visibleQueue } from '../src/chat/transcript.ts'
+import { applySessionEvent, applyStreamEvent, attemptMessage, emptyTranscript, groupAssistantReplies, groupDisplayBlocks, messageBlocksForDisplay, messageText, textMessage, visibleQueue } from '../src/chat/transcript.ts'
 
 test('replays history and replaces the in-flight text once its durable event arrives', () => {
   let state = applySessionEvent(emptyTranscript(), {
@@ -132,4 +132,48 @@ test('renders a delivered file immediately and updates a repeated declaration', 
   const history = [start, assistant, first, latest, end].reduce(applySessionEvent, emptyTranscript())
   assert.deepEqual(groupAssistantReplies(history.messages), groupAssistantReplies(updated.messages))
   assert.deepEqual(groupAssistantReplies(updated.messages)[0].blocks[1], latest.data.message.blocks[0])
+})
+
+test('consecutive image tools form their own group and preserve call order as results arrive', () => {
+  const tools = ['a', 'b', 'c'].map(id => ({ id, type: 'tool' as const, name: 'readimage', callId: id }))
+  const image = (id: string) => ({ id, type: 'image' as const, attachment: { attachmentId: id, name: id + '.png' } })
+  const blocks = [tools[0], tools[1], { id: 'break', type: 'text' as const, text: 'A new comparison' }, tools[2]]
+  const pending = groupDisplayBlocks(blocks, {})
+  assert.deepEqual(pending.map(block => block.type), ['image-tools', 'text', 'image-tools'])
+  const groups = groupDisplayBlocks(blocks, {
+    b: { status: 'succeeded', images: [image('second')] }, a: { status: 'succeeded', images: [image('first')] },
+  })
+  assert.equal(groups[0].type, 'image-tools')
+  if (groups[0].type !== 'image-tools') throw new Error('missing image tool group')
+  assert.deepEqual(groups[0].tools.map(tool => tool.callId), ['a', 'b'])
+  assert.deepEqual(groups[0].images.map(image => image.id), ['first', 'second'])
+  assert.deepEqual(groups[0].images[0].file, { source: 'attachment', attachmentId: 'first' })
+  assert.equal(blocks.length, 4)
+})
+
+test('other tools break image tool groups; only explicit presented raster files get image previews', () => {
+  const read = (id: string) => ({ id, type: 'tool' as const, name: 'readimage', callId: id })
+  const file = (name: string) => ({ id: name, type: 'file' as const, name, file: { source: 'presented' as const, path: '/root/harness/' + name } })
+  const grouped = groupDisplayBlocks([
+    read('a'), { id: 'shell', type: 'tool', callId: 'shell', name: 'shellexecute' }, read('b'),
+    file('first.PNG'), file('second.jpg'), file('report.docx'), file('third.webp'), file('vector.svg'),
+    { id: 'upload', type: 'file', name: 'upload.png', file: { source: 'attachment', attachmentId: 'upload' } },
+  ], {})
+  assert.deepEqual(grouped.map(block => block.type), ['image-tools', 'tool', 'image-tools', 'image-row', 'file', 'image-row', 'file', 'file'])
+  assert.equal(grouped[3].type, 'image-row')
+  if (grouped[3].type !== 'image-row') throw new Error('missing delivered images')
+  assert.deepEqual(grouped[3].images.map(image => image.name), ['first.PNG', 'second.jpg'])
+  assert.deepEqual(grouped[3].images[0].file, { source: 'presented', path: '/root/harness/first.PNG' })
+})
+
+test('user attachments retain mixed upload order before text; assistant interleaving is unchanged', () => {
+  const message = { ...textMessage('message', 'Explain these'), blocks: [
+    ...textMessage('message', 'Explain these').blocks,
+    { id: 'file', type: 'file' as const, file: { source: 'attachment' as const, attachmentId: 'file' } },
+    { id: 'image', type: 'image' as const, attachment: { attachmentId: 'image' } },
+  ] }
+  assert.deepEqual(messageBlocksForDisplay(message).map(block => block.type), ['file', 'image', 'text'])
+  assert.deepEqual(message.blocks.map(block => block.type), ['text', 'file', 'image'])
+  const assistant = { ...message, role: 'assistant' as const }
+  assert.equal(messageBlocksForDisplay(assistant), assistant.blocks)
 })

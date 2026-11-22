@@ -345,9 +345,6 @@ func nativeWorkerMessage(c *gin.Context, worker NativeWorkerHTTPRuntime, options
 			}
 			return
 		}
-		if content != "" {
-			blocks = append(blocks, map[string]any{"type": "text", "text": content})
-		}
 		if !options.ImageInputEnabled {
 			for _, item := range staged {
 				if item.kind == "image" {
@@ -388,6 +385,10 @@ func nativeWorkerMessage(c *gin.Context, worker NativeWorkerHTTPRuntime, options
 			}
 			files = append(files, ref)
 			blocks = append(blocks, map[string]any{"type": "file", "attachment": ref})
+		}
+		// Keep mixed attachments in upload order, then append the user instruction.
+		if content != "" {
+			blocks = append(blocks, map[string]any{"type": "text", "text": content})
 		}
 	} else {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxMessageContentBytes)

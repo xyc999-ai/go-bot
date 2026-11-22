@@ -1,6 +1,6 @@
 import { useLocale } from './locale'
-import { useEffect, useRef, useState, type ComponentRef } from 'react'
-import { ActivityIndicator, Alert, Animated, Easing, Image, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react'
+import { ActivityIndicator, Alert, Animated, AppState, Easing, Image, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ArrowUp, ChevronDown, FileText, ImagePlus, Images, ListFilter, MessageCircle, MessageCircleQuestion, Plus, Shield, ShieldAlert, Square, X } from 'lucide-react-native'
 import { attemptMessage, groupAssistantReplies, messageText, visibleQueue, type Message } from '../../frontend/src/chat/transcript'
 import type { TranscriptCache } from '../../frontend/src/chat/transcriptCache'
@@ -17,6 +17,7 @@ import { accent, Button, edge, glass, Hint, IconButton, ink, logo, muted, Panel,
 import { ApprovalSheet, PermissionSheet, permissionNames } from './PermissionSheets'
 import type { PermissionMode } from '../../frontend/src/chat/permissions'
 import { useTranscript } from './useTranscript'
+import { useTextPlayback } from '../../frontend/src/chat/useTextPlayback'
 
 type Props = {
   api: Controller; cache: TranscriptCache; id: string; active: boolean
@@ -311,14 +312,26 @@ function Conversation({ api, cache, id, pending, active, sending, onUnavailable,
   const following = useRef(true)
   const turn = state.activeTurn
   const question = state.questions[0]
-  const draft = state.draft ? attemptMessage(state.draft) : null
-  const messages = state.messages.slice()
-  const awaiting = pending && !messages.some(message => message.id === pending.id) && !state.queue.some(item => item.id === pending.id)
-  if (draft?.blocks.length) messages.push(draft)
-  const replies = groupAssistantReplies(messages)
+  const messages = useMemo(() => {
+    const messages = state.messages.slice()
+    const draft = state.draft ? attemptMessage(state.draft) : null
+    if (draft) messages.push(draft)
+    return messages
+  }, [state.messages, state.draft])
+  const reduced = useReducedMotion()
+  const [foreground, setForeground] = useState(AppState.currentState === 'active')
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', state => setForeground(state === 'active'))
+    return () => listener.remove()
+  }, [])
+  const playback = useTextPlayback(api.profile.account + '/' + id, messages,
+    active && foreground && !reduced && !loading && !connecting, state.streamEpoch)
+  const awaiting = pending && !state.messages.some(message => message.id === pending.id) && !state.queue.some(item => item.id === pending.id)
+  const replies = groupAssistantReplies(playback.messages)
   const idle = turn === null && !state.queue.length
-  const generating = turn !== null
-  const hasReply = generating && replies.some(message => message.role === 'assistant' && message.turn === turn)
+  const generating = turn !== null || playback.pending
+  const displayTurn = turn ?? playback.pendingTurn
+  const hasReply = generating && replies.some(message => message.role === 'assistant' && message.turn === displayTurn)
   const waiting = awaiting || generating && !hasReply
   const title = waiting ? t('正在等待回复…') : t('生成中')
   const queue = visibleQueue(state, state.messages)
@@ -328,7 +341,7 @@ function Conversation({ api, cache, id, pending, active, sending, onUnavailable,
     try { await work() } catch (e) { setFailed(problem(e)) }
   }
   function message(item: Message) {
-    return <MessageView api={api} id={id} key={item.id} message={item} generating={generating && item.role === 'assistant' && item.turn === turn} results={state.toolResults} openImage={setPreview} />
+    return <MessageView api={api} id={id} key={item.id} message={item} generating={generating && item.role === 'assistant' && item.turn === displayTurn} results={state.toolResults} openImage={setPreview} />
   }
 
   return <>
@@ -347,8 +360,8 @@ function Conversation({ api, cache, id, pending, active, sending, onUnavailable,
       </View>}
       {replies.map(message)}
       {awaiting && <View style={styles.pending}>
-        {!!pending.text && <Text style={s.body}>{pending.text}</Text>}
         {pending.files.map(file => <Text key={file.id} numberOfLines={1} style={s.caption}>{file.name}</Text>)}
+        {!!pending.text && <Text style={s.body}>{pending.text}</Text>}
       </View>}
       {waiting && !hasReply && <View style={s.row}>
         <Image source={logo} style={{ width: 36, height: 36 }} />
@@ -364,7 +377,7 @@ function Conversation({ api, cache, id, pending, active, sending, onUnavailable,
       </View>)}
     </View>}
     {!!failed && <View style={{ paddingHorizontal: 20 }}><Hint error>{t(failed)}</Hint></View>}
-    {!loading && !unavailable && renderComposer({ idle, generation: generating, cancel: () => { if (turn !== null) void action(() => api.stopTurn(id, turn)) },
+    {!loading && !unavailable && renderComposer({ idle, generation: turn !== null, cancel: () => { if (turn !== null) void action(() => api.stopTurn(id, turn)) },
       livePermission: state.permission?.mode,
       questionButton: question && <Button label={t(question.approval ? '查看执行审批' : '回答助手的问题')}
         onPress={() => { Keyboard.dismiss(); hideQuestion('') }}>

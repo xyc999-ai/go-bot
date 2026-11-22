@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocale } from '../locale'
-import { ArrowUp, FileText, LoaderCircle, Menu, Plus, Square, X } from 'lucide-react'
+import { ArrowUp, FileText, LoaderCircle, PanelLeft, Plus, Square, X } from 'lucide-react'
 import { HarnessAvatar } from '../HarnessAvatar'
 import { APIError, readTranscript, sendMessage, stopTurn, updateQueue } from '../api/controller'
 import { MessageBubble } from './ChatContent'
@@ -9,6 +9,9 @@ import { QuestionPanel } from './QuestionPanel'
 import { addMessageFiles, isMessageImage } from './attachments'
 import { ModelRequiredDialog } from './ModelRequiredDialog'
 import { ModelPicker } from './ModelPicker'
+import { useTextPlayback } from './useTextPlayback'
+import { usePlaybackPreference } from './usePlaybackPreference'
+import { WorkspaceHeader } from '../layout/WorkspaceHeader'
 import { attemptMessage, emptyTranscript, groupAssistantReplies, messageText, textMessage, visibleQueue, type Message } from './transcript'
 import { prependTranscriptPage, type TranscriptCache } from './transcriptCache'
 
@@ -45,9 +48,10 @@ type ChatProps = {
   onAccepted: (id: string, text: string) => void
   onUnavailable: (id: string) => void
   onTitleRefresh: () => void
+  headerActions?: ReactNode
 }
 
-export function Chat({ hidden, userId, cache, id, drawerOpen, filesOverlay, settingsVersion, onSettings, onPlugins, isMain, onOpenMenu, onAccepted, onUnavailable, onTitleRefresh }: ChatProps) {
+export function Chat({ hidden, userId, cache, id, drawerOpen, filesOverlay, settingsVersion, onSettings, onPlugins, isMain, onOpenMenu, onAccepted, onUnavailable, onTitleRefresh, headerActions }: ChatProps) {
   const { t } = useLocale()
   const cached = id ? cache.get(id) : undefined
   const [transcript, setTranscript] = useState(() => cached?.transcript ?? emptyTranscript())
@@ -131,18 +135,25 @@ export function Chat({ hidden, userId, cache, id, drawerOpen, filesOverlay, sett
   }, [cache, id, loadAttempt, userId])
 
   const pendingMessages = pending.filter(item => !transcript.messages.some(message => message.id === item.id))
-  const displayedMessages = [...transcript.messages, ...pendingMessages]
+  const displayedMessages = useMemo(() => {
+    const messages = [...transcript.messages, ...pending.filter(item => !transcript.messages.some(message => message.id === item.id))]
+    const draft = transcript.draft ? attemptMessage(transcript.draft) : null
+    if (draft) messages.push(draft)
+    return messages
+  }, [transcript.messages, transcript.draft, pending])
   const queue = visibleQueue(transcript, displayedMessages)
   const draft = transcript.draft ? attemptMessage(transcript.draft) : null
-  if (draft?.blocks.length) displayedMessages.push(draft)
-  const replies = groupAssistantReplies(displayedMessages)
+  const playbackAllowed = usePlaybackPreference()
+  const playback = useTextPlayback(userId + '/' + id, displayedMessages,
+    playbackAllowed && !hidden && !loading && !connecting, transcript.streamEpoch)
+  const replies = groupAssistantReplies(playback.messages)
   const activeTurn = transcript.activeTurn
   const hasReply = activeTurn !== null && replies.some(message => message.role === 'assistant' && message.turn === activeTurn)
   const messageObserved = transcript.messages.some(message => message.id === awaitingMessage) ||
     transcript.queue.some(message => message.id === awaitingMessage)
   const waiting = activeTurn !== null ? !hasReply && transcript.questions.length === 0
     : Boolean(awaitingMessage && !messageObserved)
-  const generating = activeTurn !== null && transcript.questions.length === 0
+  const generating = (activeTurn !== null || playback.pending) && transcript.questions.length === 0
   const showWelcome = !loading && !historyError && transcript.messages.length === 0 && pendingMessages.length === 0 &&
     !draft && !waiting && activeTurn === null && transcript.questions.length === 0
   useEffect(() => {
@@ -171,7 +182,7 @@ export function Chat({ hidden, userId, cache, id, drawerOpen, filesOverlay, sett
     } else if (following.current) {
       panel.scrollTop = panel.scrollHeight
     }
-  }, [transcript, pending.length, waiting, files.length])
+  }, [transcript, playback.messages, pending.length, waiting, files.length])
 
   async function loadOlder() {
     const entry = id ? cache.get(id) : undefined
@@ -304,9 +315,7 @@ export function Chat({ hidden, userId, cache, id, drawerOpen, filesOverlay, sett
         <div className="composer-tools">
           <button type="button" className="attachment-button" aria-label={t('Add attachments')} title={t('Add attachments')}
             disabled={submitting} onClick={() => filePicker.current?.click()}><Plus size={21} /></button>
-          <ModelPicker generating={activeTurn !== null} userId={userId} id={id} settingsVersion={settingsVersion} onSettings={onSettings} onSaving={setModelSaving} />
-          {id && <PermissionPicker key={id} userId={userId} sessionId={id} streamState={transcript.permission}
-            disabled={activeTurn !== null || submitting} onSaving={setPermissionSaving} />}
+          <span className="composer-hint">{t('Message Go Bot')}</span>
         </div>
         <div className="composer-submit">
           {activeTurn !== null && <button className="stop-generation" type="button" title={t('Stop generating')}
@@ -324,10 +333,12 @@ export function Chat({ hidden, userId, cache, id, drawerOpen, filesOverlay, sett
 
   return (
     <main className="workspace" hidden={hidden} inert={drawerOpen || filesOverlay}>
-      <header className="topbar">
-        <button className="icon-button drawer-toggle" type="button" onClick={onOpenMenu} aria-expanded={drawerOpen} aria-controls="chat-sidebar" aria-label={t('Open chats')}><Menu size={22} /></button>
-        <span>{isMain ? t('Main chat') : t('Go Bot Chat')}</span>
-      </header>
+      <WorkspaceHeader title={isMain ? 'Main chat' : 'Go Bot Chat'} actions={headerActions} start={<>
+        <button className="icon-button drawer-toggle" type="button" onClick={onOpenMenu} aria-controls="chat-sidebar" aria-label={t('Open chats')} title={t('Open chats')}><PanelLeft size={18} /></button>
+        <ModelPicker generating={activeTurn !== null} userId={userId} id={id} settingsVersion={settingsVersion} onSettings={onSettings} onSaving={setModelSaving} />
+        {id && <PermissionPicker key={id} userId={userId} sessionId={id} streamState={transcript.permission}
+          disabled={activeTurn !== null || submitting} onSaving={setPermissionSaving} />}
+      </>} />
       {modelRequired && <ModelRequiredDialog selection={modelRequired === 'selection'} onClose={() => setModelRequired(undefined)}
         onSettings={() => { setModelRequired(undefined); onSettings() }} onChoose={() => {
           setModelRequired(undefined); requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('.model-picker-trigger')?.click())
@@ -336,17 +347,13 @@ export function Chat({ hidden, userId, cache, id, drawerOpen, filesOverlay, sett
         <div className="chat-empty">
           <HarnessAvatar className="welcome-avatar" />
         </div>
-      ) : showWelcome ? (
-        <div className="welcome">
-          <div className="welcome-copy">
+      ) : (
+        <div className={'conversation' + (showWelcome ? ' is-welcome' : '')}>
+          <div className="welcome-copy" aria-hidden={!showWelcome}>
             <HarnessAvatar className="welcome-avatar" />
             <h1>{t(greeting())}</h1>
             <p>{t('How can I help you today?')}</p>
           </div>
-          <div className="welcome-input">{form}{failure && <p className="feedback" role="alert">{t(failure)}</p>}</div>
-        </div>
-      ) : (
-        <div className="conversation">
           <div className="transcript-scroll" ref={scroll} onScroll={event => {
             const panel = event.currentTarget
             following.current = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 88

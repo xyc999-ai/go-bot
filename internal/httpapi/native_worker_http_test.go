@@ -315,10 +315,10 @@ func TestNativeWorkerHTTPAdmitsMultipartAsDurableFileBlocks(t *testing.T) {
 	if err := json.Unmarshal(worker.messages[0], &message); err != nil {
 		t.Fatal(err)
 	}
-	if message.ID == "" || message.Role != "user" || len(message.Content) != 2 || message.Content[0].Text != "Read the attached report" || message.Content[1].Type != "file" {
+	if message.ID == "" || message.Role != "user" || len(message.Content) != 2 || message.Content[1].Text != "Read the attached report" || message.Content[0].Type != "file" {
 		t.Fatalf("invalid native file message: %s", worker.messages[0])
 	}
-	ref := message.Content[1].Attachment
+	ref := message.Content[0].Attachment
 	if ref.Name != "report.txt" || !strings.HasPrefix(ref.ID, "sha256:") || ref.Bytes != int64(len("verbatim file bytes")) {
 		t.Fatalf("invalid native file ref: %+v", ref)
 	}
@@ -440,7 +440,7 @@ func TestNativeWorkerHTTPAdmitsMixedImageAndFileBlocks(t *testing.T) {
 	if err := json.Unmarshal(worker.messages[0], &message); err != nil {
 		t.Fatal(err)
 	}
-	if len(message.Content) != 3 || message.Content[0].Type != "text" || message.Content[1].Type != "image" || message.Content[2].Type != "file" {
+	if len(message.Content) != 3 || message.Content[0].Type != "image" || message.Content[1].Type != "file" || message.Content[2].Type != "text" || message.Content[2].Text != "Compare these attachments" {
 		t.Fatalf("multipart order was not preserved: %s", worker.messages[0])
 	}
 	var imageRef struct {
@@ -451,7 +451,7 @@ func TestNativeWorkerHTTPAdmitsMixedImageAndFileBlocks(t *testing.T) {
 		Height       int    `json:"height"`
 		Name         string `json:"name"`
 	}
-	if err := json.Unmarshal(message.Content[1].Attachment, &imageRef); err != nil {
+	if err := json.Unmarshal(message.Content[0].Attachment, &imageRef); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(imageRef.AttachmentID, "sha256:") || imageRef.MediaType != "image/png" || imageRef.Bytes != int64(len(imageSource)) || imageRef.Width != 2 || imageRef.Height != 1 || imageRef.Name != "chart.png" {

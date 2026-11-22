@@ -23,7 +23,8 @@ var errInputTooLarge = errors.New("input file exceeds limit")
 var errInvalidInputUpload = errors.New("invalid input upload")
 
 // A native multipart request keeps explicit image and verbatim file parts in
-// submission order. The text field precedes attachments in the public API.
+// submission order. The text field is read first for admission; the final message
+// puts attachments first and appends the user text.
 type stagedNativePart struct {
 	file      *os.File
 	name      string
