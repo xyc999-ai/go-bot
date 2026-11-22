@@ -3,6 +3,7 @@ import { LanguagePicker, useLocale } from './locale'
 import { LoaderCircle } from 'lucide-react'
 import { APIError, getModelSettings, registerAccount } from './api/controller'
 import { HarnessAvatar } from './HarnessAvatar'
+import { ThemeToggle } from './layout/Theme'
 
 export function AccountEntry({ onOpen }: { onOpen: (userId: string, created: boolean) => void }) {
   const { t } = useLocale()
@@ -42,7 +43,7 @@ export function AccountEntry({ onOpen }: { onOpen: (userId: string, created: boo
       <form className="account-card" onSubmit={submit}>
         <div className="account-card-heading">
           <div className="brand"><HarnessAvatar className="brand-mark" />Go Bot</div>
-          <LanguagePicker />
+          <div className="account-preferences"><ThemeToggle /><LanguagePicker /></div>
         </div>
         <h1>{create ? t('Create an account') : t('Open your account')}</h1>
         <fieldset disabled={Boolean(phase)}>

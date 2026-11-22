@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LanguagePicker, useLocale } from './locale'
-import { ArrowLeft, Globe, Image, Menu, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { ArrowLeft, FolderOpen, Globe, Image, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { Proactive } from './settings/Proactive'
 import { APIError, archiveSession, createSession, listSessions, openAccount, readHostStream, stopHost, type ProviderPage, type SessionRow } from './api/controller'
 import { AccountEntry } from './AccountEntry'
@@ -16,8 +16,12 @@ import { ExtensionDialogs } from './extensions/Dialogs'
 import { ModelRequiredDialog } from './chat/ModelRequiredDialog'
 import { preparePlugins } from './api/extensions'
 import { imageGenerationSettingsEnabled } from './features'
+import { NavigationRail } from './layout/NavigationRail'
+import { ThemeToggle } from './layout/Theme'
+import { WorkspaceHeader } from './layout/WorkspaceHeader'
+import { Tasks } from './tasks/Tasks'
 
-type SettingsPage = 'models' | ProviderPage | 'plugins' | 'proactive'
+type SettingsPage = 'models' | ProviderPage | 'plugins' | 'proactive' | 'tasks'
 
 function currentSettings(): SettingsPage | undefined {
   if (window.location.pathname === '/settings/models') return 'models'
@@ -25,6 +29,7 @@ function currentSettings(): SettingsPage | undefined {
   if (window.location.pathname === '/settings/proactive') return 'proactive'
   if (window.location.pathname === '/settings/image-generation') return imageGenerationSettingsEnabled ? 'image-generation' : 'models'
   if (window.location.pathname === '/plugins') return 'plugins'
+  if (window.location.pathname === '/tasks') return 'tasks'
 }
 
 function settingsNavigationAllowed(resume: () => void) {
@@ -77,7 +82,8 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
   const [selected, setSelected] = useState(currentSession)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [filesOpen, setFilesOpen] = useState(false)
-  const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 1059px)').matches)
+  const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 1199px)').matches)
+  const [small, setSmall] = useState(() => window.matchMedia('(max-width: 760px)').matches)
   const filesOverlay = filesOpen && compact
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
@@ -187,7 +193,7 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
     function pop() {
       const settings = currentSettings()
       setSettingsPage(settings)
-      if (settings) return
+      if (settings) { setDrawerOpen(false); return }
       setSettingsVersion(value => value + 1)
       setSelected(currentSession() ?? mainSessionId)
     }
@@ -199,16 +205,17 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
   }, [refresh, hostReady])
 
   useEffect(() => {
-    const desktop = window.matchMedia('(min-width: 681px)')
+    const desktop = window.matchMedia('(min-width: 761px)')
     function closeAtDesktop() {
       if (desktop.matches) setDrawerOpen(false)
+      setSmall(!desktop.matches)
     }
     desktop.addEventListener('change', closeAtDesktop)
     return () => desktop.removeEventListener('change', closeAtDesktop)
   }, [])
 
   useEffect(() => {
-    const layout = window.matchMedia('(max-width: 1059px)')
+    const layout = window.matchMedia('(max-width: 1199px)')
     function resize() { setCompact(layout.matches) }
     layout.addEventListener('change', resize)
     return () => layout.removeEventListener('change', resize)
@@ -216,13 +223,12 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
 
   function closeDrawer() {
     setDrawerOpen(false)
-    requestAnimationFrame(() => document.querySelector<HTMLElement>('.drawer-toggle')?.focus())
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.rail-links > button')?.focus())
   }
 
   function closeFiles() {
     setFilesOpen(false)
-    const selector = window.matchMedia('(max-width: 680px)').matches ? '.drawer-toggle' : '#account-menu-toggle'
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(selector)?.focus())
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.navigation-rail [aria-controls="host-files"]')?.focus())
   }
 
   function toggleFiles() {
@@ -234,12 +240,12 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
     setFilesOpen(true)
   }
 
-  function choose(id?: string) {
+  function choose(id?: string, revealChats = false) {
     const complete = () => {
       const path = id ? '/chat/' + id : '/'
       if (window.location.pathname !== path) window.history.pushState(null, '', path)
       setSelected(id)
-      setDrawerOpen(false)
+      setDrawerOpen(revealChats || (!small && !settingsOpen && drawerOpen))
       if (settingsOpen) {
         setSettingsPage(undefined)
         setSettingsVersion(value => value + 1)
@@ -262,7 +268,7 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
   }
 
   function showSettings() {
-    if (settingsPage === 'plugins') { selectSettings('models'); setDrawerOpen(false); return }
+    if (settingsPage === 'plugins' || settingsPage === 'tasks') { selectSettings('models'); setDrawerOpen(false); return }
     if (settingsOpen) {
       setDrawerOpen(false)
       return
@@ -283,10 +289,25 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
     if (settingsNavigationAllowed(complete)) complete()
   }
 
+  function showTasks() {
+    const complete = () => {
+      const returnTo = settingsOpen ? window.history.state?.returnTo || '/' : window.location.pathname
+      window.history.pushState({ returnTo }, '', '/tasks')
+      setSettingsPage('tasks')
+      setDrawerOpen(false)
+    }
+    if (settingsPage !== 'tasks' && settingsNavigationAllowed(complete)) complete()
+  }
+
+  function toggleChats() {
+    if (settingsOpen) choose(selected || mainSessionId, true)
+    else setDrawerOpen(value => !value)
+  }
+
   function selectSettings(page: SettingsPage) {
     if (page === settingsPage) return
     const complete = () => {
-      window.history.replaceState(window.history.state, '', page === 'plugins' ? '/plugins' : '/settings/' + page)
+      window.history.replaceState(window.history.state, '', page === 'plugins' ? '/plugins' : page === 'tasks' ? '/tasks' : '/settings/' + page)
       setSettingsPage(page)
     }
     if (settingsNavigationAllowed(complete)) complete()
@@ -375,24 +396,25 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
     return true
   }
 
+  const headerActions = <><button type="button" className="icon-button header-files" aria-label={t('File system')} title={t('File system')} disabled={!hostReady} aria-expanded={filesOpen} onClick={toggleFiles}><FolderOpen size={18} /></button><ThemeToggle /><LanguagePicker /></>
+  const section = settingsPage === 'tasks' ? 'tasks' : settingsPage === 'plugins' ? 'plugins' : settingsPage ? 'settings' : 'chats'
   return (
-    <div className={filesOpen ? 'app app-files-open' : 'app'}>
-      <Sidebar userId={userId} cache={transcriptCache} rows={[...(mainSessionId ? [{ sessionId: mainSessionId, title: 'Go Bot', createdAt: '', isMain: true }] : []), ...rows.filter(row => row.sessionId !== mainSessionId)]} selected={selected} hasMore={Boolean(cursor)} isLoading={loading} creating={creating || !hostReady}
-        filesOpen={filesOpen} filesAvailable={hostReady} filesOverlay={filesOverlay} onFiles={toggleFiles}
-        hostReady={hostReady} stoppingHost={stoppingHost} stopHostError={stopHostError} onStopHost={exitHost}
-        error={error} needsModel={needsModel} drawerOpen={drawerOpen} onSettings={showSettings} onPlugins={showPlugins} pluginsOpen={settingsPage === 'plugins'} onCreate={() => { void start().catch(() => {}) }} onChoose={choose}
+    <div className={'app' + (filesOpen ? ' app-files-open' : '') + (drawerOpen ? ' app-sidebar-open' : '')}>
+      <NavigationRail userId={userId} section={section} chatsOpen={drawerOpen} filesOpen={filesOpen} ready={hostReady} stopping={stoppingHost} error={stopHostError}
+        onChats={toggleChats} onTasks={showTasks} onPlugins={showPlugins} onFiles={toggleFiles} onSettings={showSettings} onStop={() => void exitHost()} />
+      <div className="sidebar-slot">
+      <Sidebar cache={transcriptCache} rows={[...(mainSessionId ? [{ sessionId: mainSessionId, title: 'Go Bot', createdAt: '', isMain: true }] : []), ...rows.filter(row => row.sessionId !== mainSessionId)]} selected={selected} hasMore={Boolean(cursor)} isLoading={loading} creating={creating || !hostReady}
+        filesOverlay={filesOverlay}
+        error={error} needsModel={needsModel} drawerOpen={drawerOpen} onSettings={showSettings} onCreate={() => { void start().catch(() => {}) }} onChoose={id => choose(id)}
         onDelete={remove} onMore={() => { void refresh(cursor) }} onClose={closeDrawer}
         onRetry={() => { setError(''); if (hostReady) void refresh(); else setHostAttempt(attempt => attempt + 1) }} />
-      {settingsPage && <main className="model-settings" inert={drawerOpen || filesOverlay}>
-        <div className="settings-topbar">
-          <button type="button" className="icon-button drawer-toggle" onClick={() => setDrawerOpen(true)}
-            aria-expanded={drawerOpen} aria-controls="chat-sidebar" aria-label={t('Open chats')}><Menu size={22} /></button>
-        </div>
-        <div className={settingsPage === 'plugins' ? 'model-settings-panel plugin-settings-panel' : 'model-settings-panel'}>
+      </div>
+      {settingsPage && <main className={'model-settings' + (settingsPage === 'tasks' ? ' tasks-workspace' : '')} inert={(drawerOpen && small) || filesOverlay}>
+        <WorkspaceHeader title={settingsPage === 'tasks' ? 'Tasks' : settingsPage === 'plugins' ? 'Plugin market' : 'Settings'} actions={headerActions} />
+        {settingsPage === 'tasks' ? <Tasks userId={userId} cache={transcriptCache} onChat={id => choose(id)} /> : <div className={settingsPage === 'plugins' ? 'model-settings-panel plugin-settings-panel page-enter' : 'model-settings-panel page-enter'}>
           <header className="settings-header">
             <div className="settings-header-actions">
               <button type="button" className="settings-back" onClick={closeSettings}><ArrowLeft size={17} /> {t(settingsPage === 'plugins' && selectedPlugin ? 'Plugin market' : 'Back to chats')}</button>
-              <LanguagePicker />
             </div>
             {!(settingsPage === 'plugins' && selectedPlugin) && <h1>{t(settingsPage === 'plugins' ? 'Plugin market' : 'Settings')}</h1>}
           </header>
@@ -411,7 +433,7 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
               : settingsPage === 'proactive' ? <Proactive userId={userId} onModels={() => selectSettings('models')} />
               : <ToolProviders key={settingsPage} userId={userId} page={settingsPage} />}
           </div>
-        </div>
+        </div>}
       </main>}
       {hostReady && (preparingPlugins || prepareError) && <div className="preparation-banner" role="status">
         <span>{t(preparingPlugins ? 'Preparing browser and Office capabilities…' : 'Some plugins could not be prepared.')}</span>
@@ -419,8 +441,8 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
         <button className="text-button" onClick={showPlugins}>{t('View plugins')}</button>
       </div>}
       {modelRequired && <ModelRequiredDialog onClose={() => setModelRequired(false)} onSettings={() => { setModelRequired(false); showSettings() }} />}
-      {hostReady && <Chat hidden={settingsOpen} userId={userId} cache={transcriptCache} settingsVersion={settingsVersion} onSettings={showSettings} onPlugins={showPlugins} isMain={selected === mainSessionId} drawerOpen={drawerOpen} filesOverlay={filesOverlay} key={selected ?? 'welcome'} id={selected}
-        onOpenMenu={() => setDrawerOpen(true)} onAccepted={markTitle} onUnavailable={unavailable} onTitleRefresh={() => { void refresh() }} />}
+      {hostReady && <Chat hidden={settingsOpen} userId={userId} cache={transcriptCache} settingsVersion={settingsVersion} onSettings={showSettings} onPlugins={showPlugins} isMain={selected === mainSessionId} drawerOpen={drawerOpen && small} filesOverlay={filesOverlay} headerActions={headerActions} key={selected ?? 'welcome'} id={selected}
+        onOpenMenu={toggleChats} onAccepted={markTitle} onUnavailable={unavailable} onTitleRefresh={() => { void refresh() }} />}
       {hostReady && <HostFiles userId={userId} open={filesOpen} overlay={filesOverlay} onClose={closeFiles} />}
     </div>
   )

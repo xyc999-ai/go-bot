@@ -12,35 +12,61 @@ export type Block =
 
 export type ToolBlock = Extract<Block, { type: 'tool' }>
 type ToolGroup = { id: string; type: 'tool-group'; tools: ToolBlock[] }
-type ImageRow = { id: string; type: 'image-row'; images: ImageBlock[] }
-type DisplayBlock = Exclude<Block, ImageBlock> | ToolGroup | ImageRow
+export type ChatImage = { id: string; file: FileRef; name?: string; mediaType?: string; width?: number; height?: number }
+type ImageRow = { id: string; type: 'image-row'; images: ChatImage[] }
+type ImageTools = { id: string; type: 'image-tools'; name: string; tools: ToolBlock[]; images: ChatImage[] }
+type DisplayBlock = Exclude<Block, ImageBlock> | ToolGroup | ImageRow | ImageTools
+
+function attachmentImage(block: ImageBlock): ChatImage {
+  const { attachmentId, ...metadata } = block.attachment
+  return { id: block.id, file: { source: 'attachment', attachmentId }, ...metadata }
+}
+
+// Only explicit presented raster files become previews. Markdown links and uploaded
+// file blocks keep their existing semantics. A failed preview falls back to a file.
+export function isPresentedImage(file: FileRef) {
+  return file.source === 'presented' && /\.(png|jpe?g|webp|gif|avif|bmp)$/i.test(file.path)
+}
 
 export function groupDisplayBlocks(blocks: Block[], toolResults: Transcript['toolResults']): DisplayBlock[] {
-  const ordered = blocks.flatMap<Block>(block =>
-    block.type === 'tool' ? [block, ...(toolResults[block.callId]?.images ?? [])] : [block],
-  )
   const groups: DisplayBlock[] = []
-  for (const block of ordered) {
+  const image = (item: ChatImage) => {
     const previous = groups.at(-1)
-    if (block.type === 'image') {
-      if (previous?.type === 'image-row') {
-        previous.images.push(block)
-      } else {
-        groups.push({ id: block.id, type: 'image-row', images: [block] })
-      }
-    } else if (block.type === 'tool' && previous?.type === 'tool-group') {
-      previous.tools.push(block)
-    } else if (block.type === 'tool' && previous?.type === 'tool') {
-      groups[groups.length - 1] = { id: previous.id, type: 'tool-group', tools: [previous, block] }
+    if (previous?.type === 'image-row') previous.images.push(item)
+    else groups.push({ id: item.id, type: 'image-row', images: [item] })
+  }
+  for (const block of blocks) {
+    const previous = groups.at(-1)
+    if (block.type === 'tool' && (block.name === 'readimage' || block.name === 'generateimage')) {
+      const images = (toolResults[block.callId]?.images ?? []).map(attachmentImage)
+      if (previous?.type === 'image-tools' && previous.name === block.name) {
+        previous.tools.push(block)
+        previous.images.push(...images)
+      } else groups.push({ id: block.id, type: 'image-tools', name: block.name, tools: [block], images })
+    } else if (block.type === 'image') image(attachmentImage(block))
+    else if (block.type === 'file' && isPresentedImage(block.file)) {
+      image({ id: block.id, file: block.file, name: block.name })
     } else {
-      groups.push(block)
+      if (block.type === 'tool' && previous?.type === 'tool-group') previous.tools.push(block)
+      else if (block.type === 'tool' && previous?.type === 'tool') {
+        groups[groups.length - 1] = { id: previous.id, type: 'tool-group', tools: [previous, block] }
+      } else groups.push(block)
+      if (block.type === 'tool') for (const result of toolResults[block.callId]?.images ?? []) image(attachmentImage(result))
     }
   }
   return groups
 }
 
+// User attachments precede the instruction visually, including older histories.
+// Assistant blocks always retain their original interleaving.
+export function messageBlocksForDisplay(message: Message): Block[] {
+  if (message.role !== 'user') return message.blocks
+  return [...message.blocks.filter(block => block.type === 'image' || block.type === 'file'),
+    ...message.blocks.filter(block => block.type !== 'image' && block.type !== 'file')]
+}
+
 type MessageData = { id: string; blocks: Block[] }
-export type Message = MessageData & { role: 'user' | 'assistant' | 'notice'; turn?: number }
+export type Message = MessageData & { role: 'user' | 'assistant' | 'notice'; turn?: number; step?: number; streaming?: boolean }
 export type QueueItem = MessageData & { placement: 'queued' | 'steering' }
 export type Question = {
   id: string
@@ -75,6 +101,8 @@ export type Transcript = {
   questions: PendingQuestion[]
   permission?: SessionPermission
   toolResults: Record<string, ToolProgress>
+  // Client-only reset boundary for a restored stream snapshot, not a log fact.
+  streamEpoch?: number
 }
 
 type Chunk = { type: string; index?: number; blockType?: string; text?: string; block?: { type: string; text?: string } }
@@ -115,9 +143,9 @@ export function groupAssistantReplies(messages: Message[]): Message[] {
   return groups
 }
 
-function appendMessage(state: Transcript, role: Message['role'], message: MessageData, turn?: number): Transcript {
+function appendMessage(state: Transcript, role: Message['role'], message: MessageData, turn?: number, step?: number): Transcript {
   if (!message.blocks?.length || state.messages.some(item => item.id === message.id)) return state
-  return { ...state, messages: [...state.messages, { ...message, role, turn }] }
+  return { ...state, messages: [...state.messages, { ...message, role, turn, ...(step === undefined ? {} : { step }) }] }
 }
 
 export function applySessionEvent(previous: Transcript, event: SessionEvent): Transcript {
@@ -150,7 +178,7 @@ export function applySessionEvent(previous: Transcript, event: SessionEvent): Tr
       if (state.draft && state.draft.turn === turn && state.draft.step === step && event.seq > state.draft.startedAfterSeq) {
         state = { ...state, draft: null }
       }
-      return appendMessage(state, 'assistant', message, turn)
+      return appendMessage(state, 'assistant', message, turn, step)
     }
     case 'tool/call': {
       const { callId } = event.data as { callId: string }
@@ -196,7 +224,7 @@ export function attemptMessage(attempt: Attempt): Message {
   const blocks = Object.entries(attempt.texts).map(([index, text]) => ({
     id: attempt.attemptId + '/' + index, type: 'text' as const, text,
   }))
-  return { id: attempt.attemptId, role: 'assistant', turn: attempt.turn, blocks }
+  return { id: attempt.attemptId, role: 'assistant', turn: attempt.turn, step: attempt.step, streaming: true, blocks }
 }
 
 export function applyStreamEvent(state: Transcript, kind: string, data: unknown): Transcript {
@@ -212,6 +240,7 @@ export function applyStreamEvent(state: Transcript, kind: string, data: unknown)
   if (kind === 'permissions.state') return { ...state, permission: data as SessionPermission }
   if (kind === 'questions.state') return { ...state, questions: (data as { questions?: PendingQuestion[] }).questions ?? [] }
   if (kind === 'assistant-stream-baseline') {
+    state = { ...state, streamEpoch: (state.streamEpoch ?? 0) + 1 }
     const { baseline } = data as { baseline: { revision: number; activeAttempt?: AttemptSnapshot } }
     const current = baseline.activeAttempt
     if (!current) return { ...state, draft: null }

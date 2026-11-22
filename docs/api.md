@@ -62,6 +62,12 @@ Serve a custom browser UI from the same origin as the Controller API, or use the
 | POST /v1/host/stop | Stop Docker or release ECI for the selected account |
 | DELETE /v1/host/instance | Delete compute and retain the account and external storage |
 
+For multipart messages, send the `content` form field first, followed by mixed
+`images` / `files` parts in upload order. The admitted user message contains the
+image/file blocks in that same order, followed by the text block. This is also
+the order stored in the session log and passed to the model. Both clients show
+user attachments above the text; assistant block order is preserved.
+
 For `POST /v1/accounts`, send `{"userId":"alice"}`. Account creation returns
 the name with HTTP 201. Model settings are available before the Host starts.
 

@@ -7,6 +7,7 @@ import { proactiveChinese } from '../../frontend/src/settings/proactiveState'
 const extensionEnglish = Object.fromEntries(Object.entries(extensionChinese).map(([en, zh]) => [zh, en]))
 
 const english: Record<string, string> = {
+  '复制表格': 'Copy table', '复制代码': 'Copy code', '已复制': 'Copied', '复制失败，重试': 'Copy failed. Retry', '代码': 'Code', '表格': 'Table', '表格，可左右滚动': 'Table — scroll horizontally', '代码，可左右滚动': 'Code — scroll horizontally',
   '主会话': 'Main chat', '配置模型': 'Configure model', '查看插件': 'View plugins',
   '主会话未能准备完成。': 'The main chat could not be prepared.',
   '正在准备浏览器与 Office 能力…': 'Preparing browser and Office capabilities…',
@@ -106,6 +107,9 @@ const english: Record<string, string> = {
   '将从 App 的本地库中删除所选项目。': 'Remove the selected items from the app library.',
   '部分项目无法删除，请重试。': 'Some items could not be deleted. Try again.',
   '无法分享所选项目，请重试。': 'Could not share the selected items. Try again.',
+  '查看图片': 'View images', '生成图片': 'Generate images', '{count} 张': '{count} images', '1 张': '1 image',
+  '图片，可左右滑动': 'Images — scroll horizontally', '正在加载图片': 'Loading image',
+  '没有可显示的图片。': 'No images to display.', '图片暂不可用，重试': 'Image unavailable. Retry',
   '下载': 'Download', '文件暂不可用。': 'File unavailable.', '工具调用': 'Tool calls', '已交付': 'Delivered',
   '收起': 'Dismiss', '关闭': 'Close', '保存语言失败，请重试。': 'Could not save the language. Try again.',
   '新建任务': 'New task', '编辑任务': 'Edit task', '创建任务': 'Create task', '任务名称': 'Task name', '任务指令': 'Task instructions',

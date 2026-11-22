@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocale } from '../locale'
-import { ChevronDown, Ellipsis, FolderTree, MessageSquare, MessageSquarePlus, Power, Puzzle, Settings, Trash2, X } from 'lucide-react'
-import { HarnessAvatar } from '../HarnessAvatar'
+import { Ellipsis, MessageSquare, Plus, Trash2, X } from 'lucide-react'
 import type { SessionRow } from '../api/controller'
 import type { TranscriptCache } from '../chat/transcriptCache'
 
 type Props = {
   cache: TranscriptCache
-  userId: string
   rows: SessionRow[]
   selected?: string
   hasMore: boolean
@@ -16,16 +14,7 @@ type Props = {
   error: string
   needsModel: boolean
   onSettings: () => void
-  onPlugins: () => void
-  pluginsOpen: boolean
-  filesOpen: boolean
-  filesAvailable: boolean
   filesOverlay: boolean
-  onFiles: () => void
-  hostReady: boolean
-  stoppingHost: boolean
-  stopHostError: string
-  onStopHost: () => Promise<void>
   drawerOpen: boolean
   onCreate: () => void
   onChoose: (id: string) => void
@@ -41,19 +30,6 @@ export function Sidebar(props: Props) {
   const { language, t } = useLocale()
   const rowTitle = (row: SessionRow) => row.isMain ? 'Go Bot' : row.title || t('New chat')
   const [menu, setMenu] = useState<ContextMenu | null>(null)
-  const [accountOpen, setAccountOpen] = useState(false)
-  const accountDock = useRef<HTMLDivElement>(null)
-  const accountButton = useRef<HTMLButtonElement>(null)
-
-  useEffect(() => {
-    if (!accountOpen) return
-    function outside(event: PointerEvent) {
-      if (!accountDock.current?.contains(event.target as Node)) setAccountOpen(false)
-    }
-    document.addEventListener('pointerdown', outside)
-    return () => document.removeEventListener('pointerdown', outside)
-  }, [accountOpen])
-
   const [confirm, setConfirm] = useState<ContextMenu | null>(null)
   const [deleting, setDeleting] = useState(false)
   const menuRef = useRef<HTMLButtonElement>(null)
@@ -62,7 +38,6 @@ export function Sidebar(props: Props) {
 
   useEffect(() => {
     if (props.drawerOpen) drawerClose.current?.focus()
-    else setAccountOpen(false)
   }, [props.drawerOpen])
 
   useEffect(() => {
@@ -102,17 +77,16 @@ export function Sidebar(props: Props) {
     <>
       {props.drawerOpen && <button type="button" className="scrim" onClick={props.onClose} aria-label={t('Close chats')} />}
       <aside id="chat-sidebar" className={props.drawerOpen ? 'sidebar drawer-open' : 'sidebar'} aria-label={t('Chats')}
-        inert={props.filesOverlay}
+        inert={!props.drawerOpen || props.filesOverlay} aria-hidden={!props.drawerOpen}
         onKeyDown={event => { if (event.key === 'Escape' && !menu && !event.defaultPrevented) props.onClose() }}>
-        <div className="brand">
-          <HarnessAvatar className="brand-mark" />
-          <span>Go Bot</span>
-          <button ref={drawerClose} type="button" className="icon-button drawer-close" onClick={props.onClose} aria-label={t('Close chats')}><X size={21} /></button>
+        <div className="sidebar-header">
+          <h2>{t('Chats')}</h2>
+          <button ref={drawerClose} type="button" className="icon-button drawer-close" onClick={props.onClose} aria-label={t('Close chats')}><X size={18} /></button>
         </div>
         <button type="button" className="new-chat" onClick={props.onCreate} disabled={props.creating}>
-          <MessageSquarePlus size={21} strokeWidth={1.75} /><span>{t('New chat')}</span>
+          <Plus size={18} strokeWidth={1.7} /><span>{t('New chat')}</span>
         </button>
-        <div className="section-heading">{t('Chats')}</div>
+        <div className="section-heading">{t('Your conversations')}</div>
         <div className="session-list">
           {props.error && <p className="sidebar-feedback" role="alert">{t(props.error)} <button type="button" className="text-button" onClick={props.needsModel ? props.onSettings : props.onRetry}>{props.needsModel ? t('Open model settings') : t('Retry')}</button></p>}
           {!props.error && !props.isLoading && props.rows.length === 0 && <p className="sidebar-feedback">{t('No chats yet')}</p>}
@@ -148,41 +122,6 @@ export function Sidebar(props: Props) {
             </div>
           ))}
           {props.hasMore && <button type="button" className="text-button more" disabled={props.isLoading} onClick={props.onMore}>{t('Load more')}</button>}
-        </div>
-        <div className="sidebar-footer">
-        <button id="plugin-market-link" type="button" className="sidebar-destination" aria-current={props.pluginsOpen ? 'page' : undefined} onClick={props.onPlugins}><Puzzle size={19} strokeWidth={1.7} /><span>{t('Plugin market')}</span></button>
-        <div className="account-dock" ref={accountDock} onBlur={event => {
-          if (!event.currentTarget.contains(event.relatedTarget)) setAccountOpen(false)
-        }} onKeyDown={event => {
-          if (event.key === 'Escape' && accountOpen) {
-            event.preventDefault()
-            setAccountOpen(false)
-            accountButton.current?.focus()
-          }
-        }}>
-          <button ref={accountButton} type="button" id="account-menu-toggle" className="account-trigger"
-            aria-expanded={accountOpen} aria-controls="account-actions" onClick={() => setAccountOpen(value => !value)}>
-            <span className="account-avatar" aria-hidden="true">{Array.from(props.userId)[0]?.toUpperCase()}</span>
-            <span className="account-identity"><strong title={props.userId}>{props.userId}</strong>
-              <small>{props.hostReady ? t('Personal workspace') : t('Host unavailable')}</small></span>
-            <ChevronDown size={16} aria-hidden="true" className="account-chevron" />
-          </button>
-          {accountOpen && <div id="account-actions" className="account-popover" role="group" aria-label={t('Account actions')}>
-            <button type="button" onClick={() => { setAccountOpen(false); props.onSettings() }}>
-              <Settings size={18} aria-hidden="true" /> {t('Settings')}
-            </button>
-            <button type="button" onClick={() => { setAccountOpen(false); props.onFiles() }}
-              disabled={!props.filesAvailable} aria-controls="host-files" aria-expanded={props.filesOpen}>
-              <FolderTree size={18} aria-hidden="true" /> {t('File system')}
-            </button>
-            <div className="account-menu-divider" />
-            <button type="button" className="stop-host" onClick={() => { void props.onStopHost() }}
-              disabled={!props.hostReady || props.stoppingHost}>
-              <Power size={18} aria-hidden="true" /> {props.stoppingHost ? t('Stopping Host…') : t('Stop Host')}
-            </button>
-          </div>}
-          {props.stopHostError && <p className="sidebar-feedback" role="alert">{t(props.stopHostError)}</p>}
-        </div>
         </div>
       </aside>
       {menu && (

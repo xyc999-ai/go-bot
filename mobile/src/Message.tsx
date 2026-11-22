@@ -1,23 +1,13 @@
 import { useLocale } from './locale'
 import { useState } from 'react'
-import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
-import Markdown from 'react-native-markdown-display'
-import { ChevronDown, CircleCheck, CircleX, Download, ImageOff, Layers2 } from 'lucide-react-native'
-import { groupDisplayBlocks, type Message as Item, type ToolBlock, type Transcript } from '../../frontend/src/chat/transcript'
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native'
+import { MarkdownText } from './MarkdownText'
+import { ChevronDown, CircleCheck, CircleX, Layers2 } from 'lucide-react-native'
+import { groupDisplayBlocks, messageBlocksForDisplay, type Message as Item, type ToolBlock, type Transcript } from '../../frontend/src/chat/transcript'
 import { Controller } from './api'
-import { FileIcon } from './FileIcon'
-import { saveRemote, shareDownload, shareLibraryItem, type RemoteFile, type WorkspaceFileSource } from './library'
-import { accent, edge, glass, Hint, ink, line, logo, muted, s, wash } from './ui'
-
-export type Preview = RemoteFile & { width?: number; height?: number }
-function formatted(text: string) {
-  return <Markdown style={markdown} rules={{
-    image: node => <Text key={node.key} selectable>{'![' + (node.attributes.alt ?? '') + '](' + node.attributes.src + ')'}</Text>,
-  }} onLinkPress={url => {
-    if (/^https?:\/\//i.test(url)) void Linking.openURL(url).catch(() => {})
-    return false
-  }}>{text}</Markdown>
-}
+import { FileTile, Images, ImageTools, type Preview } from './MessageMedia'
+export type { Preview } from './MessageMedia'
+import { accent, edge, glass, Hint, ink, logo, muted, s } from './ui'
 
 export function MessageView({ api, id, message, results, openImage, generating = false }: { api: Controller; id: string; message: Item; results: Transcript['toolResults']; openImage: (image: Preview) => void; generating?: boolean }) {
   const { t } = useLocale()
@@ -29,8 +19,8 @@ export function MessageView({ api, id, message, results, openImage, generating =
       {generating && <><ActivityIndicator size="small" color={accent} /><Text accessibilityLiveRegion="polite" style={s.caption}>{t('生成中')}</Text></>}
     </View>}
     <View style={[styles.content, user && styles.bubble]}>
-      {groupDisplayBlocks(message.blocks, results).map(block => {
-        if (block.type === 'text') return <View key={block.id}>{formatted(block.text)}</View>
+      {groupDisplayBlocks(messageBlocksForDisplay(message), results).map(block => {
+        if (block.type === 'text') return <View key={block.id}><MarkdownText text={block.text} /></View>
         if (block.type === 'file') {
           const delivery = block.file.source === 'presented'
             ? { account: api.profile.account, path: block.file.path }
@@ -39,50 +29,10 @@ export function MessageView({ api, id, message, results, openImage, generating =
         }
         if (block.type === 'tool') return <Tools key={block.id} tools={[block]} results={results} />
         if (block.type === 'tool-group') return <Tools key={block.id} tools={block.tools} results={results} />
-        return <View key={block.id} style={styles.images}>
-          {block.images.map(({ id: key, attachment }) => {
-            const preview = { uri: api.fileURL(id, { source: 'attachment', attachmentId: attachment.attachmentId }),
-              headers: api.headers, name: attachment.name || t('图片'), mimeType: attachment.mediaType, width: attachment.width, height: attachment.height }
-            return <Thumb key={key} preview={preview} open={() => openImage(preview)} />
-          })}
-        </View>
+        if (block.type === 'image-tools') return <ImageTools key={block.id} tools={block.tools} images={block.images} results={results} api={api} sessionId={id} openImage={openImage} />
+        return <Images key={block.id} images={block.images} api={api} sessionId={id} openImage={openImage} />
       })}
     </View>
-  </View>
-}
-
-function Thumb({ preview, open }: { preview: Preview; open: () => void }) {
-  const [failed, setFailed] = useState(false)
-  return <Pressable accessibilityRole="imagebutton" accessibilityLabel={preview.name} onPress={open} style={styles.thumb}>
-    {failed ? <ImageOff color={muted} size={21} /> : <Image source={preview} onError={() => setFailed(true)} style={{ width: '100%', height: '100%' }} resizeMode="cover" />}
-  </Pressable>
-}
-
-function FileTile({ preview, delivery }: { preview: Preview; delivery?: WorkspaceFileSource }) {
-  const { t } = useLocale()
-  const [busy, setBusy] = useState(false)
-  const [failed, setFailed] = useState(false)
-  return <View>
-    <Pressable accessibilityRole="button" accessibilityLabel={t('下载') + ' ' + preview.name} disabled={busy} style={styles.tile} onPress={async () => {
-      setBusy(true)
-      setFailed(false)
-      try {
-        if (delivery) {
-          const saved = await saveRemote(preview, 'file', delivery)
-          await shareLibraryItem(saved)
-        } else await shareDownload(preview.uri, preview.headers, preview.name)
-      }
-      catch { setFailed(true) }
-      finally { setBusy(false) }
-    }}>
-      <FileIcon name={preview.name} />
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ color: ink, fontSize: 15, fontWeight: '600' }} numberOfLines={2}>{preview.name}</Text>
-        <Text style={{ color: muted, fontSize: 12 }}>{t(delivery ? '已交付' : '附件')}</Text>
-      </View>
-      {busy ? <ActivityIndicator color={accent} /> : <Download size={17} color={muted} />}
-    </Pressable>
-    {failed && <Hint error>{t('文件暂不可用。')}</Hint>}
   </View>
 }
 
@@ -111,27 +61,7 @@ const styles = StyleSheet.create({
   avatar: { width: 36, height: 36 },
   content: { flexShrink: 1, minWidth: 0, gap: 8 },
   bubble: { maxWidth: '83%', borderRadius: 20, backgroundColor: '#fff', borderColor: edge, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 6, boxShadow: '0 3px 12px rgba(45,35,70,0.055)' },
-  images: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  thumb: { width: '48%', maxWidth: 160, aspectRatio: 1, overflow: 'hidden', borderRadius: 15, borderColor: '#fff', borderWidth: 1.5, backgroundColor: '#e8ecfa', alignItems: 'center', justifyContent: 'center' },
-  tile: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 15, backgroundColor: glass, borderColor: edge, borderWidth: 1 },
   tools: { alignSelf: 'stretch', backgroundColor: glass, borderRadius: 14, borderColor: edge, borderWidth: 1, overflow: 'hidden' },
   toolHeader: { minHeight: 46, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
   toolRow: { minHeight: 38, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8, borderTopColor: edge, borderTopWidth: StyleSheet.hairlineWidth },
-})
-
-const markdown = StyleSheet.create({
-  body: { color: ink, fontSize: 16, lineHeight: 25 },
-  paragraph: { marginTop: 4, marginBottom: 5 },
-  heading1: { fontSize: 24, lineHeight: 30, fontWeight: '700', marginVertical: 4 },
-  heading2: { fontSize: 21, lineHeight: 27, fontWeight: '700', marginVertical: 4 },
-  heading3: { fontSize: 18, lineHeight: 24, fontWeight: '600' },
-  table: { borderColor: line, borderWidth: 1, borderRadius: 6 },
-  tr: { borderBottomColor: line },
-  th: { backgroundColor: wash, padding: 5 },
-  td: { minWidth: 0, padding: 5 },
-  link: { color: accent, textDecorationLine: 'underline' },
-  code_inline: { backgroundColor: '#eff1ed', color: ink, fontSize: 13 },
-  code_block: { backgroundColor: '#eff1ed', borderColor: line, color: ink, fontSize: 13 },
-  fence: { backgroundColor: '#eff1ed', borderColor: line, color: ink, fontSize: 13 },
-  blockquote: { backgroundColor: '#f6f7f3', borderColor: '#c3d3ca' },
 })

@@ -10,6 +10,9 @@ agent. It offers an open-source alternative to [Meta Muse](https://about.fb.com/
 [Grok Bot](https://help.x.com/en/using-x/about-grok).
 Run locally with Docker for personal use, development, and testing.
 
+Go Bot remembers your context and stays attentive to what matters to you,
+bringing useful discoveries and ideas into the conversation on its own.
+
 Teams can use Alibaba Cloud Elastic Container Instance (ECI) to build their
 own personal agent products, with a dedicated Host for each account, optional
 persistent storage, and room for their own frontends and service integrations.
@@ -23,6 +26,7 @@ persistent storage, and room for their own frontends and service integrations.
 - **Image generation and editing.** Generate images from text or use uploaded images as references. Results appear directly in chat.
 - **Office documents.** Read, create, and edit Word, PowerPoint, and Excel files with OfficeCLI, and deliver them as downloadable attachments.
 - **Long-term memory and cross-session recall.** Save user preferences and agent notes per account, and search past conversations when a task needs earlier context.
+- **Proactive discovery and follow-up.** Enable proactive assistance to let the agent gather and connect relevant information, explore new leads, and share useful findings and suggestions when it judges the timing is right.
 
 The included web UI is a lightweight test client for chat, file browsing, and
 downloads. Use the Controller's HTTP and server-sent events (SSE) API to
@@ -34,24 +38,24 @@ build your own mobile, desktop, or messaging interface. [HTTP API](docs/api.md) 
 
 ### Mobile demos
 
-The iPhone client uses English prompts and connects to a local Controller and
+The mobile client uses English prompts and connects to a local Controller and
 Docker Host. The Word and PowerPoint clips show the delivered files in WPS Office.
 
 <table align="center" width="100%">
   <tr>
     <td width="33%" valign="top" align="center">
       <h4>Browser research</h4>
-      <a href="docs/showcase/en/mobile-research.gif"><img src="docs/showcase/en/mobile-research.gif" width="260" alt="English iPhone chat verifies an AI adoption figure and links to the Stanford AI Index"></a>
+      <a href="docs/showcase/en/mobile-research.gif"><img src="docs/showcase/en/mobile-research.gif" width="260" alt="English mobile chat verifies an AI adoption figure and links to the Stanford AI Index"></a>
       <p>Verify an AI adoption figure in Chromium and get the original source in chat.</p>
     </td>
     <td width="33%" valign="top" align="center">
       <h4>Word report</h4>
-      <a href="docs/showcase/en/mobile-word.gif"><img src="docs/showcase/en/mobile-word.gif" width="260" alt="English iPhone chat creates an AI pilot brief and shows the Word file in WPS Office"></a>
+      <a href="docs/showcase/en/mobile-word.gif"><img src="docs/showcase/en/mobile-word.gif" width="260" alt="English mobile chat creates an AI pilot brief and shows the Word file in WPS Office"></a>
       <p>Ask for a Word brief with two candidate workflows and a four-week pilot.</p>
     </td>
     <td width="33%" valign="top" align="center">
       <h4>PowerPoint briefing</h4>
-      <a href="docs/showcase/en/mobile-slides.gif"><img src="docs/showcase/en/mobile-slides.gif" width="260" alt="English iPhone chat creates a three-slide deck and shows the slides in WPS Office"></a>
+      <a href="docs/showcase/en/mobile-slides.gif"><img src="docs/showcase/en/mobile-slides.gif" width="260" alt="English mobile chat creates a three-slide deck and shows the slides in WPS Office"></a>
       <p>Create a three-slide briefing on an AI pilot for a support team.</p>
     </td>
   </tr>
@@ -61,12 +65,12 @@ Docker Host. The Word and PowerPoint clips show the delivered files in WPS Offic
   <tr>
     <td width="50%" valign="top" align="center">
       <h4>Image editing with two references</h4>
-      <a href="docs/showcase/en/mobile-image.gif"><img src="docs/showcase/en/mobile-image.gif" width="260" alt="English iPhone chat sends a blue whale and coral swatch and shows the generated image"></a>
+      <a href="docs/showcase/en/mobile-image.gif"><img src="docs/showcase/en/mobile-image.gif" width="260" alt="English mobile chat sends a blue whale and coral swatch and shows the generated image"></a>
       <p>Attach a whale and a color swatch, then see the coral version in the conversation.</p>
     </td>
     <td width="50%" valign="top" align="center">
       <h4>Scheduled reminder</h4>
-      <a href="docs/showcase/en/mobile-schedule.gif"><img src="docs/showcase/en/mobile-schedule.gif" width="260" alt="English iPhone chat showing the request, scheduled task confirmation, and delivered reminder"></a>
+      <a href="docs/showcase/en/mobile-schedule.gif"><img src="docs/showcase/en/mobile-schedule.gif" width="260" alt="English mobile chat showing the request, scheduled task confirmation, and delivered reminder"></a>
       <p>Create a one-time reminder and receive the checklist in the same chat when it runs.</p>
     </td>
   </tr>
@@ -103,7 +107,7 @@ and a PowerPoint deck. [Stanford HAI 2026 AI Index](https://hai.stanford.edu/ai-
     <td width="50%" valign="top" align="center">
       <h3>Image editing with two references</h3>
       <a href="docs/showcase/en/web-image.gif"><img src="docs/showcase/en/web-image.gif" width="260" alt="English Web conversation showing the two reference images and the generated coral whale"></a>
-      <p>Use Seedream to recolor the project mascot from a reference swatch.</p>
+      <p>Recolor the project mascot using the original image and a reference swatch.</p>
     </td>
     <td width="50%" valign="top" align="center">
       <h3>Scheduled reminder</h3>

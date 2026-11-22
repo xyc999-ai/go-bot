@@ -3,7 +3,7 @@
 Follow the [local Quickstart](../README.md#quickstart) from the repository root and open
 [http://127.0.0.1:8080/](http://127.0.0.1:8080/). The Controller serves the
 page and relays API calls and SSE to the selected account's Docker or ECI Host.
-Create or open an account by name. Configure OpenAI Responses or Anthropic Messages endpoints using the protocol dropdown in Model settings, and use the model picker below a chat to change its model. Under **Settings → Web search**, save a key for DeepSeek, Zhipu, Doubao, Tavily, or Brave Search and choose **Use provider**.
+Create or open an account by name. Configure OpenAI Responses or Anthropic Messages endpoints using the protocol dropdown in Model settings, and use the model picker in the chat header to change its model. Under **Settings → Web search**, save a key for DeepSeek, Zhipu, Doubao, Tavily, or Brave Search and choose **Use provider**.
 
 For a custom mobile, desktop or web interface, use the Controller's
 [HTTP and SSE API](../docs/api.md). The [minimal example](../examples/frontend-minimal/index.html)
@@ -13,13 +13,14 @@ Use **New chat** to create a session. Right-click a row in **Chats** to delete
 it from the list. The Host archives the session and retains its data on disk.
 On touch screens, the row menu offers the same action.
 
-Open the account menu at the bottom of the sidebar for **Settings**,
-**File system**, and **Stop Host**. Use **File system** to browse the account's Host data at
+The narrow left rail switches between **Chats**, **Tasks**, **Plugin market**,
+and **Settings**. Click **Chats** to expand its conversation list. Open the
+account menu at the bottom for **Stop Host**. Use **File system** to browse the account's Host data at
 `/root/harness`. Expand directories to see their contents, select an entry to
 copy its absolute path, or refresh the selected directory. The panel keeps
 its position when you switch chats.
 
-Choose **English** or **简体中文** on the account page or in **Settings**.
+Choose **English** or **简体中文** on the account page or in the workspace header.
 The preference is saved per browser. When no preference is saved, the app uses
 the first supported browser language, with English as the fallback. Messages
 and Agent responses keep their original language.
@@ -31,6 +32,13 @@ above the composer and can be answered there. One Host SSE stays connected
 while switching chats or opening settings. A pending question or approval in
 another chat adds a chat-list indicator; open that chat to respond. Execution
 approvals have no fixed timeout and reappear after reconnecting.
+
+New assistant text appears progressively on Web and mobile. Playback follows
+the received text continuously across stream chunks and the committed message,
+without a typing cursor. History opens immediately; reconnecting, returning from
+the background, or enabling the system's reduced-motion preference shows the
+current received text directly. Playback affects display only: tools, questions,
+approvals and turn completion keep their existing backend behavior.
 
 Use the plus button to choose attachments, or paste files when your browser
 provides them in the clipboard. The composer keeps them in the draft until
@@ -65,4 +73,13 @@ A plain Go build keeps the API-only Controller available. The Host image
 contains the compiled Host and agent tools. If using ECI, build the image cache from
 the same version so the Host supports cold history and archiving.
 
-The welcome robot is [Lucide Bot](https://lucide.dev/icons/bot).
+The interface uses the project's whale logo and [Lucide](https://lucide.dev/) icons.
+
+The upper-right theme button switches between light and dark appearances. Theme
+and language preferences stay in this browser, independently of the account.
+Tasks reads the Host schedule catalog: paused jobs remain Upcoming; only ended
+jobs appear under Completed. The detail view shows the next run, schedule rule,
+last delivery and associated conversation. Create or change tasks through your
+Agent or the existing API.
+
+Visual architecture and validation: [Lumeo redesign plan](../docs/web-lumeo-redesign-plan.zh-CN.md).

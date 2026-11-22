@@ -21,7 +21,7 @@ export function ImageViewer({ preview, close }: { preview: Preview; close: () =>
     setSaving(true)
     setFeedback('')
     try {
-      const item = await saveRemote(preview, 'image')
+      const item = await saveRemote(preview, 'image', preview.workspace)
       try {
         if (!await saveToDevicePhotos(item)) {
           setFeedback('已保存到本地图片。请在系统设置中允许添加到图库。')
