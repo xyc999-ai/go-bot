@@ -9,6 +9,8 @@ go-bot 是用 Go 实现的 DeepSeek Harness，也是一款可自托管的 Person
 [OpenAI dots](https://openai.com/zh-Hans-CN/index/introducing-dots/) 和
 [Grok Bot](https://help.x.com/en/using-x/about-grok) 的开源替代方案。个人可以用 Docker 在本地运行、开发和测试。
 
+Go Bot 会记住与你交流的背景，持续关注你关心的事，并主动带来值得了解的新发现和想法。
+
 企业团队可以用阿里云弹性容器实例（ECI）为每个账号按需启动独立 Host，按需持久化数据，
 并接入自己的前端和业务服务，构建自己的 Personal Agent 产品。
 
@@ -21,6 +23,7 @@ go-bot 是用 Go 实现的 DeepSeek Harness，也是一款可自托管的 Person
 - **生成和编辑图片。** 可以用文字生图，也可以上传多张参考图，生成结果会直接显示在会话中。
 - **处理 Office 文件。** 使用 OfficeCLI 读取、生成和编辑 Word、PPT、Excel 文件，并提供下载。
 - **长期记忆和跨会话检索。** 按账号保存用户偏好和 Agent 笔记，任务需要时可以查找同账号的历史会话。
+- **主动发现与跟进。** 启用主动服务后，AI 会结合对你的了解收集和梳理相关信息，探索值得关注的新线索，并在它认为合适的时候，主动与你分享新的发现和建议。
 
 内置网页是用于测试的轻量界面，提供聊天、浏览文件和下载交付物。你可以通过 Controller 的 HTTP接口接入自己的移动端、桌面端或消息渠道。 [HTTP API](docs/api.md) · [最小前端示例](examples/frontend-minimal/index.html)
 
@@ -36,17 +39,17 @@ go-bot 是用 Go 实现的 DeepSeek Harness，也是一款可自托管的 Person
   <tr>
     <td width="33%" valign="top" align="center">
       <h4>浏览器调研</h4>
-      <a href="docs/showcase/mobile-research-demo.png"><img src="docs/showcase/mobile-research-demo.png" width="260" alt="移动端查询斯坦福 AI Index，在会话中交付图表、Markdown 摘要和 CSV"></a>
+      <a href="docs/showcase/mobile-research-demo.gif"><img src="docs/showcase/mobile-research-demo.gif" width="260" alt="移动端查询斯坦福 AI Index，在会话中交付图表、Markdown 摘要和 CSV"></a>
       <p>核对斯坦福 AI Index，在会话中收到原文图表、摘要和数据表。<br><a href="docs/showcase/mobile-research-key.png">查看原尺寸关键帧</a></p>
     </td>
     <td width="33%" valign="top" align="center">
       <h4>Word 行业报告</h4>
-      <a href="docs/showcase/mobile-word-demo.png"><img src="docs/showcase/mobile-word-demo.png" width="260" alt="手机完成 Word 报告的制作与多轮修改，随后在 WPS Office 中打开成品"></a>
+      <a href="docs/showcase/mobile-word-demo.gif"><img src="docs/showcase/mobile-word-demo.gif" width="260" alt="手机完成 Word 报告的制作与多轮修改，随后在 WPS Office 中打开成品"></a>
       <p>制作行业报告，再补充调查口径和适合团队落地的试点方案。<br><a href="docs/showcase/mobile-word-key.png">查看原尺寸关键帧</a></p>
     </td>
     <td width="33%" valign="top" align="center">
       <h4>PPT 汇报</h4>
-      <a href="docs/showcase/mobile-slides-demo.png"><img src="docs/showcase/mobile-slides-demo.png" width="260" alt="手机制作并修改三页 PPT，随后在 WPS Office 中展示三页成品"></a>
+      <a href="docs/showcase/mobile-slides-demo.gif"><img src="docs/showcase/mobile-slides-demo.gif" width="260" alt="手机制作并修改三页 PPT，随后在 WPS Office 中展示三页成品"></a>
       <p>调整采用率说明，把最后一页改成三步试点计划。<br><a href="docs/showcase/mobile-slides-key.png">查看原尺寸关键帧</a></p>
     </td>
   </tr>
@@ -56,12 +59,12 @@ go-bot 是用 Go 实现的 DeepSeek Harness，也是一款可自托管的 Person
   <tr>
     <td width="50%" valign="top" align="center">
       <h4>两张参考图编辑图片</h4>
-      <a href="docs/showcase/mobile-image-demo.png"><img src="docs/showcase/mobile-image-demo.png" width="260" alt="移动端上传蓝鲸和色板，预览 Seedream 改色结果并保存到图库"></a>
-      <p>用 Seedream 给鲸鱼换色，全屏预览后保存到手机图库。<br><a href="docs/showcase/mobile-image-key.png">查看原尺寸关键帧</a></p>
+      <a href="docs/showcase/mobile-image-demo.gif"><img src="docs/showcase/mobile-image-demo.gif" width="260" alt="移动端上传蓝鲸和色板，在会话中预览生成图片并保存到图库"></a>
+      <p>结合参考图为鲸鱼换色，全屏预览后保存到手机图库。<br><a href="docs/showcase/mobile-image-key.png">查看原尺寸关键帧</a></p>
     </td>
     <td width="50%" valign="top" align="center">
       <h4>定时任务</h4>
-      <a href="docs/showcase/mobile-schedule-demo.png"><img src="docs/showcase/mobile-schedule-demo.png" width="260" alt="手机会话中的中文定时任务请求、创建确认和到点送达的提醒"></a>
+      <a href="docs/showcase/mobile-schedule-demo.gif"><img src="docs/showcase/mobile-schedule-demo.gif" width="260" alt="手机会话中的中文定时任务请求、创建确认和到点送达的提醒"></a>
       <p>在手机会话中查看定时任务的创建确认，以及随后送达的检查清单。</p>
     </td>
   </tr>
@@ -71,7 +74,7 @@ go-bot 是用 Go 实现的 DeepSeek Harness，也是一款可自托管的 Person
 
 演示通过内置网页和本地 Docker Host 运行，所有会话均用中文提问。Agent 用 Chromium 查阅
 [斯坦福 HAI《2026 AI Index》经济章节](https://hai.stanford.edu/ai-index/2026-ai-index-report/economy)，
-再用 OfficeCLI 把查到的资料整理成 Word 简报和 PPT，并根据后续消息修改两份文件。
+再用 OfficeCLI 把查到的资料整理成 Word 行业报告和 PPT，并根据后续消息修改两份文件。
 
 <table align="center" width="100%">
   <tr>
@@ -82,15 +85,15 @@ go-bot 是用 Go 实现的 DeepSeek Harness，也是一款可自托管的 Person
       <a href="docs/showcase/ai-research-chat.webp">看会话截图</a> · <a href="docs/showcase/ai-index-source.webp">看原站图表</a>
     </td>
     <td width="33%" valign="top" align="center">
-      <h3>Word 简报</h3>
-      <img src="docs/showcase/ai-word-demo.gif" width="260" alt="从制作到修改 Word 简报的完整会话，以及在 WPS Office 中打开的成品">
-      <p>Agent 先制作单页简报，再补充采用率的调查口径和小团队试点建议，最后在 WPS Office 中查看成品。</p>
+      <h3>Word 行业报告</h3>
+      <img src="docs/showcase/ai-word-demo.gif" width="260" alt="制作和校订八页 Word 行业报告的完整会话，以及在 WPS Office 中打开的最终成品">
+      <p>制作含封面、数据图表和清晰正文层次的行业报告，再按反馈校订内容与分页，在 WPS Office 中查看最终成品。</p>
       <a href="docs/showcase/ai-word-demo.gif">查看大图</a>
     </td>
     <td width="33%" valign="top" align="center">
       <h3>PPT 汇报</h3>
-      <img src="docs/showcase/ai-slides-demo.gif" width="260" alt="从制作到修改 PPT 的完整会话，以及在 WPS Office 中打开的三页成品">
-      <p>Agent 补充采用率的调查口径，将最后一页改成三步试点计划，最后在 WPS Office 中展示三页成品。</p>
+      <img src="docs/showcase/ai-slides-demo.gif" width="260" alt="制作和修改 PPT 的完整会话，以及 WPS Office 中第二页的行业数据展示">
+      <p>核对行业数据、补充调查口径并修改汇报，在 WPS Office 中展示关键数字页。</p>
       <a href="docs/showcase/ai-slides-demo.gif">查看大图</a>
     </td>
   </tr>
@@ -100,8 +103,8 @@ go-bot 是用 Go 实现的 DeepSeek Harness，也是一款可自托管的 Person
   <tr>
     <td width="50%" valign="top" align="center">
       <h3>两张参考图编辑图片</h3>
-      <img src="docs/showcase/ai-image-demo.gif" width="260" alt="上传蓝鲸和色板、调用 Seedream 生图并在会话中交付结果">
-      <p>Seedream 参考蓝鲸 Logo 和珊瑚杏色色板，重新配色并在会话中交付一张 2048 × 2048 的图片。</p>
+      <img src="docs/showcase/ai-image-demo.gif" width="260" alt="上传蓝鲸和色板、编辑图片并在会话中交付结果">
+      <p>参考蓝鲸 Logo 和珊瑚杏色色板，重新配色并在会话中交付一张 2048 × 2048 的图片。</p>
       <a href="docs/showcase/ai-image-result.webp">看生成结果</a>
     </td>
     <td width="50%" valign="top" align="center">
