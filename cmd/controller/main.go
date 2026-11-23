@@ -89,11 +89,6 @@ func run() error {
 	if err := controller.ValidateWebDevOrigin(*webDevOrigin); err != nil {
 		return err
 	}
-	if command == "serve" {
-		if err := config.PrepareControllerProfile(*path, *envFile); err != nil {
-			return err
-		}
-	}
 	c, err := config.Load(*path, *envFile)
 	if err != nil {
 		return err

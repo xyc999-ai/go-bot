@@ -56,7 +56,7 @@ if [[ ! -f "$directory/.env" ]]; then
 fi
 
 cd "$directory"
-export GO_BOT_ENV_DIR="$directory" GO_BOT_ENV_NAME=.env GO_BOT_CONFIG_FILE="$directory/configs/default.yaml"
+export GO_BOT_ENV_FILE="$directory/.env" GO_BOT_CONFIG_FILE="$directory/configs/default.yaml"
 # Do not use Compose's interpolated .env values as application credentials.
 # Controller reads the original file. Only fixed Compose wiring uses interpolation.
 compose=(docker compose --env-file /dev/null)
@@ -69,14 +69,8 @@ controller_image="$("${compose[@]}" config controller | awk '
 while IFS= read -r image; do
   docker pull "$image"
 done < <("${compose[@]}" config --images)
-mounts=(-v "$directory:/profile" -v "$directory/configs/default.yaml:/runtime.yaml:ro")
-config_args=(--env-file /profile/.env --config /runtime.yaml)
-forwarded=()
-while IFS='=' read -r key _; do
-  if [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]]; then forwarded+=(-e "$key"); fi
-done < .env.example
-docker run --rm --pull=never --user "$(id -u):$(id -g)" "${mounts[@]}" ${forwarded[@]+"${forwarded[@]}"} \
-  --entrypoint /usr/local/bin/prepare-env "$controller_image" "${config_args[@]}"
+mounts=(-v "$directory/.env:/profile.env:ro" -v "$directory/configs/default.yaml:/runtime.yaml:ro")
+config_args=(--env-file /profile.env --config /runtime.yaml)
 runtime_info="$(docker run --rm --pull=never "${mounts[@]}" "$controller_image" check --print-runtime "${config_args[@]}")"
 if [[ "${runtime_info%%$'\n'*}" != docker ]]; then
   echo 'install.sh prepares Docker only. Follow the separate ECI guide for cloud deployment.' >&2

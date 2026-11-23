@@ -187,13 +187,27 @@ func loadTuning(path string) (Config, error) {
 	return c, nil
 }
 
-// Load reads an existing deployment profile without taking overrides from the process.
+// Load overlays process deployment variables on an existing profile in memory.
+// Neither loading nor startup validation modifies the profile.
 func Load(path, envFile string) (Config, error) {
 	c, err := loadTuning(path)
 	if err != nil {
 		return c, err
 	}
-	if err := readEnvironment(envFile, controllerBindings(&c), controllerBindings(&c)); err != nil {
+	envFile, err = privateProfilePath(envFile)
+	if err != nil {
+		return c, err
+	}
+	fields := controllerBindings(&c)
+	if err := readEnvironment(envFile, fields, fields); err != nil {
+		return c, err
+	}
+	overrides := fields.processValues()
+	// Account model and search settings come from the UI, not deployment overrides.
+	for _, key := range []string{"MODEL_API_KEY", "MODEL_URL", "MODEL_NAME", "WEB_SEARCH_PROVIDER", "WEB_SEARCH_API_KEY"} {
+		delete(overrides, key)
+	}
+	if err := fields.apply(overrides); err != nil {
 		return c, err
 	}
 	c.resolveModel()

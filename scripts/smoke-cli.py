@@ -74,7 +74,7 @@ def main():
             '  redis:\n'
             '    ports: !override ["127.0.0.1::6379"]\n'
         )
-        env = dict(os.environ, GO_BOT_ENV_DIR=str(profile.parent), GO_BOT_ENV_NAME=profile.name,
+        env = dict(os.environ, GO_BOT_ENV_FILE=str(profile),
                    GO_BOT_CONFIG_FILE=str(ROOT / "configs/default.yaml"))
         alice, bob = (f"{PROJECT}-{name}" for name in ("alice", "bob"))
         names = {}

@@ -4,16 +4,16 @@ services:
   controller:
     image: ghcr.io/xyc999-ai/go-bot-controller:latest
     pull_policy: never
-    command: ["serve", "--env-file", "/config/${GO_BOT_ENV_NAME:-.env}", "--config", "/runtime.yaml"]
+    command: ["serve", "--env-file", "/config/deployment.env", "--config", "/runtime.yaml"]
     environment:
       REDIS_ADDR: redis:6379
       CONTROLLER_CONTAINER: "1"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - type: bind
-        # Mount the directory so valid overrides can be saved by atomic rename.
-        source: ${GO_BOT_ENV_DIR:-.}
-        target: /config
+        source: ${GO_BOT_ENV_FILE:-./.env}
+        target: /config/deployment.env
+        read_only: true
         bind:
           create_host_path: false
       - type: bind

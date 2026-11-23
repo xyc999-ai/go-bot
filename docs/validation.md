@@ -92,15 +92,19 @@ not Alibaba account permissions, network reachability or actual NFS guarantees.
   ECI driver tests verify direct image/cache-ID forwarding with zero cache-detail
   queries during creation; the optional `doctor` path still checks cache readiness.
 - Built the complete Linux ARM64 Controller and Host images. Controller contains
-  Web UI, Docker CLI, `prepare-env` and `buildeci`. The Host environment/plugin
-  image smoke passed. All four Go entry points cross-compiled for Linux AMD64;
+  Web UI, Docker CLI and `buildeci`; the retired `prepare-env` writer is removed. The Host environment/plugin
+  image smoke passed. Go entry points were also cross-compiled for Linux AMD64;
   this run did not execute complete AMD64 images on native hardware.
 - `scripts/test-install.py` passed using local HTTP copies of the actual repository
   files and real image tools. It covered an empty directory, byte-identical Compose
   and YAML, only `.env` initialization, mode 0600, repeat installation, literal
-  credential values, shell/container overrides, preservation of file ownership,
+  credential values, shell/container overrides in memory, preservation of file ownership,
+  read-only single-file mounts, and absence of repository siblings in Controller,
   failed download and missing-image errors. Direct Compose and the independent
   source launcher each started real Controller/Redis containers on isolated ports.
+  Valid overrides, explicit empty values, failed validation and subsequent loads
+  leave the profile content, mode and identity unchanged. Only explicit ECI cache
+  preparation writes its resulting cache ID back to the selected profile.
   The test replaces registry pulls with local image checks: it does not establish
   that a public GHCR release already exists.
 - `scripts/smoke-cli.py` passed with real Docker/Redis: two isolated account Hosts,

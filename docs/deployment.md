@@ -41,7 +41,7 @@ docker pull redis:8-alpine
 
 Initialization creates `.env` and `.env.eci` without overwriting either file.
 `start.sh` requires an existing selected profile, defaults to `.env`, applies
-validated shell overrides and starts the same Compose stack. It reports missing
+validated shell overrides in memory and starts the same Compose stack. It reports missing
 local images instead of pulling or building. Checks use tools in the Controller
 image, so no local Go is required. Compose also validates on Controller startup,
 independently of this script.

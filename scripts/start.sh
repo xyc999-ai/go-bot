@@ -75,7 +75,7 @@ profile_dir="$(cd "$(dirname "$profile")" && pwd)"
 profile_name="$(basename "$profile")"
 profile="$profile_dir/$profile_name"
 config_file="$(cd "$(dirname "$config_file")" && pwd)/$(basename "$config_file")"
-export GO_BOT_ENV_DIR="$profile_dir" GO_BOT_ENV_NAME="$profile_name" GO_BOT_CONFIG_FILE="$config_file"
+export GO_BOT_ENV_FILE="$profile" GO_BOT_CONFIG_FILE="$config_file"
 compose=(docker compose --env-file /dev/null)
 docker info >/dev/null
 controller_image="$("${compose[@]}" config controller | awk '
@@ -90,15 +90,18 @@ while IFS= read -r image; do
     exit 1
   fi
 done < <("${compose[@]}" config --images)
-profile_mounts=(-v "$profile_dir:/profile" -v "$config_file:/config.yaml:ro")
-config_args=(--env-file "/profile/$profile_name" --config /config.yaml)
+profile_mounts=(-v "$profile:/profile.env:ro" -v "$config_file:/config.yaml:ro")
+config_args=(--env-file /profile.env --config /config.yaml)
 forwarded=()
+environment_keys=()
 while IFS='=' read -r key _; do
-  if [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]]; then forwarded+=(-e "$key"); fi
+  if [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] && printenv "$key" >/dev/null; then
+    forwarded+=(-e "$key")
+    environment_keys+=("$key")
+  fi
 done < .env.example
-docker run --rm --pull=never --user "$(id -u):$(id -g)" "${profile_mounts[@]}" ${forwarded[@]+"${forwarded[@]}"} \
-  --entrypoint /usr/local/bin/prepare-env "$controller_image" "${config_args[@]}"
-runtime_info="$(docker run --rm --pull=never "${profile_mounts[@]}" "$controller_image" check --print-runtime "${config_args[@]}")"
+runtime_info="$(docker run --rm --pull=never "${profile_mounts[@]}" ${forwarded[@]+"${forwarded[@]}"} \
+  "$controller_image" check --print-runtime "${config_args[@]}")"
 
 selected_runtime="${runtime_info%%$'\n'*}"
 selected_image="${runtime_info#*$'\n'}"
@@ -107,6 +110,18 @@ if [[ "$selected_runtime" == docker ]]; then
     echo "Host image is missing: $selected_image. Prepare it with docker pull or an explicit source build first." >&2
     exit 1
   fi
+fi
+# Forward only explicitly set shell variables for this launch. The temporary
+# Compose override contains variable names, never credential values.
+if ((${#environment_keys[@]})); then
+  mkdir -p .cache
+  environment_override="$(mktemp "$repo_dir/.cache/start-env.XXXXXX")"
+  trap 'rm -f "$environment_override"' EXIT
+  {
+    printf 'services:\n  controller:\n    environment:\n'
+    printf '      %s:\n' "${environment_keys[@]}"
+  } > "$environment_override"
+  export COMPOSE_FILE="${COMPOSE_FILE:-$repo_dir/compose.yaml}:$environment_override"
 fi
 "${compose[@]}" up -d --no-build --pull never --wait
 published="$("${compose[@]}" port controller 8080)"

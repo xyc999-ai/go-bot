@@ -58,7 +58,7 @@ def main():
         for line in (ROOT / ".env.example").read_text().splitlines():
             if line and not line.startswith("#"):
                 env.pop(line.split("=", 1)[0], None)
-        for key in ("GO_BOT_ENV_DIR", "GO_BOT_ENV_NAME", "GO_BOT_CONFIG_FILE", "COMPOSE_FILE", "COMPOSE_PROJECT_NAME"):
+        for key in ("GO_BOT_ENV_FILE", "GO_BOT_CONFIG_FILE", "COMPOSE_FILE", "COMPOSE_PROJECT_NAME"):
             env.pop(key, None)
 
         def run(script, *args, expected=0, overrides=None):
@@ -79,15 +79,6 @@ def main():
             assert not (installed / "scripts/start.sh").exists()
             pulls = log.read_text().splitlines()
             assert len(pulls) == 3 and any("go-bot-host:" in image for image in pulls)
-            controller_image = next(image for image in pulls if "go-bot-controller:" in image)
-            # A root Controller must not turn a user's 0600 profile into a root-owned file.
-            subprocess.run([real_docker, "run", "--rm", "--pull=never", "--entrypoint", "/bin/sh",
-                            controller_image, "-ec",
-                            'mkdir /tmp/profile; printf "CONTROLLER_LISTEN=127.0.0.1:8080\\n" > /tmp/profile/.env; '
-                            'chown 1234:1234 /tmp/profile/.env; '
-                            'CONTROLLER_LISTEN=127.0.0.1:8099 prepare-env --env-file /tmp/profile/.env; '
-                            'test "$(stat -c %u:%g /tmp/profile/.env)" = 1234:1234'], check=True)
-
             # Preserve user tuning and literal credentials, including '$' and spaces.
             profile = installed / ".env"
             text = profile.read_text().replace("ALIBABA_CLOUD_ACCESS_KEY_SECRET=", "ALIBABA_CLOUD_ACCESS_KEY_SECRET=fixture$literal #value=1")
@@ -98,7 +89,7 @@ def main():
             run(ROOT / "scripts/install.sh", "--dir", str(installed))
             assert profile.read_text() == text and tuning.read_bytes() == saved_tuning
             run(ROOT / "scripts/install.sh", "--dir", str(installed), overrides={"CONTROLLER_LISTEN": "127.0.0.1:8099"})
-            assert "CONTROLLER_LISTEN=127.0.0.1:8099" in profile.read_text()
+            assert profile.read_text() == text, "installation persisted a process override"
             assert "fixture$literal #value=1" in profile.read_text()
 
             broken = stage / "incomplete"
@@ -132,9 +123,10 @@ def main():
             (source / ".env").write_bytes((ROOT / ".env.example").read_bytes())
             for deployment, source_start in ((installed, False), (source, True)):
                 project = "install-qa-" + uuid.uuid4().hex[:8]
-                launch_env = dict(env, COMPOSE_PROJECT_NAME=project,
+                launch_env = dict(env, CONTROLLER_LISTEN="127.0.0.1:8099", COMPOSE_PROJECT_NAME=project,
                                   COMPOSE_FILE=str(deployment / "compose.yaml") + os.pathsep + str(ports))
                 compose = [real_docker, "compose", "--project-directory", str(deployment)]
+                profile_before_start = (deployment / ".env").read_bytes()
                 original_owner = (deployment / ".env").stat().st_uid
                 try:
                     if source_start:
@@ -150,14 +142,28 @@ def main():
                         assert b"Go Bot" in response.read()
                     saved = (deployment / ".env").read_text()
                     assert (deployment / ".env").stat().st_uid == original_owner
-                    assert "CONTROLLER_LISTEN=127.0.0.1:8098" in saved
+                    assert (deployment / ".env").read_bytes() == profile_before_start, "startup modified the deployment profile"
+                    # Only the selected profile is exposed; repository siblings are absent.
+                    mounted = subprocess.check_output(
+                        [*compose, "exec", "-T", "controller", "cat", "/config/deployment.env"],
+                        env=launch_env)
+                    assert mounted == profile_before_start
+                    subprocess.run([*compose, "exec", "-T", "controller", "sh", "-ec",
+                                    'test ! -e /config/compose.yaml; test ! -e /config/configs; '
+                                    'test ! -e /config/.git; '
+                                    'if sh -c ": >> /config/deployment.env" 2>/dev/null; then exit 1; fi'],
+                                   env=launch_env, check=True)
+                    process_listen = subprocess.check_output(
+                        [*compose, "exec", "-T", "controller", "printenv", "CONTROLLER_LISTEN"],
+                        env=launch_env, text=True).strip()
+                    assert process_listen == ("127.0.0.1:8099" if source_start else "127.0.0.1:8098")
                     if not source_start:
                         assert "fixture$literal #value=1" in saved
                 finally:
                     subprocess.run([*compose, "down", "--volumes", "--remove-orphans"],
                                    env=launch_env, check=True, stdout=subprocess.DEVNULL)
             assert log.read_text() == before, "startup unexpectedly pulled an image"
-            print("Install/start checks passed: shared files, private profile, literal values, repeat install, missing image and interrupted download.")
+            print("Install/start checks passed: shared files, read-only profile, in-memory overrides, narrow mounts, literal values, repeat install, missing image and interrupted download.")
         finally:
             server.shutdown()
             server.server_close()

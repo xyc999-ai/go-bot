@@ -299,21 +299,23 @@ cache and update its ID before replacing the account's instance.
 
 Controller reads the mounted `.env` and `configs/default.yaml` and validates
 them at startup, including when started directly with Compose. Edit `.env` to
-change deployment settings. The source-only `start.sh` additionally saves
-validated shell overrides before starting Compose; it never pulls or builds
-images. Explicit container environment overrides are also validated and saved
-by Controller. An explicitly empty override clears the saved value.
+change deployment settings. The source-only `start.sh` forwards
+explicit shell overrides to Controller; it never pulls or builds images. Process
+environment overrides apply in memory only and never modify `.env`. An explicitly
+empty override clears the effective value for that process. Compose mounts only
+the selected env file and runtime YAML, both read-only.
 Model and web-search settings are saved per account through the UI.
 Gemini media capabilities use the API key configured in the plugin detail.
 
 For an offline configuration check or a read-only runtime check, use:
 
 ```sh
-docker compose run --rm --no-deps controller check --env-file /config/.env --config /runtime.yaml
-docker compose run --rm --no-deps controller doctor --env-file /config/.env --config /runtime.yaml
+docker compose run --rm --no-deps controller check --env-file /config/deployment.env --config /runtime.yaml
+docker compose run --rm --no-deps controller doctor --env-file /config/deployment.env --config /runtime.yaml
 ```
 
-For ECI, change `/config/.env` to `/config/.env.eci`. These commands use tools
+For ECI, prefix these commands with `GO_BOT_ENV_FILE=.env.eci` to select the
+profile. These commands use tools
 in the existing Controller image and need no local Go or running Redis.
 `check` validates configuration, including
 required fields. `doctor` also checks the selected runtime, such as the local

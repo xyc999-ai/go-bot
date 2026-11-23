@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -58,23 +57,6 @@ func WritePrivate(filename string, b []byte) error {
 		return err
 	}
 	defer os.Remove(f.Name())
-	// A containerized Controller may be root while the mounted profile belongs
-	// to the installer user. Preserve that owner when replacing the file.
-	if os.Geteuid() == 0 {
-		info, statErr := os.Stat(filename)
-		if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
-			f.Close()
-			return statErr
-		}
-		if info != nil {
-			if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-				if err := f.Chown(int(stat.Uid), int(stat.Gid)); err != nil {
-					f.Close()
-					return err
-				}
-			}
-		}
-	}
 	if err = f.Chmod(0600); err == nil {
 		_, err = f.Write(b)
 	}

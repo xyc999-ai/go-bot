@@ -10,7 +10,7 @@ Controller、Host 分别构建和发布，保留 `build/Dockerfile.controller`�
 
 | 镜像示例 | 包含内容 |
 | --- | --- |
-| `ghcr.io/xyc999-ai/go-bot-controller:latest` | Controller、内嵌 Web、prepare-env、buildeci、Docker CLI |
+| `ghcr.io/xyc999-ai/go-bot-controller:latest` | Controller、内嵌 Web、buildeci、Docker CLI |
 | `ghcr.io/xyc999-ai/go-bot-host:latest` | Go Harness Host、Node/Python/Chromium、Office/PDF 基础环境和插件资源 |
 | `redis:8-alpine` | 官方 Redis |
 
@@ -108,7 +108,7 @@ Docker 安装流程：
 检查 Docker / Compose / Docker Engine 是否可用
   → 创建目标目录，下载仓库原始 Compose、.env.example、configs/default.yaml
   → 仅在 .env 缺失时复制模板初始化，不生成 .env.eci
-  → 读取配置、应用显式安装环境覆盖
+  → 读取并校验配置
   → 拉取选定版本的 Controller、Host 和 Redis 镜像
   → 使用 Controller 镜像内工具完成配置检查
   → 输出部署目录及 docker compose up -d 启动命令
@@ -116,27 +116,21 @@ Docker 安装流程：
 
 安装脚本不执行源码构建，镜像拉取失败时明确退出，不切换为本地编译。发布 Compose 不配置 build，并对 Controller、Redis 设置 pull_policy: never，因此用户直接运行 docker compose up -d 也只使用已拉取的镜像。Controller、Redis 和 Docker Host 镜像应已由安装器拉取到本地，缺失时报错并提示重新准备。
 
-仓库内部 start.sh 保留 --env-file、可选调优文件及配置检查、环境覆盖写回、启动和就绪检查；不运行 docker pull、docker build、compose build、up --build 或 go run。配置工具统一使用本地 Controller 镜像，不再按本机是否安装 Go 分两条路径，Compose 启动显式禁止构建和拉取。ECI 模式不检查本地 Host 镜像，但要求有效的缓存 ID；普通 start 不制作缓存。这些内部用法不进入 Docker Quickstart。
+仓库内部 start.sh 保留 --env-file、可选调优文件及配置检查、本次进程的环境覆盖、启动和就绪检查；不运行 docker pull、docker build、compose build、up --build 或 go run。配置工具统一使用本地 Controller 镜像，不再按本机是否安装 Go 分两条路径，Compose 启动显式禁止构建和拉取。ECI 模式不检查本地 Host 镜像，但要求有效的缓存 ID；普通 start 不制作缓存。这些内部用法不进入 Docker Quickstart。
 
 Host 不在 Compose 服务中，所以安装脚本必须单独准备 Host 镜像。Controller 创建 Host 时继续检查本地镜像并使用 `--pull=never`；缺失时提示重新运行安装器准备，避免每个账号启动都临时联网拉取。
 
 Controller 自身启动时仍执行完整配置检查，因此即使跳过安装器直接运行 Compose，错误配置也不会被忽略。安装检查完成后，真正的服务健康状态由 Compose healthcheck / ready 检查确认，不把「镜像下载成功」称为「服务已经启动」。
 
-目前 Controller 的 Config.Load 以指定 env 文件为准，不会自动因为 Compose 设置了某个同名环境变量就覆盖它。因此落地时在 Controller serve 的 Go 启动入口复用现有配置准备函数：读取文件 → 应用已知进程环境覆盖 → 完整校验 → 将有效覆盖原子保存 → 启动 Controller。不增加另一份配置状态，也不需要进程管理器。
+Controller 的 Config.Load 按默认值 → 调优与 env 文件 → 显式进程部署环境变量的顺序合并配置，启动入口随后执行完整校验。覆盖值只保存在本次进程内存中，不保存回 .env，不改变其权限。删除旧的 prepare-env 工具及其构建、调用入口。
 
-仓库和安装目录共用的 Compose 默认读取同级 .env 及 configs/default.yaml，Redis 地址和容器标记由 Compose 固定提供。部署配置目录可写绑定到 /config，以支持覆盖值的原子保存；Controller 默认读取 /config/.env。configs/default.yaml 单独只读绑定到 /runtime.yaml 并通过 --config 读取。两处始终使用同一套挂载声明，不由安装器重写路径或生成不同 Compose。
+仓库和安装目录共用的 Compose 只将所选 env 文件只读绑定到 /config/deployment.env，将 configs/default.yaml 只读绑定到 /runtime.yaml。不绑定配置目录或源码目录。GO_BOT_ENV_FILE 可选择其他私有配置，默认 ./.env；GO_BOT_CONFIG_FILE 可选择调优文件。
 
-共用 Compose 仅提供 REDIS_ADDR 和 CONTROLLER_CONTAINER，不使用 env_file、`${SECRET}` 或无值 environment 条目重新传入部署凭证。普通用户编辑挂载的 .env；start.sh 和 install.sh 的配置工具只转发宿主进程中显式存在的已知字段。若用户通过自定义 Compose override 或 docker run -e 显式传入 Controller 进程环境，serve 会校验并保存。不能假定 HOST_IMAGE=... docker compose up 会自动透传任意 shell 变量；这样也避免把 Compose 自动解析的 .env 值误判为显式覆盖。
+共用 Compose 固定提供 REDIS_ADDR 和 CONTROLLER_CONTAINER，不将 env 文件整体重新注入进程环境。自定义 Compose override 或 docker run -e 可以提供显式部署覆盖。start.sh 将宿主进程中实际存在的已知部署变量同时用于校验和本次 Compose 启动；临时 override 只包含变量名、不包含凭证值，并在脚本结束时删除。install.sh 只初始化缺失文件并准备镜像，不保存 shell 覆盖。
 
-用户修改磁盘上的私有文件后，显式重启 Controller 才按新配置运行；不新增配置监控或后台热更新。进程环境设置发生变化时需要重建容器，不能只用 docker compose restart 期望获得新的进程环境。
+进程环境变量覆盖 env 文件不等于修改文件。用户希望长期改变配置时自行编辑 .env，再明确重建 Controller；不新增配置监控或热更新。模型和搜索配置继续由账号设置管理，不接受部署环境覆盖。
 
-### 当前实现与新方案的配置传递区别
-
-当前 scripts/start.sh 先用 prepare-env 读取指定 profile，将已识别的显式进程环境变量覆盖并保存到该文件，再运行 controller check；之后启动 docker compose --env-file /dev/null up -d --build --wait。GO_BOT_ENV_FILE 只告诉 Compose 要挂载哪个文件。Compose 将该文件只读挂载到 /config/deployment.env，Controller 通过 --env-file /config/deployment.env 调用 Go Config.Load 读取。部署配置没有整体注入 Controller 的进程环境，Compose environment 当前只有 REDIS_ADDR 和 CONTROLLER_CONTAINER。
-
-新方案继续以挂载文件作为持久配置来源，并让 Controller 的启动入口自己完成环境覆盖与保存，直接运行 Compose 就具备完整启动检查，不依赖 start.sh。Compose 的 --env-file（插值来源）、服务 env_file（容器进程环境）和挂载后传给 controller --env-file（Go 读取文件）是三件不同的事；本方案采用最后一种，另显式透传允许覆盖的进程环境变量。
-
-挂载本身声明在 compose.yaml 的 services.controller.volumes 中，由 Docker Compose 创建容器时交给 Docker Engine 执行，并非 start.sh 额外执行一条复制或挂载命令。当前 source: ${GO_BOT_ENV_FILE:-./.env}、target: /config/deployment.env 表示将宿主机选中的文件绑定到容器内路径；command 中的 --env-file /config/deployment.env 再告诉 Controller 去读取该路径。即使不设置 GO_BOT_ENV_FILE，Compose 也会使用默认来源 ./.env。统一后的 Compose 同样默认选取根目录 .env 与 configs/default.yaml，保留这两个配置来源，不依赖 start.sh 补充必填路径。
+唯一保留的 env 自动写回是用户明确执行 buildeci 成功制作缓存后保存 ECI_IMAGE_CACHE_ID。这是独立准备操作，不属于 Controller 启动流程，也不要求运行中的 Controller 能写 env。
 
 ## 6. 多架构发布
 
@@ -230,8 +224,8 @@ Redis 数据卷、每账号 Docker 卷和 NAS 路径保持现有命名。非 NAS
 
 ## 11. 本地实施与验证结果
 
-已完成独立安装器、共用 Compose、仓库启动脚本与模板改造；Controller 自行校验并保存显式容器环境覆盖，原子替换保留原文件归属。ECI cache 只读取 HOST_IMAGE，不拼接架构后缀；工具已纳入 Controller 镜像，旧的本地构建、推送、仓库认证参数及实现已移除。
+已完成独立安装器、共用 Compose、仓库启动脚本与模板改造；Controller 自行校验配置；环境覆盖只在内存中生效，env 和基础 YAML 均只读挂载，不暴露源码目录。ECI cache 只读取 HOST_IMAGE，不拼接架构后缀；工具已纳入 Controller 镜像，旧的本地构建、推送、仓库认证参数及实现已移除。
 
-本地通过 make test vet check、ARM64 两个完整镜像构建及 Host smoke、安装器和独立 start 的真实容器启动、双账号 Host / Redis 生命周期、Web Docker 集成、AMD64 四个 Go 入口交叉编译，以及 actionlint / Compose 静态检查。安装器测试通过本地 HTTP 文件和本地镜像模拟分发端，不冒充已发布 GHCR 的匿名下载验收。
+本地通过 make test vet check、ARM64 两个完整镜像构建及 Host smoke、安装器和独立 start 的真实容器启动、双账号 Host / Redis 生命周期、Web Docker 集成、AMD64 Go 入口交叉编译，以及 actionlint / Compose 静态检查。安装器测试通过本地 HTTP 文件和本地镜像模拟分发端，不冒充已发布 GHCR 的匿名下载验收。
 
 还需在远端发布工作流运行后将两个 GHCR 包设置为 Public，并完成匿名拉取检查；ECI/NAS 本次未调用真实云服务。首发使用审查后的源码手动发布 v0.0.1，不移动既有 Git 标签。详见 [部署与首发操作](deployment.md#publishing-project-images) 与 [验证记录](validation.md#ghcr-deployment-workflow-2026-11-23)。

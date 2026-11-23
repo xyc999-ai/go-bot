@@ -12,7 +12,8 @@ paths. Initialization leaves existing files in place.
 Startup defaults to `.env`, and `buildeci.sh` defaults to `.env.eci`. Both
 accept `--env-file PATH` and require the selected file to exist. The launcher
 applies explicitly set shared deployment variables, validates the runtime
-configuration, and saves valid overrides atomically.
+configuration, and forwards the overrides only to that process. Neither loading
+nor validating configuration writes overrides back to the profile.
 Compose mounts the profile into Controller. Controller connects to Redis over
 the internal Compose network at `redis:6379`. Compose publishes Controller on
 port 8080 and Redis on port 6379 on the Docker host's network interfaces.
@@ -32,17 +33,27 @@ files, except for the root `.env.example` template. For other names, keep
 private profiles outside the checkout or under the ignored `.local/` directory.
 Create the directory first if passing a new path to `--init-env`.
 
-Compose mounts the profile directory read/write at `/config` to allow atomic
-profile replacement, and mounts `configs/default.yaml` read-only at `/runtime.yaml`.
-Missing YAML fails startup. Controller reads the original profile directly;
-Compose does not pass the entire profile as container environment variables.
-`REDIS_ADDR` and `CONTROLLER_CONTAINER` are fixed container wiring. Compose's
-automatic `.env` interpolation is not used to reconstruct application secrets.
-Edit `.env` for ordinary Compose deployments, then restart Controller.
-If you explicitly provide deployment variables in a container environment (for
-example through a Compose override), Controller validates and persists them before
-serving. The source `start.sh` similarly forwards explicit shell overrides to
-its configuration tool. An explicit empty value clears the saved value.
+Compose mounts only the selected env file read-only at `/config/deployment.env`,
+and mounts `configs/default.yaml` read-only at `/runtime.yaml`. The repository or
+installation directory is not mounted into Controller. Missing files fail startup.
+Controller reads the original profile directly; Compose does not pass the entire
+profile as container environment variables. `REDIS_ADDR` and `CONTROLLER_CONTAINER`
+are fixed container wiring. Compose's automatic `.env` interpolation is not used
+to reconstruct application secrets.
+
+Configuration precedence is built-in defaults, tuning/profile files, then explicit
+process deployment variables. Overrides affect only the current process. They do
+not rewrite the profile, change its permissions or clear saved values. An explicit
+empty override clears the effective value in memory. Account model and search
+settings remain managed through the UI.
+
+For ordinary Compose deployments, edit `.env` and recreate Controller to apply
+changes. Use a Compose override to explicitly supply container environment values.
+The repository `start.sh` forwards explicitly set shell values for that launch,
+using a temporary Compose override that contains variable names only and is deleted
+on exit. The installer prepares files and images; it does not persist shell
+configuration. `buildeci` saving a successfully created `ECI_IMAGE_CACHE_ID` remains
+an explicit preparation operation, separate from startup.
 
 ## Runtime, storage and entry
 

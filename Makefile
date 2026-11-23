@@ -5,14 +5,12 @@ build:
 	mkdir -p bin
 	go build -trimpath -o bin/controller ./cmd/controller
 	go build -trimpath -o bin/host ./cmd/host
-	go build -trimpath -o bin/prepare-env ./internal/cmd/prepare-env
 	go build -trimpath -o bin/buildeci ./cmd/buildeci
 build-web:
 	npm --prefix frontend ci --prefer-offline
 	npm --prefix frontend run build
 	mkdir -p bin
 	go build -tags webui -trimpath -o bin/controller ./cmd/controller
-	go build -trimpath -o bin/prepare-env ./internal/cmd/prepare-env
 image:
 	docker build -f build/Dockerfile.host -t $(HOST_IMAGE) .
 image-controller:

@@ -68,12 +68,9 @@ func TestSearchProviderAndKeyAreRequired(t *testing.T) {
 	}
 	t.Setenv("WEB_SEARCH_PROVIDER", "deepseek")
 	t.Setenv("WEB_SEARCH_API_KEY", "explicit-key")
-	if err := PrepareControllerProfile("", ""); err != nil {
-		t.Fatal(err)
-	}
 	c, err = Load("", "")
 	if err != nil || c.Web.APIKey != "explicit-key" {
-		t.Fatalf("explicit search configuration: %v", err)
+		t.Fatal("account search environment unexpectedly overrode the profile")
 	}
 }
 func TestYAMLOnlyAcceptsProcessTuning(t *testing.T) {
@@ -244,7 +241,7 @@ func TestEnvironmentTemplateAndPrecedence(t *testing.T) {
 	if err != nil || c.Model.Main.BaseURL != "https://models.example/v1" || c.Model.Main.APIKey != "literal#key=$value" {
 		t.Fatal("direct profile loading consumed process overrides")
 	}
-	if err := PrepareControllerProfile("", ".env.eci"); err != nil {
+	if err := c.ValidateController(); err != nil {
 		t.Fatalf("Controller validation depended on account model environment: %v", err)
 	}
 	if _, err := Load("", ".env.missing"); !errors.Is(err, os.ErrNotExist) {
@@ -296,32 +293,49 @@ func TestHostRequiresControllerEnvironment(t *testing.T) {
 	}
 }
 
-func TestStartupRequiresProfileWithoutAccountCredentials(t *testing.T) {
+func TestProcessOverridesDoNotModifyProfile(t *testing.T) {
 	clean(t)
 	t.Chdir(t.TempDir())
-	if err := PrepareControllerProfile("", ""); !errors.Is(err, os.ErrNotExist) {
+	if _, err := Load("", ""); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing profile: %v", err)
 	}
 	if _, err := os.Stat(".env"); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("startup created a profile")
 	}
-	writeFile(t, ".env", gobot.EnvironmentTemplate)
-	if err := PrepareControllerProfile("", ""); err != nil {
-		t.Fatalf("start without account credentials: %v", err)
-	}
-	t.Setenv("MODEL_API_KEY", "fixture-account-key")
-	t.Setenv("MODEL_URL", "https://models.example/v1")
-	t.Setenv("MODEL_NAME", "fixture-model")
-	t.Setenv("WEB_SEARCH_API_KEY", "fixture#search=$key")
-	t.Setenv("WEB_SEARCH_PROVIDER", "deepseek")
-	t.Setenv("HOST_IMAGE", "go-bot/host:fixture")
-	if err := PrepareControllerProfile("", ""); err != nil {
+	const profile = "# read-only deployment\nHOST_IMAGE=registry.example/host:saved\nALIBABA_CLOUD_ACCESS_KEY_SECRET=saved-secret\n"
+	if err := os.WriteFile(".env", []byte(profile), 0400); err != nil {
 		t.Fatal(err)
 	}
+	before, err := os.Stat(".env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOST_IMAGE", "registry.example/host:process")
+	t.Setenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET", "")
+	t.Setenv("MODEL_API_KEY", "ignored-account-key")
+	t.Setenv("WEB_SEARCH_API_KEY", "ignored-search-key")
+	c, err := Load("", "")
+	if err != nil || c.ValidateController() != nil || c.Runtime.Image != "registry.example/host:process" || c.Cloud.Aliyun.Credentials.AccessKeySecret != "" {
+		t.Fatalf("deployment overrides were not applied in memory: %v", err)
+	}
+	if c.Model.Main.APIKey != "" || c.Web.APIKey != "" {
+		t.Fatal("account configuration was taken from deployment environment")
+	}
+	t.Setenv("HOST_IMAGE", "")
+	c, err = Load("", "")
+	if err != nil || c.ValidateController() == nil {
+		t.Fatal("an explicit empty image must fail startup validation")
+	}
+	os.Unsetenv("HOST_IMAGE")
+	os.Unsetenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET")
+	c, err = Load("", "")
+	if err != nil || c.Runtime.Image != "registry.example/host:saved" || c.Cloud.Aliyun.Credentials.AccessKeySecret != "saved-secret" {
+		t.Fatal("removing process overrides did not restore file configuration")
+	}
 	saved, err := os.ReadFile(".env")
-	if err != nil || strings.Contains(string(saved), "MODEL_") || strings.Contains(string(saved), "WEB_SEARCH_") ||
-		!strings.Contains(string(saved), "HOST_IMAGE=go-bot/host:fixture") {
-		t.Fatal("profile did not preserve only deployment overrides")
+	after, statErr := os.Stat(".env")
+	if err != nil || statErr != nil || string(saved) != profile || after.Mode() != before.Mode() || !os.SameFile(before, after) {
+		t.Fatal("loading or validation changed the deployment file")
 	}
 }
 
@@ -334,7 +348,7 @@ func TestStartupRejectsPublicTemplateAsPrivateProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{".env.example", ".env"} {
-		if err := PrepareControllerProfile("", path); err == nil || !strings.Contains(err.Error(), "private environment profile") {
+		if _, err := Load("", path); err == nil || !strings.Contains(err.Error(), "private environment profile") {
 			t.Fatalf("accepted the public template through %s: %v", path, err)
 		}
 	}

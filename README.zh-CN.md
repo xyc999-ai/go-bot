@@ -274,18 +274,19 @@ ECI Host。仅制作缓存不会创建用户 Host。更新 Host 镜像时，先�
 ## 配置与检查
 
 Controller 启动时读取并校验挂载的 `.env` 和 `configs/default.yaml`，直接用 Compose 启动也会检查。
-普通部署修改 `.env` 即可。仓库中的 `start.sh` 还支持校验并保存 shell 环境覆盖，再启动 Compose；
-它不会拉取或构建镜像。Controller 也会校验并保存显式传入容器的环境覆盖，显式空值会清空已保存值。
+普通部署修改 `.env` 即可。仓库中的 `start.sh` 会将显式 shell 环境变量传给 Controller，
+不会拉取或构建镜像。环境变量只在内存中覆盖本次进程的配置，不写回 `.env`；
+显式空值会清空本次进程中的对应值。Compose 只读挂载所选 env 文件和基础 YAML，不挂载整个目录。
 模型和网页搜索由用户在设置界面按账号配置；Gemini 生图等能力在插件详情中配置 API Key。
 
 用下面的命令检查 ECI 配置或运行环境：
 
 ```sh
-docker compose run --rm --no-deps controller check --env-file /config/.env --config /runtime.yaml
-docker compose run --rm --no-deps controller doctor --env-file /config/.env --config /runtime.yaml
+docker compose run --rm --no-deps controller check --env-file /config/deployment.env --config /runtime.yaml
+docker compose run --rm --no-deps controller doctor --env-file /config/deployment.env --config /runtime.yaml
 ```
 
-ECI 模式将 `/config/.env` 换成 `/config/.env.eci`。命令使用本地 Controller 镜像中的工具，
+ECI 模式在上述命令前加 `GO_BOT_ENV_FILE=.env.eci` 选择配置。命令使用本地 Controller 镜像中的工具，
 无需安装 Go 或先启动 Redis。`check` 离线校验配置及必填项。
 `doctor` 还会检查本地 Host 镜像或阿里云 Ready 镜像缓存。实际创建 Host、挂载存储，
 以及验证 Controller 到 Host 的连通性，发生在打开账号时。
