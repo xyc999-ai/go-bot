@@ -17,7 +17,7 @@ func TestRecentActivityUsesVisibleMessageTimesAndBoundedUnicodeText(t *testing.T
 	histories := map[string][]sessionformat.Event{}
 	for n := 1; n <= 12; n++ {
 		id := fmt.Sprintf("00000000-0000-4000-8000-%012d", n)
-		for seq, text := range []string{"first request", "first answer", "second request", "second answer", "third request", strings.Repeat("界", 1200)} {
+		for seq, text := range []string{"first request", "first answer", "second request", "second answer", "third request", "third answer", "fourth request", "fourth answer", "fifth request", strings.Repeat("界", 1200)} {
 			role, kind := "user", "user/message"
 			if seq%2 != 0 {
 				role, kind = "assistant", "assistant/message"
@@ -34,13 +34,13 @@ func TestRecentActivityUsesVisibleMessageTimesAndBoundedUnicodeText(t *testing.T
 	old := historyEvent(0, "user/message", "user", "stale conversation")
 	old.Time = now.Add(-8 * 24 * time.Hour).UnixMilli()
 	histories[stale] = []sessionformat.Event{old}
-	internal := historyEvent(6, "user/message", "agent-message", "never copy internal relay")
+	internal := historyEvent(10, "user/message", "agent-message", "never copy internal relay")
 	internal.Time = now.UnixMilli()
-	tool := historyEvent(7, "tool/result", "tool", "never copy tool output")
+	tool := historyEvent(11, "tool/result", "tool", "never copy tool output")
 	tool.Time = now.UnixMilli()
-	welcome := historyEvent(8, "assistant/message", "go-bot/welcome", "never infer interests from the welcome")
+	welcome := historyEvent(12, "assistant/message", "go-bot/welcome", "never infer interests from the welcome")
 	welcome.Time = now.UnixMilli()
-	mixed := historyEvent(9, "assistant/message", "assistant", "visible conclusion")
+	mixed := historyEvent(13, "assistant/message", "assistant", "visible conclusion")
 	mixed.Time = now.Add(-time.Hour).UnixMilli()
 	var data map[string]json.RawMessage
 	_ = json.Unmarshal(mixed.Data, &data)
@@ -79,8 +79,11 @@ func TestRecentActivityUsesVisibleMessageTimesAndBoundedUnicodeText(t *testing.T
 		}
 		users := 0
 		for _, message := range entry.Messages {
+			if message.Timestamp != histories[entry.SessionID][message.ID].Time {
+				t.Fatal("activity lost the original message timestamp")
+			}
 			chars += len([]rune(message.Content))
-			if len([]rune(message.Content)) > 800 {
+			if len([]rune(message.Content)) > 1000 {
 				t.Fatal("Unicode preview exceeded its limit")
 			}
 			if message.Role == "user" {
@@ -91,15 +94,15 @@ func TestRecentActivityUsesVisibleMessageTimesAndBoundedUnicodeText(t *testing.T
 					t.Fatalf("copied excluded text %q: %+v", forbidden, message)
 				}
 			}
-			if strings.HasPrefix(message.Content, "界") && !message.Truncated {
-				t.Fatal("long preview lacked its truncation flag")
+			if strings.HasPrefix(message.Content, "界") && (!message.Truncated || len([]rune(message.Content)) != 1000) {
+				t.Fatal("long preview did not retain exactly 1000 characters with a truncation flag")
 			}
 		}
-		if users != 2 {
-			t.Fatalf("expected the last two user exchanges, got %d: %+v", users, entry)
+		if users != 4 {
+			t.Fatalf("expected the last four user exchanges, got %d: %+v", users, entry)
 		}
 	}
-	if chars > 24000 {
+	if chars > 30000 {
 		t.Fatal("total activity budget exceeded")
 	}
 	// Archived sessions disappear through the same real source list used by

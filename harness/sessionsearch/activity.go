@@ -64,7 +64,7 @@ WHERE time >= ? AND session_id <> ? GROUP BY session_id ORDER BY MAX(time) DESC,
 			selected = append([]ActivitySession{{SessionID: main, UpdatedAt: last.Int64}}, selected...)
 		}
 	}
-	budget := 24000
+	budget := 30000
 	for _, entry := range selected {
 		if i.source.Title != nil {
 			entry.Title = i.source.Title(entry.SessionID)
@@ -79,8 +79,8 @@ WHERE time >= ? AND session_id <> ? GROUP BY session_id ORDER BY MAX(time) DESC,
 				break
 			}
 			chars := []rune(message.Content)
-			if len(chars) > min(800, budget) {
-				chars, message.Truncated = chars[:min(800, budget)], true
+			if len(chars) > min(1000, budget) {
+				chars, message.Truncated = chars[:min(1000, budget)], true
 			}
 			message.Content = string(chars)
 			budget -= len(chars)
@@ -94,19 +94,19 @@ WHERE time >= ? AND session_id <> ? GROUP BY session_id ORDER BY MAX(time) DESC,
 }
 
 func (i *Index) recentDialogue(ctx context.Context, id string, since int64) ([]Message, error) {
-	// Keep the last two actual user inputs and the latest assistant dialogue
+	// Keep the last four actual user inputs and the latest assistant dialogue
 	// belonging to each. Text around tools can span several messages; at most
 	// two assistant messages per exchange keep this preview bounded. Earlier
 	// details remain retrievable by the original seq anchors.
 	rows, err := i.db.QueryContext(ctx, `WITH last_users AS (
- SELECT seq FROM messages WHERE session_id=? AND time>=? AND role='user' ORDER BY seq DESC LIMIT 2
+ SELECT seq FROM messages WHERE session_id=? AND time>=? AND role='user' ORDER BY seq DESC LIMIT 4
 ), recent AS (
  SELECT seq, role, body, time, MAX(CASE WHEN role='user' THEN seq END) OVER (ORDER BY seq) AS exchange
  FROM messages WHERE session_id=? AND time>=? AND seq >= COALESCE((SELECT MIN(seq) FROM last_users), 0)
 ), ranked AS (
  SELECT *, ROW_NUMBER() OVER (PARTITION BY exchange, role ORDER BY seq DESC) AS rank FROM recent
 )
-SELECT seq, role, SUBSTR(body,1,801), time, LENGTH(body)>800 FROM ranked WHERE role='user' OR rank<=2 ORDER BY seq`, id, since, id, since)
+SELECT seq, role, SUBSTR(body,1,1001), time, LENGTH(body)>1000 FROM ranked WHERE role='user' OR rank<=2 ORDER BY seq`, id, since, id, since)
 	if err != nil {
 		return nil, err
 	}
