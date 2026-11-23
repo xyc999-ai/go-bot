@@ -2,43 +2,74 @@
 
 [English README](../README.md) · [简体中文 README](../README.zh-CN.md)
 
+## User and developer guides
+
 | Guide | Contents |
 | --- | --- |
-| [Configuration](configuration.md) | Private profiles, validation, precedence, and per-account settings |
-| [Deployment](deployment.md) | Docker and ECI operations, image caches, storage, and Host lifecycle |
-| [Troubleshooting](troubleshooting.md) | Diagnose startup, connectivity, and account settings |
-| [HTTP API](api.md) · [OpenAPI](../api/openapi.yaml) | Accounts, sessions, messages, streaming, and files |
-| [Architecture](architecture.md) | Controller, Redis, Host, and data layout |
-| [Main chat and first run](main-chat-and-first-run-plan.zh-CN.md) | Stable main conversation, model checks, welcome seed and default plugin preparation |
-| [Schedule and workspaces](schedule-parity-plan.zh-CN.md) | Upstream behavior, delivery receipts, chat archiving, and mobile task management |
-| [Proactive wake-up research](proactive-service-research-and-plan.zh-CN.md) | Verified Muse, Grok Bot and dots behavior, disclosed triggers, and limits of public implementation details |
-| [Agent composition](agent-composition-research-plan.zh-CN.md) | Implemented fixed Go composition selectors and background Agent; distinct from the full Preset subsystem |
-| [Go Agent Preset proposal](agent-preset-go-plan.zh-CN.md) | Planned Go registry, definitions, Agent bindings, selection projection and restoration; not yet implemented |
-| [Proactive discovery](proactive-discovery-plan.zh-CN.md) | Implemented persistent background Agent, LLM-selected wake times, structured decisions and internal delivery |
-| [Extending capabilities](providers.md) · [Contributing](../CONTRIBUTING.md) | Provider contracts and development workflow |
-| [X / Google account setup](plugin-account-setup.md) | Obtain your application credentials and connect native accounts |
-| [Gemini API CLI plugin plan](gemini-api-cli-plugin-plan.zh-CN.md) | API-key connection, official CLI installation, Agent usage and file delivery |
-| [Business plugin SDK](../extensions/sdk/README.md) · [Examples](../examples/plugins/README.md) | Native Cordis plugins, async Host APIs, credentials and MCP |
-| [Web visual redesign](web-lumeo-redesign-plan.zh-CN.md) | Lumeo reference, navigation rail, task browser, themes, typography, and visual validation |
-| [Frontend development](../frontend/README.md) | Develop the UI with Vite against Controller |
-| [Chat images and tools](chat-media-display-plan.zh-CN.md) | Compact image tools, horizontal edge fades and delivered image previews |
-| [Streaming text playback](stream-text-playback-plan.zh-CN.md) | Shared Web/mobile progressive text display and validation |
-| [Markdown and demo refresh](markdown-and-demo-refresh-plan.zh-CN.md) | Scrollable tables and code, source copying, attachment order, and bilingual demos |
-| [Upstream compatibility](compatibility.md) · [Validation](validation.md) | Upstream fixtures and historical verification results |
-| [License](../LICENSE) · [Third-party notices](../THIRD_PARTY_NOTICES.md) | License terms and upstream attribution |
+| [Configuration](configuration.md) | Deployment profiles, validation and per-account settings |
+| [Deployment](deployment.md) | Docker and ECI, image caches, storage and image publication |
+| [Troubleshooting](troubleshooting.md) | Startup, connectivity and account settings |
+| [HTTP API](api.md) · [OpenAPI](../api/openapi.yaml) | Accounts, sessions, streaming, files, permissions and plugins |
+| [Architecture](architecture.md) | Controller, Redis, Host, Go composition and storage |
+| [Extending capabilities](providers.md) | Model, runtime, search and tool adapters |
+| [Plugin accounts](plugin-account-setup.md) · [Google application setup](google-workspace-app-setup.md) | Configure plugin services and OAuth applications |
+| [Upstream compatibility](compatibility.md) | Session format, behavior references and fixture verification |
+| [Contributing](../CONTRIBUTING.md) | Source development and verification |
+| [Frontend development](../frontend/README.md) · [Mobile development](../mobile/README.md) | Develop and customize the supplied clients |
 
-Run the development checks from the repository root:
+## Design documents
+
+Design documents describe responsibilities, data contracts and interactions. Their
+status notes distinguish implemented behavior from proposals. For current setup
+commands, use the guides above.
+
+| Design | Contents |
+| --- | --- |
+| [Controller and Redis](redis-multi-host-controller-plan.zh-CN.md) | Account data, multiple Hosts and synchronous lifecycle requests |
+| [Container distribution](container-release-plan.zh-CN.md) | Separate GHCR images, installer and Docker/ECI startup boundaries |
+| [Main chat and first run](main-chat-and-first-run-plan.zh-CN.md) | Main Session, greeting, model checks and default plugins |
+| [Agent Preset proposal](agent-preset-go-plan.zh-CN.md) | Proposed Go registry and bindings; full subsystem not yet implemented |
+| [Models and sessions](model-settings-and-session-routing-plan.zh-CN.md) | Endpoint settings and per-session model selection |
+| [Model protocols](anthropic-model-protocol-plan.zh-CN.md) | OpenAI/Anthropic adapters and protocol selection |
+| [Long-term memory](hermes-agent-memory-design.zh-CN.md) | Memory files, prompt integration and SQLite FTS5 recall |
+| [Schedules and workspaces](schedule-parity-plan.zh-CN.md) | Delivery, working directories and archival |
+| [Proactive assistance](proactive-discovery-plan.zh-CN.md) | Background context, wake decisions and main-chat delivery |
+| [Permissions and approvals](permission-parity-plan.zh-CN.md) | Per-session execution permissions and human approval |
+| [Host event stream](host-event-stream-plan.zh-CN.md) | Shared client stream and in-chat questions/approvals |
+| [Business plugin system](host-bridge-plugin-system-plan.zh-CN.md) | Cordis, asynchronous Host Bridge and Go core services |
+| [Default capability plugins](agent-browser-officecli-plugin-plan.zh-CN.md) | agent-browser/OfficeCLI installation, activation and Skills |
+| [X and Google Workspace](x-google-workspace-plugin-plan.zh-CN.md) | CLI/MCP integration and plugin authorization |
+| [Gemini API CLI](gemini-api-cli-plugin-plan.zh-CN.md) | API-key configuration, media tools and Agent integration |
+| [Web search and fetch](web-tools-parity-plan.zh-CN.md) | Provider boundaries, formatting and bounded output |
+| [Web UI](web-lumeo-redesign-plan.zh-CN.md) | Navigation, themes, typography and interaction |
+| [Chat images and tools](chat-media-display-plan.zh-CN.md) | Image groups, scrolling and presented-image previews |
+| [Streaming text](stream-text-playback-plan.zh-CN.md) | Progressive display across Web and mobile |
+| [Markdown and attachments](markdown-and-demo-refresh-plan.zh-CN.md) | Tables, code, copying, attachment order and demos |
+
+## Showcase
+
+[Showcase assets](showcase/) contains the real demo GIFs and images referenced by
+both READMEs. Chinese and English demos are retained alongside their source
+screenshots.
+
+## Licensing
+
+[MIT License](../LICENSE) · [Third-party notices](../THIRD_PARTY_NOTICES.md) · [Security policy](../SECURITY.md)
+
+## Development checks
+
+Run from the repository root:
 
 ```sh
 make test vet check
 make race
 make build-web
 npm --prefix frontend test
-make image
+make image image-controller
 ./scripts/smoke-image.sh
 RUN_DOCKER_INTEGRATION=1 go test -tags webui ./tests/integration -v
 python3 scripts/smoke-cli.py
 ```
 
-The Chinese design and research notes in this directory record earlier implementation
-decisions. Use the guides above for current commands and behavior.
+Docker checks require Docker to be running. Real cloud and third-party service
+checks additionally need the deployer's own configuration and credentials.

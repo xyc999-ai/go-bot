@@ -1,10 +1,15 @@
 <h1 align="center">go-bot</h1>
 
 <p align="center">
+  <a href="README.md">English</a> · <strong>简体中文</strong> ·
+  <strong><a href="https://github.com/xyc999-ai/go-bot/releases/latest">下载 Android APK</a></strong>
+</p>
+
+<p align="center">
   <img src="assets/harness-whale.png" width="184" alt="go-bot 蓝鲸头像">
 </p>
 
-go-bot 是用 Go 实现的 DeepSeek Harness，也是一款可自托管的 Personal Agent，
+go-bot 是用 Go 实现的 Harness 系统，也是一款可自托管的 Personal Agent，
 可作为 [Meta Muse](https://about.fb.com/news/2026/09/introducing-muse-personal-ai-agent/)、
 [OpenAI dots](https://openai.com/zh-Hans-CN/index/introducing-dots/) 和
 [Grok Bot](https://help.x.com/en/using-x/about-grok) 的开源替代方案。个人可以用 Docker 在本地运行、开发和测试。
@@ -13,11 +18,6 @@ Go Bot 会记住与你交流的背景，持续关注你关心的事，并主动�
 
 企业团队可以用阿里云弹性容器实例（ECI）为每个账号按需启动独立 Host，按需持久化数据，
 并接入自己的前端和业务服务，构建自己的 Personal Agent 产品。
-
-<p align="center">
-  <a href="README.md">English</a> · <strong>简体中文</strong> ·
-  <strong><a href="https://github.com/xyc999-ai/go-bot/releases/latest">下载 Android APK</a></strong>
-</p>
 
 - **网络搜索和浏览器操作。** 配置搜索供应商后即可检索网页。Agent 能操作 Chromium，打开页面、填写表单和截图。
 - **生成和编辑图片。** 可以用文字生图，也可以上传多张参考图，生成结果会直接显示在会话中。
@@ -297,10 +297,18 @@ ECI 模式在上述命令前加 `GO_BOT_ENV_FILE=.env.eci` 选择配置。命令
 | 用途 | 在执行命令的机器上安装 |
 | --- | --- |
 | Quickstart | Docker Engine 或 Docker Desktop、Docker Compose v2、curl 和 Bash。 |
-| 运行 `start.sh` 或制作公共镜像的 ECI 缓存 | Docker、Docker Compose v2 和 Bash，先准备所需镜像；无需在本机安装 Go。 |
+| 在源码目录通过 `scripts/start.sh` 启动服务 | Docker、Docker Compose v2 和 Bash。提前准备环境文件和所需本地镜像；脚本不拉取或构建镜像。 |
+| 通过 `scripts/buildeci.sh` 制作 ECI 镜像缓存 | Docker、Docker Compose v2 和 Bash、本地 Controller 镜像，以及填写云凭证和网络参数的 ECI 环境文件。 |
 | 在 Docker 外开发 | 后端需要 Go 1.26 或更高版本，原生 Controller 需要 Redis，前端开发需要 Node.js 22.12+ 和 npm。 |
+| 开发 Cordis 插件运行时 | 按 `extensions/cordis/package.json` 使用 Node.js 24.9+ 和 pnpm 11.25.0。 |
 
-Compose 负责启动 Redis 和内嵌前端的已发布 Controller。Agent 使用的 Python、Node.js、Chromium 和通用文档环境已包含在 Host 镜像中；OfficeCLI 与 agent-browser 从插件市场安装。
+[ECI 完整流程](#阿里云-eci)还需要 Git 获取源码，并提前准备该节列出的云资源。
+`buildeci.sh` 会用 Controller 镜像启动临时容器，运行其中打包的 `buildeci` 程序，
+调用阿里云拉取 Host 镜像并制作缓存，待缓存就绪后将 ID 回写选定的环境文件。
+此步骤不依赖正在运行的 Controller 服务，无需在本机构建 Host 或安装 Go，也不会启动账号的 Host。
+
+Compose 负责启动 Redis 和内嵌前端的已发布 Controller。Agent 使用的 Python、Node.js、Chromium 和通用文档环境已包含在 Host 镜像中。
+新账号会自动安装并启用 agent-browser 和 OfficeCLI，包括官方 CLI 依赖及 Skills；首次安装需要联网，后续可以通过插件市场管理。
 
 ## 开发与扩展
 
@@ -312,11 +320,22 @@ Compose 负责启动 Redis 和内嵌前端的已发布 Controller。Agent 使用
 
 - **新增 Skill。** 用 `SKILL.md` 把已有工具组合成可重复执行的流程。账号级 Skill 放在 Host 的 `/root/harness/.dsh/skills/` 下。
 - **新增工具和部分第三方服务。** 在自定义 Host 中实现 Go Tool 接口，并加入 Host 的工具集合。把外部 SDK 和 HTTP 调用放在 `thirdparty/`，运行环境、模型、搜索和生图的适配放在 `providers/`。 [工具接口](harness/agent/native_contract.go) · [Host 工具组装](harness/assembly/native_runtime.go) · [供应商扩展指南](docs/providers.md)
-- **定制产品入口。** 通过 HTTP 和 SSE 接入自己的聊天前端或消息渠道，由产品层处理账号认证、连接权限，以及预订和付款等操作的用户确认。 [API 文档](docs/api.md) · [个人 Agent 接入调研](docs/personal-agent-research.zh-CN.md)
+- **定制产品入口。** 通过 HTTP 和 SSE 接入自己的聊天前端或消息渠道，由产品层处理账号认证、连接权限，以及预订和付款等操作的用户确认。 [API 文档](docs/api.md)
 
 [文档索引](docs/README.md) · [贡献指南](CONTRIBUTING.md) · [安全报告](SECURITY.md) · [MIT 许可证](LICENSE) · [第三方声明](THIRD_PARTY_NOTICES.md)
 
-## 社区交流
+## 社区与联系
+
+欢迎通过 [Issue](https://github.com/xyc999-ai/go-bot/issues/new) 提出问题、分享想法或反馈建议，
+也可以直接联系项目作者：
+
+- 邮箱：[xyc00666@gmail.com](mailto:xyc00666@gmail.com)
+- 微信：`Xyc--999`
+- X：[@xyc_999](https://x.com/xyc_999)
+
+欢迎有意将该项目商业化的团队或个人联系交流。
+
+### QQ 交流群
 
 欢迎加入 QQ 群 **go-bot交流**，交流部署和使用经验，也可以提出问题或反馈建议。
 用 QQ 扫描下方二维码，或直接搜索群号 **710767129**。
@@ -332,4 +351,4 @@ Compose 负责启动 Redis 和内嵌前端的已发布 Controller。Agent 使用
 - [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) 提供 Word、PPT、Excel 处理能力。Host 也包含 [LibreOffice](https://www.libreoffice.org/)。
 - [agent-browser](https://github.com/vercel-labs/agent-browser) 提供 CLI 和 Skill，Host 用它们操作 [Chromium](https://www.chromium.org/)。
 
-其他调研项目见[开源记忆方案对比](docs/open-source-agent-memory-survey.zh-CN.md)。随项目分发的组件及其许可见[第三方声明](THIRD_PARTY_NOTICES.md)。
+随项目分发的组件及其许可见[第三方声明](THIRD_PARTY_NOTICES.md)。

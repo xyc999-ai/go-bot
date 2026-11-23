@@ -148,7 +148,7 @@ The Host shell has the user's container-wide authority, including access to its
 model/search keys and other Sessions. It is not a multi-tenant isolation layer.
 
 See [configuration](configuration.md), [deployment](deployment.md),
-[provider extension](providers.md) and [validation evidence](validation.md).
+[provider extension](providers.md) and [development checks](../CONTRIBUTING.md#development-and-verification).
 
 ## Business plugins
 

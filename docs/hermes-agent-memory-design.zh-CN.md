@@ -97,4 +97,4 @@ Docker 命名卷和 ECI + NAS 保留两份记忆和 v4 日志。Host 重建后�
 3. 会话 B 用 FTS5 查询 A 的历史原文，覆盖中文单字、双字、英文关键词、短语、布尔和前缀查询，并按消息锚点展开前后文。另一个账号查不到 A。归档会话和系统提示词不出现在检索结果中。
 4. 验证日志提交后能够增量入索引，并模拟日志已提交但索引未更新的重启。用 Docker 新容器复用同一个账号卷，验证从 v4 重建索引。账号记忆在其他会话中修改后，验证恢复的会话和 Fork 在下一模型步骤使用当前版本。
 
-ECI + NAS 实机验证延后，复用同一套实例替换和索引重建场景。 [验收命令](validation.md#account-memory-and-history-search)
+存储与实例替换方式见[部署说明](deployment.md#storage-choices)，本地验证入口见[贡献指南](../CONTRIBUTING.md#development-and-verification)。
