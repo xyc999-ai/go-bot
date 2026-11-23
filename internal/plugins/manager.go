@@ -38,6 +38,8 @@ type Manager struct {
 	runtime         *hostBridge
 	desired         plugin.RuntimeSettings
 	lastError       string
+	applying        bool
+	preparation     map[string]plugin.Instance
 	changes         chan struct{}
 	surface         *authorization.Surface
 	ownsCredentials bool
@@ -166,8 +168,20 @@ func (m *Manager) Apply(ctx context.Context, settings plugin.RuntimeSettings) (S
 func (m *Manager) apply(ctx context.Context, s plugin.RuntimeSettings, restart bool, reinstall string) (status Status, err error) {
 	m.mu.Lock()
 	m.desired = s.Clone()
+	m.applying = true
+	m.lastError = ""
+	m.preparation = make(map[string]plugin.Instance)
 	m.mu.Unlock()
+	m.changed()
 	defer func() {
+		m.mu.Lock()
+		m.applying = false
+		for name, row := range m.preparation {
+			if row.State != "installation-failed" {
+				delete(m.preparation, name)
+			}
+		}
+		m.mu.Unlock()
 		m.report(err)
 		read, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
@@ -204,6 +218,15 @@ func (m *Manager) apply(ctx context.Context, s plugin.RuntimeSettings, restart b
 			missing = append(missing, name)
 		}
 	}
+	// Defaults install sequentially. Publish the entire queue so a package
+	// waiting for its turn is not mistaken for an unavailable plugin.
+	m.mu.Lock()
+	for _, name := range missing {
+		m.preparation[name] = plugin.Instance{Package: name, State: "installing"}
+	}
+	m.mu.Unlock()
+	m.changed()
+
 	reloadRuntime := restart
 	var installErrors []error
 	failed := map[string]bool{}
@@ -226,6 +249,14 @@ func (m *Manager) apply(ctx context.Context, s plugin.RuntimeSettings, restart b
 			_, e = m.packages().Install(ctx, name, s.Packages[name].Source, values, s.Packages[name].Builds...)
 			return e
 		}()
+		row := plugin.Instance{Package: name, State: "loading"}
+		if installErr != nil {
+			row.State, row.Error = "installation-failed", m.redact(installErr.Error())
+		}
+		m.mu.Lock()
+		m.preparation[name] = row
+		m.mu.Unlock()
+		m.changed()
 		if installErr != nil {
 			failed[name] = true
 			installErrors = append(installErrors, fmt.Errorf("%s: %w", name, installErr))
@@ -319,8 +350,16 @@ func stringField(row map[string]any, key string) string { value, _ := row[key].(
 func (m *Manager) Status(ctx context.Context) (Status, error) {
 	m.mu.RLock()
 	runtime, last, desired := m.runtime, m.lastError, m.desired.Clone()
+	applying := m.applying
+	preparation := make(map[string]plugin.Instance, len(m.preparation))
+	for name, row := range m.preparation {
+		preparation[name] = row
+	}
 	m.mu.RUnlock()
 	status := Status{Runtime: "stopped", Packages: []plugin.PackageInfo{}, Instances: []plugin.Instance{}, Error: last}
+	if runtime == nil && applying {
+		status.Runtime = "loading"
+	}
 	if runtime != nil {
 		status.Runtime = "running"
 		if !runtime.Alive() {
@@ -338,13 +377,36 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 				}
 			}
 		}
-	} else {
-		for _, row := range desired.Instances {
-			state := "disabled"
-			if row.Enabled {
-				state = "unavailable"
+	}
+	// Cordis has no instance row until a package has been installed and applied.
+	// Merge installation progress with its actual rows, including while sibling
+	// plugins remain active in the existing runtime.
+	for _, wanted := range desired.Instances {
+		index := -1
+		for i, row := range status.Instances {
+			if row.ID == wanted.ID {
+				index = i
+				break
 			}
-			status.Instances = append(status.Instances, plugin.Instance{ID: row.ID, Package: row.Package, State: state})
+		}
+		row, preparing := preparation[wanted.Package]
+		if preparing && (row.State != "loading" || index < 0) {
+			row.ID = wanted.ID
+		} else if index < 0 {
+			row = plugin.Instance{ID: wanted.ID, Package: wanted.Package, State: "disabled"}
+			if wanted.Enabled {
+				row.State = "unavailable"
+				if applying {
+					row.State = "loading"
+				}
+			}
+		} else {
+			continue
+		}
+		if index < 0 {
+			status.Instances = append(status.Instances, row)
+		} else {
+			status.Instances[index] = row
 		}
 	}
 	installed, err := m.packages().List(ctx)

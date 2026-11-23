@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { AlertCircle, RefreshCw } from 'lucide-react'
+import { AlertCircle, LoaderCircle, RefreshCw } from 'lucide-react'
 import { APIError, settingsApplyFailed } from '../api/controller'
 import { useLocale } from '../locale'
 import type { TranscriptCache } from '../chat/transcriptCache'
@@ -7,11 +7,11 @@ import './extensions.css'
 import { extensionOperations } from './operations'
 import { useExtensionConfirm } from './Dialogs'
 
-const states: Record<string, string> = { installed: 'Installed', active: 'Active', running: 'Running', connected: 'Connected', ready: 'Ready', loading: 'Starting', connecting: 'Connecting', pending: 'Pending', failed: 'Failed', error: 'Failed', unavailable: 'Unavailable', stopped: 'Stopped', disabled: 'Disabled', stopping: 'Stopping', disconnected: 'Disconnected', 'waiting-credentials': 'Needs credentials', 'waiting-authorization': 'Authorization needed' }
+const states: Record<string, string> = { installed: 'Installed', active: 'Active', running: 'Running', connected: 'Connected', ready: 'Ready', installing: 'Installing', 'installation-failed': 'Installation failed', loading: 'Starting', connecting: 'Connecting', pending: 'Pending', failed: 'Failed', error: 'Failed', unavailable: 'Unavailable', stopped: 'Stopped', disabled: 'Disabled', stopping: 'Stopping', disconnected: 'Disconnected', 'waiting-credentials': 'Needs credentials', 'waiting-authorization': 'Authorization needed' }
 export function ExtensionState({ state }: { state: string }) {
   const { t } = useLocale()
-  const tone = ['active', 'running', 'connected', 'ready'].includes(state) ? 'good' : ['failed', 'error'].includes(state) ? 'bad' : 'quiet'
-  return <span className={'extension-state extension-state-' + tone}><i aria-hidden="true" />{t(states[state] ?? state)}</span>
+  const tone = ['active', 'running', 'connected', 'ready'].includes(state) ? 'good' : ['failed', 'error', 'installation-failed'].includes(state) ? 'bad' : 'quiet'
+  return <span className={'extension-state extension-state-' + tone}>{['installing', 'loading'].includes(state) ? <LoaderCircle size={12} className="extension-state-spinner" aria-hidden="true" /> : <i aria-hidden="true" />}{t(states[state] ?? state)}</span>
 }
 
 export function extensionFailure(error: unknown) {

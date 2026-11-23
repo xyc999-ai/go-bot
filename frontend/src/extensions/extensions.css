@@ -42,6 +42,7 @@
 .extension-runtime .extension-text { margin-left: auto; }
 .extension-state { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 550; white-space: nowrap; }
 .extension-state i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none; }
+.extension-state-spinner { animation: extension-auth-spin 1.2s linear infinite; flex: none; }
 .extension-state-good { color: var(--success, #51846d); }
 .extension-state-bad { color: var(--danger); }
 .extension-list { display: grid; border-top: 1px solid var(--line); }

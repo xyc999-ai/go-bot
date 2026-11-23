@@ -81,7 +81,7 @@ export const extensionChinese: Readonly<Record<string, string>> = {
   'This directory must exist inside the Host. A path on your phone or computer is not a Host path.': '该目录必须存在于 Host 内。手机或电脑上的路径不等于 Host 内的路径。',
   'Private source authentication': '私有来源认证', 'Registry URL (optional)': 'Registry 地址（可选）', 'Credential reference (optional)': '凭证引用名（可选）', 'Username (optional)': '用户名（可选）', 'Pinned source': '固定来源', 'Enable bundle after installation': '安装完成后启用组合',
   'Install packages you trust. Plugins run code inside your Host.': '请安装可信任的插件包。插件会在 Host 内执行代码。',
-  'Check package': '检查插件包', 'Checking…': '检查中…', 'Applying plugin changes…': '正在应用插件变更…', 'Installing…': '安装中…', 'Confirm installation': '确认安装', 'Package checked. Review its details before installing.': '检查已完成，请核对插件包信息后安装。', 'Package installed. Review its instances below.': '插件包已安装，请查看下方实例状态。',
+  'Check package': '检查插件包', 'Checking…': '检查中…', 'Applying plugin changes…': '正在应用插件变更…', 'Installing': '安装中', 'Installation failed': '安装失败', 'Installing…': '安装中…', 'Confirm installation': '确认安装', 'Package checked. Review its details before installing.': '检查已完成，请核对插件包信息后安装。', 'Package installed. Review its instances below.': '插件包已安装，请查看下方实例状态。',
   'Instance configuration': '实例配置', 'Instance ID': '实例 ID', 'This instance ID is already in use.': '该实例 ID 已被使用。', 'Configuration override (JSON)': '配置覆盖项（JSON）',
   'Only overrides are shown. Bundle defaults remain in the package. Use credential references for secrets.': '这里只显示覆盖项，组合默认值仍由插件包提供。私密值请使用凭证引用。',
   'Save configuration': '保存配置', 'Could not save configuration.': '无法保存配置。', 'Enter a JSON object.': '请输入 JSON 对象。',
