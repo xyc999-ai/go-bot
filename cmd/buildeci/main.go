@@ -13,13 +13,12 @@ import (
 	"time"
 
 	"go-bot/internal/config"
-	"go-bot/internal/imagebuild"
 	"go-bot/thirdparty/aliyun"
 )
 
 func run(args []string) error {
-	if len(args) == 0 || (args[0] != "prepare" && args[0] != "cache" && args[0] != "check") {
-		return errors.New("usage: buildeci prepare|cache|check [--env-file file] [--output json|cache-id]")
+	if len(args) == 0 || (args[0] != "cache" && args[0] != "check") {
+		return errors.New("usage: buildeci cache|check [--env-file file] [--output json|cache-id]")
 	}
 	command := args[0]
 	f := flag.NewFlagSet("buildeci "+command, flag.ContinueOnError)
@@ -36,7 +35,7 @@ func run(args []string) error {
 		(*writeProfile && (*profile == "" || command == "check")) {
 		return errors.New("invalid buildeci arguments")
 	}
-	o, err := readOptions(*profile, *tuning, command == "prepare")
+	o, err := readOptions(*profile, *tuning)
 	if err != nil {
 		return err
 	}
@@ -50,13 +49,7 @@ func run(args []string) error {
 	}
 	ctx, done := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer done()
-	var publish func(context.Context, string) (string, error)
-	if command == "prepare" {
-		publish = func(ctx context.Context, image string) (string, error) {
-			return imagebuild.PublishAMD64(ctx, o.LocalImage, image, os.Stderr)
-		}
-	}
-	out, err := execute(ctx, o, *state, *operation, client, publish, 3*time.Second)
+	out, err := execute(ctx, o, *state, *operation, client, 3*time.Second)
 	if err != nil {
 		return err
 	}

@@ -2,11 +2,9 @@ name: go-bot
 
 services:
   controller:
-    build:
-      context: .
-      dockerfile: build/Dockerfile.controller
-    image: go-bot/controller:local
-    command: ["serve", "--env-file", "/config/deployment.env", "--config", "/config/runtime.yaml"]
+    image: ghcr.io/xyc999-ai/go-bot-controller:latest
+    pull_policy: never
+    command: ["serve", "--env-file", "/config/deployment.env", "--config", "/runtime.yaml"]
     environment:
       REDIS_ADDR: redis:6379
       CONTROLLER_CONTAINER: "1"
@@ -20,7 +18,7 @@ services:
           create_host_path: false
       - type: bind
         source: ${GO_BOT_CONFIG_FILE:-./configs/default.yaml}
-        target: /config/runtime.yaml
+        target: /runtime.yaml
         read_only: true
         bind:
           create_host_path: false
@@ -31,11 +29,18 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "3", "-O", "/dev/null", "http://127.0.0.1:8080/readyz"]
+      interval: 2s
+      timeout: 4s
+      retries: 30
+      start_period: 5s
     networks:
       - ingress
       - state
   redis:
     image: redis:8-alpine
+    pull_policy: never
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always"]
     ports:
       - "6379:6379"

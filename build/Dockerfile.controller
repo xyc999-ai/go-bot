@@ -20,18 +20,18 @@ COPY --from=frontend-build /frontend/dist ./frontend/dist
 FROM controller-source AS controller-compile
 ARG CONTROLLER_GOOS=linux CONTROLLER_GOARCH=amd64
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${CONTROLLER_GOOS} GOARCH=${CONTROLLER_GOARCH} go build -tags webui -trimpath -o /out/ ./cmd/controller ./internal/cmd/prepare-env
+    CGO_ENABLED=0 GOOS=${CONTROLLER_GOOS} GOARCH=${CONTROLLER_GOARCH} go build -tags webui -trimpath -o /out/ ./cmd/controller ./cmd/buildeci
 FROM scratch AS controller-binary
 COPY --from=controller-compile /out/controller /controller
-COPY --from=controller-compile /out/prepare-env /prepare-env
+COPY --from=controller-compile /out/buildeci /buildeci
 
 FROM controller-source AS controller-linux
 ARG TARGETARCH
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -tags webui -trimpath -o /linux/ ./cmd/controller ./internal/cmd/prepare-env
+    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -tags webui -trimpath -o /linux/ ./cmd/controller ./cmd/buildeci
 
 FROM docker:29-cli AS controller
 COPY --from=controller-linux /linux/controller /usr/local/bin/controller
-COPY --from=controller-linux /linux/prepare-env /usr/local/bin/prepare-env
+COPY --from=controller-linux /linux/buildeci /usr/local/bin/buildeci
 COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/doc/go-bot/
 ENTRYPOINT ["/usr/local/bin/controller"]

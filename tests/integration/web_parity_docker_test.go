@@ -335,7 +335,8 @@ func buildWebFixtureImage(t *testing.T, ctx context.Context, fixtureURL string) 
 	t.Helper()
 	stage := t.TempDir()
 	tag := "go-bot/web-parity:" + uuid.NewString()
-	arch, err := exec.CommandContext(ctx, "docker", "image", "inspect", "--format", "{{.Architecture}}", "go-bot/host:local").Output()
+	baseImage := dockerFixtureConfig().Runtime.Image
+	arch, err := exec.CommandContext(ctx, "docker", "image", "inspect", "--format", "{{.Architecture}}", baseImage).Output()
 	if err != nil {
 		t.Fatalf("inspect base Host image: %v", err)
 	}
@@ -345,7 +346,7 @@ func buildWebFixtureImage(t *testing.T, ctx context.Context, fixtureURL string) 
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build fixture Host: %v\n%s", err, output)
 	}
-	recipe := "FROM go-bot/host:local\nCOPY host-test /usr/local/bin/host-test\n" +
+	recipe := "FROM " + baseImage + "\nCOPY host-test /usr/local/bin/host-test\n" +
 		"ENV HARNESS_TEST_WEB_FIXTURE=" + fixtureURL + "\n" +
 		"ENTRYPOINT [\"/usr/local/bin/host-test\",\"-test.run=^TestDockerWebFixtureHost$\"]\n"
 	if err := os.WriteFile(filepath.Join(stage, "Dockerfile"), []byte(recipe), 0o600); err != nil {

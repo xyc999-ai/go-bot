@@ -1,0 +1,125 @@
+name: Publish container images
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Image version to publish from the selected ref (for example v0.0.1)'
+        required: true
+        default: v0.0.1
+      update_latest:
+        description: 'Also point latest at this version (disable when republishing an older version)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-container-images
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.role }} / ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [controller, host]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select version and namespace
+        env:
+          REQUESTED_VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          [[ "$REQUESTED_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use a stable vX.Y.Z version.' >&2; exit 1; }
+          echo "IMAGE_VERSION=$REQUESTED_VERSION" >> "$GITHUB_ENV"
+          echo "IMAGE_NAMESPACE=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          file: build/Dockerfile.${{ matrix.role }}
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=image,name=ghcr.io/${{ env.IMAGE_NAMESPACE }}/go-bot-${{ matrix.role }},push-by-digest=true,name-canonical=true,push=true
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.IMAGE_VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+      - name: Record architecture digest
+        env:
+          ROLE: ${{ matrix.role }}
+          ARCH: ${{ matrix.arch }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests/$ROLE"
+          printf '%s\n' "$DIGEST" > "$RUNNER_TEMP/digests/$ROLE/$ARCH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-digest-${{ matrix.role }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/
+          retention-days: 1
+
+  manifest:
+    name: Publish multi-platform tags
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Select version and namespace
+        env:
+          REQUESTED_VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          [[ "$REQUESTED_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          echo "IMAGE_VERSION=$REQUESTED_VERSION" >> "$GITHUB_ENV"
+          echo "IMAGE_NAMESPACE=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: image-digest-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/digests
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Combine matching architecture builds
+        env:
+          UPDATE_LATEST: ${{ github.event_name == 'push' || inputs.update_latest }}
+        run: |
+          for role in controller host; do
+            image="ghcr.io/$IMAGE_NAMESPACE/go-bot-$role"
+            sources=()
+            for arch in amd64 arm64; do
+              read -r digest < "$RUNNER_TEMP/digests/$role/$arch"
+              [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
+              sources+=("$image@$digest")
+            done
+            tags=(--tag "$image:$IMAGE_VERSION")
+            if [[ "$UPDATE_LATEST" == true ]]; then tags+=(--tag "$image:latest"); fi
+            docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+          done
+      - name: Verify public access
+        run: |
+          docker logout ghcr.io
+          for role in controller host; do
+            # On first publication, set both GHCR packages to Public and rerun this job.
+            docker buildx imagetools inspect "ghcr.io/$IMAGE_NAMESPACE/go-bot-$role:$IMAGE_VERSION"
+          done

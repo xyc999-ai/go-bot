@@ -33,7 +33,7 @@ build/Dockerfile.host → 发布的 Host 镜像 → buildeci → Ready 缓存 ID
 | 入口 | 负责的工作 | 产物 |
 |---|---|---|
 | `cmd/buildeci` | 构建及发布 Host 镜像，或接受已发布镜像。调用阿里云 API 创建缓存并等待就绪 | `ECI_IMAGE_CACHE_ID` 与不含凭证的构建记录 |
-| `scripts/start.sh` | 初始化环境文件，应用显式覆盖，校验并保存，然后启动 controller | 私有 `.env` |
+| `scripts/start.sh` | 初始化环境文件，在内存中应用显式覆盖并校验，然后启动 controller | 私有 `.env` |
 | `cmd/controller` | 读取配置，装配所选 driver，管理 Host 和 HTTP/SSE 入口 | 运行状态与就绪的 Host |
 | `providers/runtime/eci` | 校验指定缓存，从缓存详情解析镜像地址，用该缓存创建或接回 ECI 实例 | 私网 Host 地址 |
 
@@ -78,7 +78,7 @@ build/Dockerfile.host → 发布的 Host 镜像 → buildeci → Ready 缓存 ID
 ## 启动脚本与直接调用
 
 1. 先显式运行 `scripts/start.sh --init-env`，从 `.env.example` 生成 `.env` 和 `.env.eci`，权限为 `0600`。启动时用 `--env-file` 选择已有配置，默认读取 `.env`。
-2. 正常启动时，脚本调用独立的 Go 配置准备工具。工具按字面解析环境文件，只合并已知的显式进程变量，复用 controller 的静态校验规则。校验通过才以锁和原子替换保存。首次缺必填项时保留模板供编辑，已有文件遇到无效覆盖时保留原内容。
+2. 正常启动时，脚本通过 Controller 镜像内的 check 命令校验配置。文件按字面解析，只在内存中合并显式进程部署变量；无论校验成功或失败都不写回 env。Controller 启动入口独立执行相同校验。
 3. 脚本启动 `controller serve --env-file <path>`。controller 严格读取该文件，缺文件或缺当前模式所需字段即退出。删除现有的 `--save-env` 和 runtime 的自动写回路径。直接运行 controller 时，应用配置以文件值为准。controller 的实例状态和生成的应用 token 仍通过各自的状态文件持久化。
 4. Docker 脚本可先准备默认本地镜像。ECI 分支直接使用配置好的缓存 ID，已经安装本机二进制时只需运行 controller。受管 Host 继续接收 controller 显式注入的 Host 参数，独立 Host 由调用方提供配置或容器环境。
 
@@ -147,7 +147,6 @@ cmd/
   buildeci/                   # ECI 打包入口与自身配置
 internal/
   config/                     # 只读解析和按用途校验
-  cmd/prepare-env/            # 启动脚本调用的环境文件写入工具
   imagebuild/                 # 可复用的镜像构建、发布及产物信息
 providers/runtime/eci/        # ECI 实例生命周期与缓存读取
 thirdparty/aliyun/            # ImageCache 与 ContainerGroup SDK 封装

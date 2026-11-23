@@ -14,7 +14,6 @@ import (
 
 	"github.com/google/uuid"
 	"go-bot/internal/config"
-	"go-bot/internal/imagebuild"
 	"go-bot/internal/localstate"
 	"go-bot/thirdparty/aliyun"
 )
@@ -25,24 +24,21 @@ type cacheAPI interface {
 }
 
 type operation struct {
-	Token      string `json:"clientToken"`
-	Image      string `json:"image"`
-	Digest     string `json:"digest,omitempty"`
-	CacheID    string `json:"cacheId,omitempty"`
-	Publishing bool   `json:"publishing,omitempty"`
+	Token   string `json:"clientToken"`
+	Image   string `json:"image"`
+	CacheID string `json:"cacheId,omitempty"`
 }
 
 type result struct {
-	CacheID  string `json:"cacheId"`
-	Image    string `json:"image"`
-	Digest   string `json:"digest,omitempty"`
-	Region   string `json:"region"`
-	Platform string `json:"platform,omitempty"`
+	CacheID string `json:"cacheId"`
+	Image   string `json:"image"`
+	Digest  string `json:"digest,omitempty"`
+	Region  string `json:"region"`
 }
 
-func execute(ctx context.Context, o options, root, name string, api cacheAPI, publish func(context.Context, string) (string, error), interval time.Duration) (result, error) {
+func execute(ctx context.Context, o options, root, name string, api cacheAPI, interval time.Duration) (result, error) {
 	req := o.Request
-	identity, _ := json.Marshal([]any{o.Region, o.Cloud.AccessKeyID, req.Image, req.VSwitchID, req.SecurityGroupID, req.RegistryServer, req.SizeGiB, req.RetentionDays, name})
+	identity, _ := json.Marshal([]any{o.Region, o.Cloud.AccessKeyID, req.Image, req.VSwitchID, req.SecurityGroupID, req.SizeGiB, req.RetentionDays, name})
 	key := sha256.Sum256(identity)
 	store, err := localstate.Open(filepath.Join(root, hex.EncodeToString(key[:16])))
 	if err != nil {
@@ -61,29 +57,8 @@ func execute(ctx context.Context, o options, root, name string, api cacheAPI, pu
 		return result{}, err
 	}
 	if _, err := uuid.Parse(op.Token); err != nil || op.Image != req.Image ||
-		(op.Digest != "" && !imagebuild.ValidDigest(op.Digest)) ||
 		(op.CacheID != "" && !config.ValidImageCacheID(op.CacheID)) {
 		return result{}, errors.New("invalid saved buildeci operation")
-	}
-	if publish != nil && op.Digest == "" && op.CacheID == "" {
-		if op.Publishing {
-			return result{}, errors.New("previous image publication is uncertain; verify the registry, then use cache for a published image or choose a new version tag")
-		}
-		op.Publishing = true
-		if err := store.Write(filename, op); err != nil {
-			return result{}, err
-		}
-		digest, err := publish(ctx, req.Image)
-		if err != nil {
-			return result{}, fmt.Errorf("publish Host image: %w", err)
-		}
-		if !imagebuild.ValidDigest(digest) {
-			return result{}, errors.New("invalid published image digest")
-		}
-		op.Digest, op.Publishing = digest, false
-		if err := store.Write(filename, op); err != nil {
-			return result{}, err
-		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, o.Wait)
 	defer cancel()
@@ -116,10 +91,8 @@ func execute(ctx context.Context, o options, root, name string, api cacheAPI, pu
 				if image != op.Image {
 					return result{}, fmt.Errorf("image cache %s contains an unexpected image", op.CacheID)
 				}
-				out := result{CacheID: op.CacheID, Image: image, Digest: op.Digest, Region: o.Region}
-				if op.Digest != "" {
-					out.Platform = "linux/amd64"
-				} else if _, digest, ok := strings.Cut(image, "@"); ok {
+				out := result{CacheID: op.CacheID, Image: image, Region: o.Region}
+				if _, digest, ok := strings.Cut(image, "@"); ok {
 					out.Digest = digest
 				}
 				return out, nil

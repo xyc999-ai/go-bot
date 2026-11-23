@@ -76,7 +76,7 @@ func (c *ECI) Create(ctx context.Context, s Create) (string, error) {
 		return "", err
 	}
 	if s.Image == "" || s.ImageCacheID == "" {
-		return "", errors.New("ECI launch requires an image from a Ready cache")
+		return "", errors.New("ECI launch requires HOST_IMAGE and ECI_IMAGE_CACHE_ID")
 	}
 	res, err := c.SDK.CreateContainerGroup(c.request(s))
 	if err != nil {

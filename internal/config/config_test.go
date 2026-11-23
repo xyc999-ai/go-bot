@@ -68,12 +68,9 @@ func TestSearchProviderAndKeyAreRequired(t *testing.T) {
 	}
 	t.Setenv("WEB_SEARCH_PROVIDER", "deepseek")
 	t.Setenv("WEB_SEARCH_API_KEY", "explicit-key")
-	if err := PrepareControllerProfile("", ""); err != nil {
-		t.Fatal(err)
-	}
 	c, err = Load("", "")
 	if err != nil || c.Web.APIKey != "explicit-key" {
-		t.Fatalf("explicit search configuration: %v", err)
+		t.Fatal("account search environment unexpectedly overrode the profile")
 	}
 }
 func TestYAMLOnlyAcceptsProcessTuning(t *testing.T) {
@@ -109,7 +106,6 @@ func TestECICredentialsAndOptionalNAS(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Runtime.Provider = "eci"
-	c.Runtime.Image = ""
 	c.Runtime.ECI.ImageCacheID = "imc-fixture"
 	c.Runtime.ECI.VSwitchID = "vsw-test"
 	c.Runtime.ECI.SecurityGroupID = "sg-test"
@@ -118,6 +114,11 @@ func TestECICredentialsAndOptionalNAS(t *testing.T) {
 		t.Fatal("ECI missing credentials accepted")
 	}
 	c.Cloud.Aliyun.Credentials = Credentials{"id", "secret"}
+	c.Runtime.Image = ""
+	if e = c.Validate(false); e == nil || !strings.Contains(e.Error(), "HOST_IMAGE") {
+		t.Fatal("ECI accepted an empty image reference")
+	}
+	c.Runtime.Image = DefaultHostImage
 	if e = c.Validate(false); e != nil {
 		t.Fatal(e)
 	}
@@ -159,10 +160,9 @@ func TestHostEnvironmentHasNoCloudOrPublicToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Cloud.Aliyun.Credentials = Credentials{"cloud-id", "cloud-secret"}
-	c.Registry = Registry{PushImage: "registry.example/host:v1", Username: "registry-user", Password: "registry-secret"}
 	env := c.HostEnvironment("alice", "run", "internal-token")
 	b, _ := json.Marshal(env)
-	for _, secret := range []string{"cloud-id", "cloud-secret", "public-token-secret", "registry-secret", "model-secret", "search-secret"} {
+	for _, secret := range []string{"cloud-id", "cloud-secret", "public-token-secret", "model-secret", "search-secret"} {
 		if strings.Contains(string(b), secret) {
 			t.Fatalf("Host environment exposed %s", secret)
 		}
@@ -196,7 +196,7 @@ func TestEnvironmentTemplateAndPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"ALIBABA_CLOUD_ACCESS_KEY_ID", "ALIBABA_CLOUD_ACCESS_KEY_SECRET", "REGISTRY_PUSH_IMAGE", "REGISTRY_USERNAME", "REGISTRY_PASSWORD"} {
+	for _, key := range []string{"ALIBABA_CLOUD_ACCESS_KEY_ID", "ALIBABA_CLOUD_ACCESS_KEY_SECRET"} {
 		if value, exists := values[key]; !exists || value != "" {
 			t.Errorf("%s must be present and blank in the public template", key)
 		}
@@ -204,12 +204,12 @@ func TestEnvironmentTemplateAndPrecedence(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeFile(t, ".env", string(template))
 	c, err = Load("", "")
-	if err != nil || c.Runtime.Provider != "docker" || c.Storage.Type != "container" || c.ValidateController() != nil {
+	if err != nil || c.Runtime.Provider != "docker" || c.Runtime.Image != DefaultHostImage || c.Storage.Type != "container" || c.ValidateController() != nil {
 		t.Fatalf("template did not produce the default deployment without account credentials: %v", err)
 	}
 	profile := strings.NewReplacer(
 		"HARNESS_RUNTIME=docker", "HARNESS_RUNTIME=eci",
-		"HOST_IMAGE=go-bot/host:local", "HOST_IMAGE=registry.example/host:test",
+		"HOST_IMAGE="+DefaultHostImage, "HOST_IMAGE=registry.example/host:test",
 		"ECI_VSWITCH_ID=", "ECI_VSWITCH_ID=vsw-fixture",
 		"ECI_SECURITY_GROUP_ID=", "ECI_SECURITY_GROUP_ID=sg-fixture",
 		"ECI_IMAGE_CACHE_ID=", "ECI_IMAGE_CACHE_ID=imc-fixture",
@@ -241,7 +241,7 @@ func TestEnvironmentTemplateAndPrecedence(t *testing.T) {
 	if err != nil || c.Model.Main.BaseURL != "https://models.example/v1" || c.Model.Main.APIKey != "literal#key=$value" {
 		t.Fatal("direct profile loading consumed process overrides")
 	}
-	if err := PrepareControllerProfile("", ".env.eci"); err != nil {
+	if err := c.ValidateController(); err != nil {
 		t.Fatalf("Controller validation depended on account model environment: %v", err)
 	}
 	if _, err := Load("", ".env.missing"); !errors.Is(err, os.ErrNotExist) {
@@ -293,32 +293,49 @@ func TestHostRequiresControllerEnvironment(t *testing.T) {
 	}
 }
 
-func TestStartupRequiresProfileWithoutAccountCredentials(t *testing.T) {
+func TestProcessOverridesDoNotModifyProfile(t *testing.T) {
 	clean(t)
 	t.Chdir(t.TempDir())
-	if err := PrepareControllerProfile("", ""); !errors.Is(err, os.ErrNotExist) {
+	if _, err := Load("", ""); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing profile: %v", err)
 	}
 	if _, err := os.Stat(".env"); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("startup created a profile")
 	}
-	writeFile(t, ".env", gobot.EnvironmentTemplate)
-	if err := PrepareControllerProfile("", ""); err != nil {
-		t.Fatalf("start without account credentials: %v", err)
-	}
-	t.Setenv("MODEL_API_KEY", "fixture-account-key")
-	t.Setenv("MODEL_URL", "https://models.example/v1")
-	t.Setenv("MODEL_NAME", "fixture-model")
-	t.Setenv("WEB_SEARCH_API_KEY", "fixture#search=$key")
-	t.Setenv("WEB_SEARCH_PROVIDER", "deepseek")
-	t.Setenv("HOST_IMAGE", "go-bot/host:fixture")
-	if err := PrepareControllerProfile("", ""); err != nil {
+	const profile = "# read-only deployment\nHOST_IMAGE=registry.example/host:saved\nALIBABA_CLOUD_ACCESS_KEY_SECRET=saved-secret\n"
+	if err := os.WriteFile(".env", []byte(profile), 0400); err != nil {
 		t.Fatal(err)
 	}
+	before, err := os.Stat(".env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOST_IMAGE", "registry.example/host:process")
+	t.Setenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET", "")
+	t.Setenv("MODEL_API_KEY", "ignored-account-key")
+	t.Setenv("WEB_SEARCH_API_KEY", "ignored-search-key")
+	c, err := Load("", "")
+	if err != nil || c.ValidateController() != nil || c.Runtime.Image != "registry.example/host:process" || c.Cloud.Aliyun.Credentials.AccessKeySecret != "" {
+		t.Fatalf("deployment overrides were not applied in memory: %v", err)
+	}
+	if c.Model.Main.APIKey != "" || c.Web.APIKey != "" {
+		t.Fatal("account configuration was taken from deployment environment")
+	}
+	t.Setenv("HOST_IMAGE", "")
+	c, err = Load("", "")
+	if err != nil || c.ValidateController() == nil {
+		t.Fatal("an explicit empty image must fail startup validation")
+	}
+	os.Unsetenv("HOST_IMAGE")
+	os.Unsetenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET")
+	c, err = Load("", "")
+	if err != nil || c.Runtime.Image != "registry.example/host:saved" || c.Cloud.Aliyun.Credentials.AccessKeySecret != "saved-secret" {
+		t.Fatal("removing process overrides did not restore file configuration")
+	}
 	saved, err := os.ReadFile(".env")
-	if err != nil || strings.Contains(string(saved), "MODEL_") || strings.Contains(string(saved), "WEB_SEARCH_") ||
-		!strings.Contains(string(saved), "HOST_IMAGE=go-bot/host:fixture") {
-		t.Fatal("profile did not preserve only deployment overrides")
+	after, statErr := os.Stat(".env")
+	if err != nil || statErr != nil || string(saved) != profile || after.Mode() != before.Mode() || !os.SameFile(before, after) {
+		t.Fatal("loading or validation changed the deployment file")
 	}
 }
 
@@ -331,7 +348,7 @@ func TestStartupRejectsPublicTemplateAsPrivateProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{".env.example", ".env"} {
-		if err := PrepareControllerProfile("", path); err == nil || !strings.Contains(err.Error(), "private environment profile") {
+		if _, err := Load("", path); err == nil || !strings.Contains(err.Error(), "private environment profile") {
 			t.Fatalf("accepted the public template through %s: %v", path, err)
 		}
 	}
@@ -340,7 +357,7 @@ func TestStartupRejectsPublicTemplateAsPrivateProfile(t *testing.T) {
 func TestSaveECIImageCacheIDPreservesProfile(t *testing.T) {
 	t.Chdir(t.TempDir())
 	const path = ".env.eci"
-	const initial = "# deployment\nHARNESS_RUNTIME=eci\nECI_IMAGE_CACHE_ID=imc-old\nREGISTRY_PASSWORD=literal#password=$value\n"
+	const initial = "# deployment\nHARNESS_RUNTIME=eci\nECI_IMAGE_CACHE_ID=imc-old\nALIBABA_CLOUD_ACCESS_KEY_SECRET=literal#password=$value\n"
 	if err := os.WriteFile(path, []byte(initial), 0644); err != nil {
 		t.Fatal(err)
 	}

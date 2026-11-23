@@ -32,6 +32,9 @@ func (*Driver) Validate(s runtime.Spec) error {
 	if !config.ValidImageCacheID(s.ECI.ImageCacheID) {
 		return errors.New("ECI_IMAGE_CACHE_ID must be a valid imc- ID")
 	}
+	if !config.ValidImage(s.Image) {
+		return errors.New("HOST_IMAGE must be an image reference")
+	}
 	for key, value := range s.Environment {
 		if len(value) > 256 {
 			return fmt.Errorf("ECI environment value for %s exceeds 256 bytes", key)
@@ -48,19 +51,22 @@ func (*Driver) Validate(s runtime.Spec) error {
 func tags(s runtime.Spec) map[string]string {
 	return map[string]string{"component": "go-bot-host", "deployment-id": s.DeploymentID, "run-id": s.RunID}
 }
-func (d *Driver) image(ctx context.Context, s runtime.Spec) (string, error) {
+
+// checkCache is used only by the explicitly requested doctor command.
+// Normal instance creation passes the configured image and cache ID directly.
+func (d *Driver) checkCache(ctx context.Context, s runtime.Spec) error {
 	cache, err := d.Client.DescribeImageCache(ctx, s.ECI.ImageCacheID)
 	if err != nil {
-		return "", err
+		return err
 	}
 	image, err := cache.ReadyImage(s.ECI.ImageCacheID, s.ECI.Region, time.Now())
 	if err != nil {
-		return "", err
+		return err
 	}
-	if !config.ValidImage(image) || image == "go-bot/host:local" {
-		return "", errors.New("ECI cache contains an invalid Host image reference")
+	if !config.ValidImage(image) {
+		return errors.New("ECI cache contains an invalid Host image reference")
 	}
-	return image, nil
+	return nil
 }
 
 func (d *Driver) Preflight(ctx context.Context, s runtime.Spec) error {
@@ -76,8 +82,7 @@ func (d *Driver) Preflight(ctx context.Context, s runtime.Spec) error {
 			return nil // Reconnecting to an existing instance does not consume its old cache.
 		}
 	}
-	_, err = d.image(ctx, s)
-	return err
+	return d.checkCache(ctx, s)
 }
 
 func deploymentTags(s runtime.Spec) map[string]string {
@@ -165,11 +170,7 @@ func (d *Driver) Ensure(ctx context.Context, s runtime.Spec) (runtime.Instance, 
 		}
 		id = active.ID
 	} else {
-		image, err := d.image(ctx, s)
-		if err != nil {
-			return runtime.Instance{}, err
-		}
-		req := aliyun.Create{Name: "go-bot-" + s.RunID, ClientToken: s.RunID, Image: image, ImageCacheID: s.ECI.ImageCacheID, VSwitchID: s.ECI.VSwitchID, SecurityGroupID: s.ECI.SecurityGroupID, CPU: s.ECI.CPU, MemoryGiB: s.ECI.MemoryGiB, Environment: s.Environment, Tags: tags(s)}
+		req := aliyun.Create{Name: "go-bot-" + s.RunID, ClientToken: s.RunID, Image: s.Image, ImageCacheID: s.ECI.ImageCacheID, VSwitchID: s.ECI.VSwitchID, SecurityGroupID: s.ECI.SecurityGroupID, CPU: s.ECI.CPU, MemoryGiB: s.ECI.MemoryGiB, Environment: s.Environment, Tags: tags(s)}
 		if s.Storage.Type == "nas" {
 			req.NASMountTarget = s.Storage.MountTarget
 			req.NASPath = s.Storage.Path

@@ -29,6 +29,7 @@ state.json
 .credentials.yaml
 .credential-write-*
 .write-*
+.install-*/
 
 # Private cloud deployment and replay notes
 /docs/eci-nas-validation.zh-CN.md

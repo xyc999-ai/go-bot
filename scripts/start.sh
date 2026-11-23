@@ -54,7 +54,7 @@ if $init_only; then
     temporary="$(mktemp "$path.tmp.XXXXXX")"
     trap 'unlink "$temporary"' EXIT
     if [[ "$2" == eci ]]; then
-      sed -e 's/^HARNESS_RUNTIME=docker$/HARNESS_RUNTIME=eci/' -e 's/^HOST_IMAGE=.*/HOST_IMAGE=go-bot\/host:eci/' .env.example > "$temporary"
+      sed 's/^HARNESS_RUNTIME=docker$/HARNESS_RUNTIME=eci/' .env.example > "$temporary"
     else
       cat .env.example > "$temporary"
     fi
@@ -77,34 +77,60 @@ profile="$profile_dir/$profile_name"
 config_file="$(cd "$(dirname "$config_file")" && pwd)/$(basename "$config_file")"
 export GO_BOT_ENV_FILE="$profile" GO_BOT_CONFIG_FILE="$config_file"
 compose=(docker compose --env-file /dev/null)
-prepare_args=(--env-file "$profile" --config "$config_file")
-
-if command -v go >/dev/null 2>&1; then
-  go run ./internal/cmd/prepare-env "${prepare_args[@]}"
-  runtime_info="$(go run ./cmd/controller check --print-runtime --env-file "$profile" --config "$config_file")"
-else
-  "${compose[@]}" build controller
-  profile_mounts=(-v "$profile_dir:/profile" -v "$config_file:/config.yaml:ro")
-  config_args=(--env-file "/profile/$profile_name" --config /config.yaml)
-  forwarded=()
-  while IFS='=' read -r key _; do
-    if [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]]; then forwarded+=(-e "$key"); fi
-  done < .env.example
-  docker run --rm --user "$(id -u):$(id -g)" "${profile_mounts[@]}" "${forwarded[@]}" \
-    --entrypoint /usr/local/bin/prepare-env go-bot/controller:local "${config_args[@]}"
-  runtime_info="$(docker run --rm "${profile_mounts[@]}" go-bot/controller:local check --print-runtime "${config_args[@]}")"
-fi
+docker info >/dev/null
+controller_image="$("${compose[@]}" config controller | awk '
+  /^  controller:/ { selected=1; next }
+  selected && /^  [^ ]/ { selected=0 }
+  selected && $1 == "image:" { print $2; exit }
+')"
+[[ -n "$controller_image" ]] || { echo 'Compose must define a Controller image.' >&2; exit 1; }
+while IFS= read -r image; do
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    echo "Required local image is missing: $image. Prepare it with docker pull or an explicit source build first." >&2
+    exit 1
+  fi
+done < <("${compose[@]}" config --images)
+profile_mounts=(-v "$profile:/profile.env:ro" -v "$config_file:/config.yaml:ro")
+config_args=(--env-file /profile.env --config /config.yaml)
+forwarded=()
+environment_keys=()
+while IFS='=' read -r key _; do
+  if [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] && printenv "$key" >/dev/null; then
+    forwarded+=(-e "$key")
+    environment_keys+=("$key")
+  fi
+done < .env.example
+runtime_info="$(docker run --rm --pull=never "${profile_mounts[@]}" ${forwarded[@]+"${forwarded[@]}"} \
+  "$controller_image" check --print-runtime "${config_args[@]}")"
 
 selected_runtime="${runtime_info%%$'\n'*}"
 selected_image="${runtime_info#*$'\n'}"
 if [[ "$selected_runtime" == docker ]]; then
-  docker build -f build/Dockerfile.host -t "$selected_image" .
+  if ! docker image inspect "$selected_image" >/dev/null 2>&1; then
+    echo "Host image is missing: $selected_image. Prepare it with docker pull or an explicit source build first." >&2
+    exit 1
+  fi
 fi
-"${compose[@]}" up -d --build --wait
+# Forward only explicitly set shell variables for this launch. The temporary
+# Compose override contains variable names, never credential values.
+if ((${#environment_keys[@]})); then
+  mkdir -p .cache
+  environment_override="$(mktemp "$repo_dir/.cache/start-env.XXXXXX")"
+  trap 'rm -f "$environment_override"' EXIT
+  {
+    printf 'services:\n  controller:\n    environment:\n'
+    printf '      %s:\n' "${environment_keys[@]}"
+  } > "$environment_override"
+  export COMPOSE_FILE="${COMPOSE_FILE:-$repo_dir/compose.yaml}:$environment_override"
+fi
+"${compose[@]}" up -d --no-build --pull never --wait
+published="$("${compose[@]}" port controller 8080)"
+published="${published%%$'\n'*}"
+published_port="${published##*:}"
 if command -v curl >/dev/null 2>&1; then
   for ((attempt = 0; attempt < 30; attempt++)); do
-    if curl --fail --silent --max-time 2 'http://127.0.0.1:8080/readyz' >/dev/null; then
-      echo 'Go Bot is ready at http://localhost:8080'
+    if curl --fail --silent --max-time 2 "http://127.0.0.1:$published_port/readyz" >/dev/null; then
+      echo "Go Bot is ready at http://localhost:$published_port"
       exit 0
     fi
     sleep 1
@@ -112,4 +138,4 @@ if command -v curl >/dev/null 2>&1; then
   "${compose[@]}" logs --tail 20 controller >&2
   exit 1
 fi
-echo 'Open http://localhost:8080'
+echo "Open http://localhost:$published_port"

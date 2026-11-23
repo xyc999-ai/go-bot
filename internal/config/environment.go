@@ -112,9 +112,6 @@ func controllerBindings(c *Config) bindings {
 		"ECI_IMAGE_CACHE_ID":              &c.Runtime.ECI.ImageCacheID,
 		"ALIBABA_CLOUD_ACCESS_KEY_ID":     &c.Cloud.Aliyun.Credentials.AccessKeyID,
 		"ALIBABA_CLOUD_ACCESS_KEY_SECRET": &c.Cloud.Aliyun.Credentials.AccessKeySecret,
-		"REGISTRY_PUSH_IMAGE":             &c.Registry.PushImage,
-		"REGISTRY_USERNAME":               &c.Registry.Username,
-		"REGISTRY_PASSWORD":               &c.Registry.Password,
 	})
 	return b
 }

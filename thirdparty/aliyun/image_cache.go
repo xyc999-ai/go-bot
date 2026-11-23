@@ -13,7 +13,6 @@ var ErrImageCacheNotFound = errors.New("ECI image cache not found")
 
 type CreateImageCache struct {
 	Name, ClientToken, Image, VSwitchID, SecurityGroupID string
-	RegistryServer, RegistryUsername, RegistryPassword   string
 	SizeGiB, RetentionDays                               int32
 }
 
@@ -46,11 +45,6 @@ func (c *ECI) imageCacheRequest(s CreateImageCache) *eci.CreateImageCacheRequest
 	r := &eci.CreateImageCacheRequest{
 		RegionId: &c.Region, ImageCacheName: &s.Name, ClientToken: &s.ClientToken,
 		Image: []*string{&s.Image}, VSwitchId: &s.VSwitchID, SecurityGroupId: &s.SecurityGroupID,
-	}
-	if s.RegistryServer != "" {
-		r.ImageRegistryCredential = []*eci.CreateImageCacheRequestImageRegistryCredential{
-			{Server: &s.RegistryServer, UserName: &s.RegistryUsername, Password: &s.RegistryPassword},
-		}
 	}
 	if s.SizeGiB > 0 {
 		r.ImageCacheSize = &s.SizeGiB

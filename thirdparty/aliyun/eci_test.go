@@ -69,7 +69,7 @@ func TestECICacheLaunchAndOptionalNAS(t *testing.T) {
 	}
 }
 
-func TestImageCacheRegistryCredentialsAreOptional(t *testing.T) {
+func TestImageCacheUsesPublicImage(t *testing.T) {
 	c := ECI{Region: "cn-hangzhou"}
 	s := CreateImageCache{Image: "registry.example/host:v1", ClientToken: "token", Name: "cache", VSwitchID: "vsw-test", SecurityGroupID: "sg-test"}
 	r := c.imageCacheRequest(s)
@@ -77,17 +77,7 @@ func TestImageCacheRegistryCredentialsAreOptional(t *testing.T) {
 		value(r.ClientToken) != s.ClientToken || value(r.VSwitchId) != s.VSwitchID || value(r.SecurityGroupId) != s.SecurityGroupID {
 		t.Fatal("incorrect image cache request")
 	}
-	s.RegistryServer = "registry.example"
-	s.RegistryUsername = "fixture-user"
-	s.RegistryPassword = "fixture-password"
-	r = c.imageCacheRequest(s)
-	if len(r.ImageRegistryCredential) != 1 {
-		t.Fatal("private image access credentials missing")
-	}
-	auth := r.ImageRegistryCredential[0]
-	if *auth.Server != s.RegistryServer || *auth.UserName != s.RegistryUsername || *auth.Password != s.RegistryPassword {
-		t.Fatal("registry credential payload differs from the explicit settings")
-	}
+
 }
 
 func TestECISearchSettingsArePassedToHost(t *testing.T) {

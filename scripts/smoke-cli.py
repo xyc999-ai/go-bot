@@ -62,7 +62,9 @@ def main():
     work.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="compose-smoke-", dir=work) as directory:
         profile = Path(directory) / ".env"
-        profile.write_text("")
+        profile_text = ("HOST_IMAGE=" + os.environ.get("HARNESS_TEST_HOST_IMAGE", "ghcr.io/xyc999-ai/go-bot-host:latest") + "\n"
+                        "ALIBABA_CLOUD_ACCESS_KEY_SECRET=literal$not_interpolated #fixture=1\n")
+        profile.write_text(profile_text)
         profile.chmod(0o600)
         ports = Path(directory) / "ports.yaml"
         ports.write_text(
@@ -72,14 +74,15 @@ def main():
             '  redis:\n'
             '    ports: !override ["127.0.0.1::6379"]\n'
         )
-        env = dict(os.environ, GO_BOT_ENV_FILE=str(profile))
+        env = dict(os.environ, GO_BOT_ENV_FILE=str(profile),
+                   GO_BOT_CONFIG_FILE=str(ROOT / "configs/default.yaml"))
         alice, bob = (f"{PROJECT}-{name}" for name in ("alice", "bob"))
         names = {}
         sessions = {}
         main_sessions = {}
 
         def compose(*args):
-            return run("docker", "compose", "--env-file", "/dev/null", "-p", PROJECT,
+            return run("docker", "compose", "--project-directory", str(profile.parent), "-p", PROJECT,
                        "-f", str(ROOT / "compose.yaml"), "-f", str(ports), *args, env=env)
 
         def redis(*args):
@@ -90,9 +93,10 @@ def main():
             return {key: value for key, value in json.loads(raw).items() if value != ""}
 
         try:
-            compose("up", "-d", "--build", "--wait")
+            compose("up", "-d", "--no-build", "--pull", "never", "--wait")
             BASE = "http://" + compose("port", "controller", "8080")
             wait_for(lambda: call("GET", "/readyz", expected=200) is None)
+            assert profile.read_text() == profile_text
             assert "Go Bot" in call("GET", "/")
             assert redis("DBSIZE") == "0"
             call("POST", "/v1/host/start", "unknown", expected=404)

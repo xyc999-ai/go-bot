@@ -19,6 +19,7 @@ import (
 )
 
 const DataRoot = "/root/harness"
+const DefaultHostImage = "ghcr.io/xyc999-ai/go-bot-host:latest"
 const DeepSeekOrigin = "https://api.deepseek.com"
 const HostListen = "0.0.0.0:8080"
 const ModelContextWindow = 1_000_000
@@ -111,11 +112,6 @@ type Host struct {
 type Auth struct {
 	HostToken string `json:"-"`
 }
-type Registry struct {
-	PushImage string
-	Username  string `json:"-"`
-	Password  string `json:"-"`
-}
 type Config struct {
 	Version    int
 	Controller Controller
@@ -127,7 +123,6 @@ type Config struct {
 	Web        Web
 	Cloud      Cloud
 	Auth       Auth
-	Registry   Registry
 }
 
 func Default() Config {
@@ -135,7 +130,7 @@ func Default() Config {
 		Version:    1,
 		Controller: Controller{Listen: "127.0.0.1:8080"},
 		Runtime: Runtime{
-			Provider: "docker", Image: "go-bot/host:local", StartTimeout: 5 * time.Minute,
+			Provider: "docker", Image: DefaultHostImage, StartTimeout: 5 * time.Minute,
 			Docker: Docker{EndpointHost: "127.0.0.1"},
 			ECI:    ECI{Region: "cn-hangzhou", CPU: 2, MemoryGiB: 4},
 		},
@@ -192,13 +187,27 @@ func loadTuning(path string) (Config, error) {
 	return c, nil
 }
 
-// Load reads an existing deployment profile without taking overrides from the process.
+// Load overlays process deployment variables on an existing profile in memory.
+// Neither loading nor startup validation modifies the profile.
 func Load(path, envFile string) (Config, error) {
 	c, err := loadTuning(path)
 	if err != nil {
 		return c, err
 	}
-	if err := readEnvironment(envFile, controllerBindings(&c), controllerBindings(&c)); err != nil {
+	envFile, err = privateProfilePath(envFile)
+	if err != nil {
+		return c, err
+	}
+	fields := controllerBindings(&c)
+	if err := readEnvironment(envFile, fields, fields); err != nil {
+		return c, err
+	}
+	overrides := fields.processValues()
+	// Account model and search settings come from the UI, not deployment overrides.
+	for _, key := range []string{"MODEL_API_KEY", "MODEL_URL", "MODEL_NAME", "WEB_SEARCH_PROVIDER", "WEB_SEARCH_API_KEY"} {
+		delete(overrides, key)
+	}
+	if err := fields.apply(overrides); err != nil {
 		return c, err
 	}
 	c.resolveModel()
@@ -287,13 +296,13 @@ func (c Config) validate(hostOnly, requireModel bool) error {
 	}
 	if !hostOnly {
 		need(c.Runtime.StartTimeout > 0, "runtime.start_timeout must be positive")
+		need(ValidImage(c.Runtime.Image), "HOST_IMAGE must be an image reference")
 		_, listenErr := ControllerListenAddress(c.Controller.Listen)
 		if listenErr != nil {
 			need(false, listenErr.Error())
 		}
 		switch c.Runtime.Provider {
 		case "docker":
-			need(ValidImage(c.Runtime.Image), "HOST_IMAGE must be an image reference")
 			need(c.Storage.Type != "nas", "HARNESS_STORAGE=nas requires HARNESS_RUNTIME=eci")
 		case "eci":
 			need(c.Cloud.Aliyun.Credentials.AccessKeyID != "", "missing ALIBABA_CLOUD_ACCESS_KEY_ID")
