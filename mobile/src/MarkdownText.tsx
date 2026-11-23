@@ -1,5 +1,5 @@
-import { createContext, memo, useContext, useEffect, useRef, useState } from 'react'
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { Children, cloneElement, isValidElement, memo, useEffect, useRef, useState } from 'react'
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import Markdown, { MarkdownIt, type ASTNode } from 'react-native-markdown-display'
 import * as Clipboard from 'expo-clipboard'
 import { Check, Copy } from 'lucide-react-native'
@@ -33,26 +33,9 @@ function CopyButton({ raw, kind }: { raw: string; kind: 'table' | 'code' }) {
   }}>{status === 'copied' ? <Check size={14} color={muted} /> : <Copy size={14} color={muted} />}<Text accessibilityLiveRegion="polite" style={styles.action}>{t(label)}</Text></Pressable>
 }
 
-const MarkdownWidth = createContext<number | undefined>(undefined)
-function InlineCode({ text, cellWidth }: { text: string; cellWidth?: number }) {
-  const { width } = useWindowDimensions()
-  const contentWidth = useContext(MarkdownWidth)
-  const available = Math.max(48, cellWidth ?? contentWidth ?? width - 60)
-  const [size, setSize] = useState({ width: available, height: 24 })
-  // Android Text background spans do not clip to borderRadius. A measured inline
-  // view gives both platforms the same rounded pill without estimating glyphs.
-  return <View style={[styles.inline, { width: Math.min(available, size.width), height: size.height }]}>
-    <Text selectable style={styles.inlineText} onTextLayout={({ nativeEvent: { lines } }) => {
-      if (!lines.length) return
-      const next = { width: lines.length > 1 ? available : Math.min(available, Math.ceil(lines[0].width) + 12), height: Math.ceil(lines.reduce((sum, line) => sum + line.height, 0)) + 4 }
-      setSize(old => old.width === next.width && old.height === next.height ? old : next)
-    }}>{text}</Text>
-  </View>
-}
-
-function CodePanel({ node }: { node: SourceNode }) {
+function CodePanel({ node, style }: { node: SourceNode; style?: StyleProp<ViewStyle> }) {
   const { t } = useLocale()
-  return <View style={styles.panel}>
+  return <View style={[styles.panel, style]}>
     <View style={styles.toolbar}><Text style={styles.caption}>{node.sourceInfo?.trim().split(/\s/)[0] || t('代码')}</Text><CopyButton raw={node.sourceMeta?.markdownSource ?? node.content} kind="code" /></View>
     <ScrollView horizontal nestedScrollEnabled directionalLockEnabled showsHorizontalScrollIndicator accessibilityLabel={t('代码，可左右滚动')} contentContainerStyle={styles.codeContent}>
       <Text selectable style={styles.code}>{node.content.replace(/\n$/, '')}</Text>
@@ -73,14 +56,15 @@ function columnWidths(table: ASTNode) {
 
 export const MarkdownText = memo(function MarkdownText({ text }: { text: string }) {
   const { t } = useLocale()
-  const [width, setWidth] = useState<number>()
-  return <View onLayout={({ nativeEvent: { layout } }) => setWidth(old => old === layout.width ? old : layout.width)}><MarkdownWidth.Provider value={width}><Markdown markdownit={parser} style={markdown} rules={{
-    image: node => <Text key={node.key} selectable>{'![' + (node.attributes.alt ?? '') + '](' + node.attributes.src + ')'}</Text>,
-    code_inline: (node, _children, parents) => {
-      const table = parents.find(parent => parent.type === 'table')
-      const cell = parents.find(parent => parent.type === 'td' || parent.type === 'th')
-      return <InlineCode key={node.key} text={node.content} cellWidth={table && cell ? columnWidths(table)[cell.index] - 28 : undefined} />
+  return <Markdown markdownit={parser} style={markdown} rules={{
+    body: (node, children, _parents, nodeStyles) => {
+      const blocks = Children.toArray(children)
+      return <View key={node.key} style={nodeStyles._VIEW_SAFE_body}>{blocks.map((child, index) =>
+        isValidElement<{ style?: StyleProp<ViewStyle> }>(child) ? cloneElement(child, { style: [child.props.style,
+          index === 0 && styles.firstBlock, index === blocks.length - 1 && styles.lastBlock] }) : child,
+      )}</View>
     },
+    image: node => <Text key={node.key} selectable>{'![' + (node.attributes.alt ?? '') + '](' + node.attributes.src + ')'}</Text>,
     fence: node => <CodePanel key={node.key} node={node} />,
     code_block: node => <CodePanel key={node.key} node={node} />,
     table: (node: SourceNode, children) => <View key={node.key} style={[styles.panel, { backgroundColor: '#ffffff80' }]}>
@@ -97,14 +81,13 @@ export const MarkdownText = memo(function MarkdownText({ text }: { text: string 
       const table = parents.find(parent => parent.type === 'table')
       return <View key={node.key} style={[styles.cell, { width: table ? columnWidths(table)[node.index] : 140 }]}>{children}</View>
     },
-  }} onLinkPress={url => { if (/^https?:\/\//i.test(url)) void Linking.openURL(url).catch(() => {}); return false }}>{text}</Markdown></MarkdownWidth.Provider></View>
+  }} onLinkPress={url => { if (/^https?:\/\//i.test(url)) void Linking.openURL(url).catch(() => {}); return false }}>{text}</Markdown>
 })
 
 const styles = StyleSheet.create({
   panel: { alignSelf: 'stretch', minWidth: 0, marginTop: 8, marginBottom: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: border, borderRadius: 10, backgroundColor: paper, overflow: 'hidden' },
   toolbar: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 14, paddingRight: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border, backgroundColor: '#f4f5f8' },
-  inline: { borderRadius: 5, backgroundColor: '#eef0f4', borderWidth: StyleSheet.hairlineWidth, borderColor: border, paddingHorizontal: 5, paddingVertical: 1, overflow: 'hidden' },
-  inlineText: { fontFamily: mono, color: '#414756', fontSize: 13, lineHeight: 20 },
+  firstBlock: { marginTop: 0 }, lastBlock: { marginBottom: 0 },
   caption: { fontSize: 11, fontWeight: '500', color: muted },
   copy: { minHeight: 44, minWidth: 72, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   action: { fontSize: 11, color: muted },
@@ -126,7 +109,7 @@ const markdown = StyleSheet.create({
   bullet_list: { marginBottom: 12 }, ordered_list: { marginBottom: 12 },
   list_item: { marginBottom: 6 },
   link: { color: accent, textDecorationLine: 'underline' },
-  code_inline: { fontFamily: mono, backgroundColor: '#eef0f4', color: '#414756', fontSize: 13, lineHeight: 20, borderWidth: 0, borderRadius: 4 },
+  code_inline: { fontFamily: mono, fontSize: 14, fontWeight: '400', color: '#3f414a', backgroundColor: '#f1f2f5', borderWidth: 0, padding: 0, borderRadius: 0 },
   blockquote: { marginTop: 6, marginBottom: 18, paddingHorizontal: 15, paddingTop: 12, paddingBottom: 0, borderLeftWidth: 3, borderColor: '#d4d7e0', backgroundColor: '#f5f6f980' },
   tr: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border },
   thead: { backgroundColor: '#f4f5f8' },
