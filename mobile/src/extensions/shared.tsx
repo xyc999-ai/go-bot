@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { AppState, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, AppState, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ArrowLeft, ChevronDown, RefreshCw } from 'lucide-react-native'
 import { extensionOperations } from '../../../frontend/src/extensions/operations'
 import type { TranscriptCache } from '../../../frontend/src/chat/transcriptCache'
@@ -31,11 +31,11 @@ export function useManagement<T>({ api, cache }: ScreenProps, load: (api: Contro
 }
 export type Runner = ReturnType<typeof useManagement>['run']
 
-const stateLabels: Record<string, string> = { installed: 'Installed', active: 'Active', running: 'Running', connected: 'Connected', ready: 'Ready', loading: 'Starting', applying: 'Starting', connecting: 'Connecting', pending: 'Pending', failed: 'Failed', unavailable: 'Unavailable', stopped: 'Stopped', disabled: 'Disabled', stopping: 'Stopping', 'waiting-credentials': 'Needs credentials', 'waiting-authorization': 'Authorization needed' }
+const stateLabels: Record<string, string> = { installed: 'Installed', active: 'Active', running: 'Running', connected: 'Connected', ready: 'Ready', installing: 'Installing', 'installation-failed': 'Installation failed', loading: 'Starting', applying: 'Starting', connecting: 'Connecting', pending: 'Pending', failed: 'Failed', unavailable: 'Unavailable', stopped: 'Stopped', disabled: 'Disabled', stopping: 'Stopping', 'waiting-credentials': 'Needs credentials', 'waiting-authorization': 'Authorization needed' }
 export function State({ value }: { value: string }) {
   const { t } = useLocale()
-  const color = ['active', 'connected', 'running', 'ready'].includes(value) ? '#3d7967' : value === 'failed' ? danger : muted
-  return <View style={x.state}><View style={[x.dot, { backgroundColor: color }]} /><Text style={[x.stateLabel, { color }]}>{t(stateLabels[value] ?? value)}</Text></View>
+  const color = ['active', 'connected', 'running', 'ready'].includes(value) ? '#3d7967' : ['failed', 'installation-failed'].includes(value) ? danger : muted
+  return <View style={x.state}>{['installing', 'loading'].includes(value) ? <ActivityIndicator size={12} color={color} /> : <View style={[x.dot, { backgroundColor: color }]} />}<Text style={[x.stateLabel, { color }]}>{t(stateLabels[value] ?? value)}</Text></View>
 }
 export function Toolbar({ title, busy, onBack, onRefresh, children }: { title: string; busy?: boolean; onBack?: () => void; onRefresh?: () => void; children?: ReactNode }) {
   const { t } = useLocale()

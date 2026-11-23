@@ -228,4 +228,4 @@ Redis 数据卷、每账号 Docker 卷和 NAS 路径保持现有命名。非 NAS
 
 本地通过 make test vet check、ARM64 两个完整镜像构建及 Host smoke、安装器和独立 start 的真实容器启动、双账号 Host / Redis 生命周期、Web Docker 集成、AMD64 Go 入口交叉编译，以及 actionlint / Compose 静态检查。安装器测试通过本地 HTTP 文件和本地镜像模拟分发端，不冒充已发布 GHCR 的匿名下载验收。
 
-还需在远端发布工作流运行后将两个 GHCR 包设置为 Public，并完成匿名拉取检查；ECI/NAS 本次未调用真实云服务。首发使用审查后的源码手动发布 v0.0.1，不移动既有 Git 标签。详见 [部署与首发操作](deployment.md#publishing-project-images) 与 [验证记录](validation.md#ghcr-deployment-workflow-2026-11-23)。
+发布工作流运行后，需将两个 GHCR 包设置为 Public 并完成匿名拉取检查。版本和发布操作以[镜像发布说明](deployment.md#publishing-project-images)为准。

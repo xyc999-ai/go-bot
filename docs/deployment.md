@@ -189,8 +189,8 @@ Their original Skills are contributed from the installed plugin packages; the Ho
 no longer copies a first-start skill seed into user directories.
 ECI container storage uses the writable layer for the lifetime of the instance.
 
-See [validation](validation.md) for real Docker coverage and the remaining
-cloud checks.
+See [Contributing](../CONTRIBUTING.md#development-and-verification) for local
+checks and Docker integration commands.
 
 ## Publishing project images
 

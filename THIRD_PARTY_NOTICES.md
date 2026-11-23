@@ -1,8 +1,7 @@
 # Third-party notices
 
 Go Bot's own code is distributed under the [MIT License](LICENSE). The project
-was extracted from LifeClaw's server-side native Host. [Source provenance](docs/migration-files.json)
-records the migration. The upstream material and bundled components below retain
+was extracted from LifeClaw's server-side native Host. The upstream material and bundled components below retain
 their respective licenses and copyright notices.
 
 ## DeepSeek Harness

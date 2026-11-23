@@ -33,6 +33,7 @@ export function Plugins({ userId, cache, selected, onSelect }: { userId: string;
  const release = view?.catalog.find(row => row.package === selected)
  const info = view?.status.packages.find(row => row.name === selected)
  const actual = view?.status.instances.find(row => row.package === selected)
+ const preparing = ['installing', 'loading'].includes(actual?.state ?? '')
  const title = release ? release.name : info?.title || selected
  const install = async (entry: CatalogEntry) => {
   await run('install:' + entry.package, () => installPackage(userId, entry.pluginId), 'Plugin and dependencies installed. Enable it to use its capabilities.')
@@ -44,7 +45,7 @@ export function Plugins({ userId, cache, selected, onSelect }: { userId: string;
   }
  }
  const more = (name: string, entry?: CatalogEntry) => <div className="plugin-more" ref={menu === name ? menuRef : undefined}>
-  <button type="button" className="plugin-icon-button" aria-label={t('More options')} aria-haspopup="menu" aria-expanded={menu === name} disabled={!!busy} onClick={event => { menuTrigger.current = event.currentTarget; setMenu(menu === name ? undefined : name) }}><MoreHorizontal size={20} /></button>
+  <button type="button" className="plugin-icon-button" aria-label={t('More options')} aria-haspopup="menu" aria-expanded={menu === name} disabled={!!busy || view?.status.instances.some(row => row.package === name && ['installing', 'loading'].includes(row.state))} onClick={event => { menuTrigger.current = event.currentTarget; setMenu(menu === name ? undefined : name) }}><MoreHorizontal size={20} /></button>
   {menu === name && <div className="plugin-action-menu" role="menu">
    {!selected && <button role="menuitem" onClick={() => open(name)}><ChevronRight size={16} />{t('Plugin details')}</button>}
    {view?.status.packages.find(row => row.name === name)?.availableVersion && entry && <button role="menuitem" onClick={() => { setMenu(undefined); void run('install:' + name, () => updatePackage(userId, name, entry.pluginId)) }}><RefreshCw size={16} />{t('Update plugin')}</button>}
@@ -63,7 +64,7 @@ export function Plugins({ userId, cache, selected, onSelect }: { userId: string;
    {info?.availableVersion && release && <div className="plugin-update-banner"><div><strong>{t('Update available')}</strong><small>{info.version} → {info.availableVersion}</small></div><button className="model-secondary" disabled={!!busy} onClick={() => { void run('install:' + selected, () => updatePackage(userId, selected!, release.pluginId)) }}>{t('Update plugin')}</button></div>}
    {!selection && release ? <button className="account-submit plugin-primary" disabled={!!busy} onClick={() => { void install(release) }}>{selectedBusy ? <LoaderCircle size={16} /> : <Plus size={16} />}{t('Install plugin')}</button> : selection && <div className="plugin-activation">
     <div><strong>{t('Enable plugin')}</strong>{!selectedBusy && <ExtensionState state={actual?.state ?? (selection.enabled ? 'unavailable' : 'disabled')} />}</div>
-    <button type="button" className="plugin-switch" role="switch" aria-label={t('Enable plugin')} aria-checked={selection.enabled} disabled={!!busy} onClick={() => { void run('settings:' + selected, () => setPluginEnabled(userId, selected, !selection.enabled)) }}><span /></button>
+    <button type="button" className="plugin-switch" role="switch" aria-label={t('Enable plugin')} aria-checked={selection.enabled} disabled={!!busy || preparing} onClick={() => { void run('settings:' + selected, () => setPluginEnabled(userId, selected, !selection.enabled)) }}><span /></button>
    </div>}
    {!selectedBusy && (actual?.error || view?.status.error) && <p className="extension-diagnostic" role="alert">{actual?.error || view?.status.error}</p>}
    {release && <>
@@ -83,8 +84,8 @@ export function Plugins({ userId, cache, selected, onSelect }: { userId: string;
      const entry = view.catalog.find(row => row.package === name), saved = view.settings.packages[name], state = view.status.instances.find(row => row.package === name)
      const label = entry ? entry.name : view.status.packages.find(row => row.name === name)?.title || name
      return <article className="plugin-tile" key={name}>
-      <button type="button" className="plugin-tile-main" onClick={() => open(name)}><PluginIcon icon={entry?.icon} /><span className="plugin-tile-copy"><strong>{label}</strong><small>{entry ? localize(entry.description, language).split('\n')[0] : name}</small>{view.status.packages.find(row => row.name === name)?.availableVersion && <span className="plugin-update-tag">{t('Update available')}</span>}{tab === 'installed' && <ExtensionState state={state?.state ?? (saved?.enabled ? 'unavailable' : 'disabled')} />}</span></button>
-      {busy === 'install:' + name ? <span className="plugin-icon-button plugin-progress" role="status" aria-label={t('Installing…')}><LoaderCircle size={19} /></span> : saved ? more(name, entry) : <button type="button" className="plugin-icon-button" disabled={!!busy} aria-label={t('Install plugin') + ': ' + label} onClick={() => { if (entry) void install(entry) }}><Plus size={22} /></button>}
+      <button type="button" className="plugin-tile-main" onClick={() => open(name)}><PluginIcon icon={entry?.icon} /><span className="plugin-tile-copy"><strong>{label}</strong><small>{entry ? localize(entry.description, language).split('\n')[0] : name}</small>{view.status.packages.find(row => row.name === name)?.availableVersion && <span className="plugin-update-tag">{t('Update available')}</span>}{(tab === 'installed' || ['installing', 'installation-failed'].includes(state?.state ?? '')) && <ExtensionState state={state?.state ?? (saved?.enabled ? 'unavailable' : 'disabled')} />}</span></button>
+      {busy === 'install:' + name || state?.state === 'installing' ? <span className="plugin-icon-button plugin-progress" role="status" aria-label={t('Installing…')}><LoaderCircle size={19} /></span> : saved ? more(name, entry) : <button type="button" className="plugin-icon-button" disabled={!!busy} aria-label={t('Install plugin') + ': ' + label} onClick={() => { if (entry) void install(entry) }}><Plus size={22} /></button>}
      </article>
     })}</div>
     {tab === 'installed' && <details className="plugin-runtime-details"><summary>{t('Plugin runtime')}</summary><div className="extension-runtime"><ExtensionState state={view.status.runtime} /><button className="extension-text" disabled={!!busy} onClick={() => { void run('restart', () => restartPlugins(userId)) }}>{t('Restart')}</button></div>{view.status.error && <p className="extension-diagnostic">{view.status.error}</p>}</details>}

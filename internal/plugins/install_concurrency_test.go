@@ -77,6 +77,17 @@ process.stdout.write(JSON.stringify({result}));`
 		case <-tick.C:
 		}
 	}
+	status, err := m.Status(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	states := map[string]string{}
+	for _, row := range status.Instances {
+		states[row.Package] = row.State
+	}
+	if states["extra"] != "installing" || states["fixture"] != "ready" {
+		t.Fatalf("wrong progress while sibling stays active: %+v", status.Instances)
+	}
 	tools, err := m.Tools(t.Context(), "session")
 	if err != nil || len(tools) != 1 || tools[0].Spec().Name != "fixture__echo" {
 		t.Fatalf("existing tools unavailable during download: %v %v", tools, err)

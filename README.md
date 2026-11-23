@@ -1,10 +1,15 @@
 <h1 align="center">go-bot</h1>
 
 <p align="center">
+  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a> ·
+  <strong><a href="https://github.com/xyc999-ai/go-bot/releases/latest">Download Android APK</a></strong>
+</p>
+
+<p align="center">
   <img src="assets/harness-whale.png" width="184" alt="go-bot blue whale mascot">
 </p>
 
-go-bot is a Go implementation of DeepSeek Harness and a self-hosted personal
+go-bot is a Go-based Harness system and a self-hosted personal
 agent. It offers an open-source alternative to [Meta Muse](https://about.fb.com/news/2026/09/introducing-muse-personal-ai-agent/),
 [OpenAI dots](https://openai.com/index/introducing-dots/), and
 [Grok Bot](https://help.x.com/en/using-x/about-grok).
@@ -16,11 +21,6 @@ bringing useful discoveries and ideas into the conversation on its own.
 Teams can use Alibaba Cloud Elastic Container Instance (ECI) to build their
 own personal agent products, with a dedicated Host for each account, optional
 persistent storage, and room for their own frontends and service integrations.
-
-<p align="center">
-  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a> ·
-  <strong><a href="https://github.com/xyc999-ai/go-bot/releases/latest">Download Android APK</a></strong>
-</p>
 
 - **Web research and browser automation.** Search the web through a configured provider. Use Chromium to navigate pages, interact with forms, and capture screenshots.
 - **Image generation and editing.** Generate images from text or use uploaded images as references. Results appear directly in chat.
@@ -328,11 +328,24 @@ creation, storage and Controller-to-Host connectivity.
 | Task | Install on the machine running it |
 | --- | --- |
 | Quickstart | Docker Engine or Docker Desktop, Docker Compose v2, curl and Bash. |
-| Run `start.sh` or prepare a public ECI cache | Docker, Docker Compose v2 and Bash; prepare the required images first. No local Go installation is needed. |
+| Start services from a source checkout with `scripts/start.sh` | Docker, Docker Compose v2 and Bash. Prepare the deployment profile and required local images first; this script neither pulls nor builds images. |
+| Prepare an ECI image cache with `scripts/buildeci.sh` | Docker, Docker Compose v2 and Bash, the local Controller image, and an ECI profile with cloud credentials and network settings. |
 | Develop outside Docker | Go 1.26 or newer for the backend, a Redis instance for a native Controller, and Node.js 22.12+ with npm for frontend development. |
+| Develop the Cordis plugin runtime | Node.js 24.9+ and pnpm 11.25.0, as declared in `extensions/cordis/package.json`. |
 
-Compose runs Redis and the published Controller with its embedded frontend. Python, Node.js, Chromium and
-the general document environment are included in the Host image. Install OfficeCLI and agent-browser through the plugin market.
+The [ECI workflow](#alibaba-cloud-eci) also uses Git to obtain the source checkout
+and requires the cloud resources described there. `buildeci.sh` starts a temporary
+container from the Controller image and runs its bundled `buildeci` program.
+It calls Alibaba Cloud to pull the Host image and create the cache, then writes
+the Ready cache ID back to the selected env file. This requires neither a running
+Controller service nor a local Host build or Go installation, and does not start
+an account Host.
+
+Compose runs Redis and the published Controller with its embedded frontend. Python,
+Node.js, Chromium and the general document environment are included in the Host
+image. New accounts automatically install and enable agent-browser and OfficeCLI,
+including their official CLI dependencies and Skills; first-time installation
+requires network access. Manage them later through the plugin market.
 
 ## Develop and extend
 
@@ -347,11 +360,22 @@ credentials and bind access to the authenticated account.
 - **Add a Skill** with a `SKILL.md` file to describe a repeatable workflow that uses existing tools. Put account-level skills under `/root/harness/.dsh/skills/` on the Host.
 - **Add tools and selected third-party services** in a custom Host build. Implement the Go tool contract and include the tool in the Host's tool set. Keep external SDK and HTTP calls in `thirdparty/`, and use `providers/` for adapters to the runtime, model, search, or image provider contracts. [Tool interface](harness/agent/native_contract.go) · [Host tool assembly](harness/assembly/native_runtime.go) · [Provider guide](docs/providers.md)
 - **Add business plugins** with native Cordis and asynchronous `ctx.host` APIs for tools, Skills, prompts, credentials, authorization and MCP. The Harness core stays in Go. [Plugin SDK](extensions/sdk/README.md) · [Examples](examples/plugins/README.md)
-- **Build the product interface** on HTTP and SSE. Connect your own chat frontend or messaging channel and handle account authentication, connection permissions, and user approval for actions such as booking or payment. [API guide](docs/api.md) · [Personal-agent integration research](docs/personal-agent-research.zh-CN.md)
+- **Build the product interface** on HTTP and SSE. Connect your own chat frontend or messaging channel and handle account authentication, connection permissions, and user approval for actions such as booking or payment. [API guide](docs/api.md)
 
 [Documentation](docs/README.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [MIT License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-## Community
+## Community and contact
+
+Questions, ideas, and feedback are welcome. [Open an issue](https://github.com/xyc999-ai/go-bot/issues/new)
+or contact the project author directly:
+
+- Email: [xyc00666@gmail.com](mailto:xyc00666@gmail.com)
+- WeChat: `Xyc--999`
+- X: [@xyc_999](https://x.com/xyc_999)
+
+Teams and individuals interested in commercializing the project are also welcome to get in touch.
+
+### QQ community
 
 Join **go-bot交流** on QQ to ask questions, share setups, or give feedback.
 Scan the QR code in QQ or search for group **710767129**.
@@ -368,6 +392,5 @@ Scan the QR code in QQ or search for group **710767129**.
 - [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) supplies the Word, PowerPoint, and Excel tools. The Host also includes [LibreOffice](https://www.libreoffice.org/).
 - [agent-browser](https://github.com/vercel-labs/agent-browser) provides the CLI and skill the Host uses to automate [Chromium](https://www.chromium.org/).
 
-See the [open-source memory survey](docs/open-source-agent-memory-survey.zh-CN.md)
-for additional designs evaluated, and [third-party notices](THIRD_PARTY_NOTICES.md)
-for bundled components and their license terms.
+See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled components and
+their license terms.

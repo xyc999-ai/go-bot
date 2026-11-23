@@ -311,9 +311,13 @@ func TestBackgroundHostRunsQuietThenTimedNotificationWithStandardContext(t *test
 	if len(captured) != 2 {
 		t.Fatalf("background calls=%d", len(captured))
 	}
+	historicalTime := time.UnixMilli(activity.Sessions[0].Messages[0].Timestamp).UTC().Format("2006-01-02 15:04:05.000 MST")
 	for _, raw := range captured {
 		if !strings.Contains(string(raw), "Time sampled while preparing turn") || !strings.Contains(string(raw), "我正在研究 AI 行业报告") {
 			t.Fatalf("missing standard time or real activity context: %s", raw)
+		}
+		if !strings.Contains(string(raw), "historical times in UTC") || !strings.Contains(string(raw), historicalTime) {
+			t.Fatalf("historical dialogue lacks readable, labelled times: %s", raw)
 		}
 		for _, name := range []string{`"name":"ask_user_question"`, `"name":"create_goal"`, `"name":"schedule_create"`, `"name":"send_message"`} {
 			if strings.Contains(string(raw), name) {
