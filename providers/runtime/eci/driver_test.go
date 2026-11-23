@@ -63,7 +63,7 @@ func TestECIContainerUsesCacheWithoutNAS(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if out.Endpoint != "http://10.1.2.3:8080" || api.last.NASMountTarget != "" || api.last.ImageCacheID != "imc-test" || api.last.Image != "registry.example/host:v1" {
+	if out.Endpoint != "http://10.1.2.3:8080" || api.last.NASMountTarget != "" || api.last.ImageCacheID != "imc-test" || api.last.Image != s.Image || api.cacheQueries != 0 {
 		t.Fatal("unexpected endpoint, NAS or cache image")
 	}
 	s.Storage = runtime.Storage{Type: "nas"}
@@ -137,12 +137,13 @@ func TestECIRefusesForeignRunAndMultipleActiveInstances(t *testing.T) {
 	}
 }
 
-func TestECIRejectsInvalidCacheBeforeCreating(t *testing.T) {
+func TestECIDoctorValidatesCache(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		change func(*runtime.Spec, *aliyun.ImageCache)
 	}{
 		{"missing ID", func(s *runtime.Spec, _ *aliyun.ImageCache) { s.ECI.ImageCacheID = "" }},
+		{"missing image", func(s *runtime.Spec, _ *aliyun.ImageCache) { s.Image = "" }},
 		{"not ready", func(_ *runtime.Spec, c *aliyun.ImageCache) { c.Status = "Creating" }},
 		{"wrong region", func(_ *runtime.Spec, c *aliyun.ImageCache) { c.Region = "cn-beijing" }},
 		{"expired", func(_ *runtime.Spec, c *aliyun.ImageCache) { c.ExpiresAt = "2000-01-01T00:00:00Z" }},
@@ -155,10 +156,22 @@ func TestECIRejectsInvalidCacheBeforeCreating(t *testing.T) {
 			test.change(&s, &cache)
 			api := &fakeAPI{cache: &cache}
 			d := &Driver{Client: api}
-			if _, err := d.Ensure(context.Background(), s); err == nil || api.creates != 0 {
+			if err := d.Preflight(context.Background(), s); err == nil || api.creates != 0 {
 				t.Fatalf("invalid cache reached create: %v", err)
 			}
 		})
+	}
+}
+
+func TestECICreationDoesNotQueryCache(t *testing.T) {
+	api := &fakeAPI{cache: &aliyun.ImageCache{Status: "Failed"}}
+	driver := &Driver{Client: api}
+	spec := testSpec()
+	if _, err := driver.Ensure(t.Context(), spec); err != nil {
+		t.Fatal(err)
+	}
+	if api.cacheQueries != 0 || api.last.Image != spec.Image || api.last.ImageCacheID != spec.ECI.ImageCacheID {
+		t.Fatal("creation must pass the configured image/cache pair directly to the cloud")
 	}
 }
 

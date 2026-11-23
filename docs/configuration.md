@@ -1,6 +1,10 @@
 # Configuration
 
-Run `./scripts/start.sh --init-env` once to create `.env` for Docker and
+The [Quickstart installer](../README.md#quickstart) downloads the same Compose,
+`.env.example` and `configs/default.yaml` used in the repository, creates only
+`.env`, and pulls the images. Start with `docker compose up -d`.
+
+In a source checkout, run `./scripts/start.sh --init-env` to create `.env` for Docker and
 `.env.eci` for ECI from [.env.example](../.env.example). Use
 `--docker-env-file PATH` and `--eci-env-file PATH` to customize the output
 paths. Initialization leaves existing files in place.
@@ -12,8 +16,10 @@ configuration, and saves valid overrides atomically.
 Compose mounts the profile into Controller. Controller connects to Redis over
 the internal Compose network at `redis:6379`. Compose publishes Controller on
 port 8080 and Redis on port 6379 on the Docker host's network interfaces.
-The launcher runs the configuration tools with local Go when available, or
-builds a Controller image to run them in Docker. `controller check` validates
+The source launcher runs configuration tools in the existing local Controller
+image. It never pulls or builds images and is independent of install.sh.
+Controller also validates configuration on `serve`, so starting Compose directly
+does not skip checks. `controller check` validates
 the profile offline. `controller doctor` also performs a read-only runtime
 preflight. In ECI mode, `check` validates the cache ID format and `doctor`
 queries Alibaba Cloud for a usable cache. `buildeci` validates its own
@@ -26,12 +32,24 @@ files, except for the root `.env.example` template. For other names, keep
 private profiles outside the checkout or under the ignored `.local/` directory.
 Create the directory first if passing a new path to `--init-env`.
 
+Compose mounts the profile directory read/write at `/config` to allow atomic
+profile replacement, and mounts `configs/default.yaml` read-only at `/runtime.yaml`.
+Missing YAML fails startup. Controller reads the original profile directly;
+Compose does not pass the entire profile as container environment variables.
+`REDIS_ADDR` and `CONTROLLER_CONTAINER` are fixed container wiring. Compose's
+automatic `.env` interpolation is not used to reconstruct application secrets.
+Edit `.env` for ordinary Compose deployments, then restart Controller.
+If you explicitly provide deployment variables in a container environment (for
+example through a Compose override), Controller validates and persists them before
+serving. The source `start.sh` similarly forwards explicit shell overrides to
+its configuration tool. An explicit empty value clears the saved value.
+
 ## Runtime, storage and entry
 
 | Variable | Meaning | Default or requirement |
 |---|---|---|
 | `HARNESS_RUNTIME` | Runtime provider | `docker` or `eci`, default `docker` |
-| `HOST_IMAGE` | Local Host build tag | Initialization sets `go-bot/host:local` for Docker and `go-bot/host:eci` for ECI |
+| `HOST_IMAGE` | Host image reference | `ghcr.io/xyc999-ai/go-bot-host:latest`; Docker requires it locally. ECI cache creation and instance startup pass this same reference |
 | `HARNESS_STORAGE` | Host filesystem | `container` by default. Docker automatically mounts an account volume. ECI uses the instance filesystem or can be set to `nas` |
 | `NAS_MOUNT_TARGET` | Existing NAS mount target | Required for ECI with `nas` |
 | `CONTROLLER_LISTEN` | Loopback address for a native Controller | `127.0.0.1:8080` |
@@ -105,14 +123,18 @@ and previously published replies intact. There is no phone push requirement.
 |---|---|
 | `ALIBABA_CLOUD_ACCESS_KEY_ID` | Controller and buildeci, required for ECI |
 | `ALIBABA_CLOUD_ACCESS_KEY_SECRET` | Controller and buildeci, required for ECI. The same pair is used with optional NAS |
-| `REGISTRY_PUSH_IMAGE` | Full registry image reference for publishing or caching a Host image |
-| `REGISTRY_USERNAME` | Private registry account for ECI cache creation, supplied with the password |
-| `REGISTRY_PASSWORD` | Private registry password for ECI cache creation, supplied with the username |
 
-`buildeci` takes the registry host from `REGISTRY_PUSH_IMAGE` and supplies
-the username and password to Alibaba Cloud ECI to pull the private image.
-The registry can be hosted by another provider. Local publication uses the
-Docker CLI login.
+`buildeci` passes the public `HOST_IMAGE` reference to Alibaba Cloud ECI without
+registry credentials. It creates a cloud image cache, not a local image build or
+registry push. Project image publication is a separate GitHub Actions workflow;
+its automatic `GITHUB_TOKEN` is not a deployment credential.
+When creating an ECI Host, Controller passes `HOST_IMAGE` and `ECI_IMAGE_CACHE_ID`
+directly, without querying the cache to discover its image. Rebuild the cache and
+update its ID when changing the image version. The explicit `doctor` command can
+still inspect cache readiness as a diagnostic.
+The template defaults to `latest`. A ready cache retains the image it was made
+from even if that tag later moves. Use a new `buildeci --operation` name for an
+intentional cache refresh; repeating the same operation resumes the old request.
 
 ### Redis account storage
 

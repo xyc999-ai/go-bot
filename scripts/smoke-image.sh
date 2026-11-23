@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-image="${1:-go-bot/host:local}"
+image="${1:-ghcr.io/xyc999-ai/go-bot-host:latest}"
 docker run --rm --entrypoint /bin/sh "$image" -ec '
   python --version
   python -m pip --version

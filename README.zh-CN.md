@@ -117,15 +117,19 @@ Go Bot 会记住与你交流的背景，持续关注你关心的事，并主动�
 
 ## 快速开始
 
-安装 Docker Engine 或 Docker Desktop，并确认可以运行 `docker compose`。在仓库根目录执行：
+安装 Docker Engine 或 Docker Desktop、Docker Compose v2、curl 和 Bash。无需克隆源码或安装 Go：
 
 ```sh
-./scripts/start.sh --init-env
-./scripts/start.sh
+curl -fsSL https://raw.githubusercontent.com/xyc999-ai/go-bot/main/scripts/install.sh | bash
+cd go-bot
+docker compose up -d
 ```
 
-第一条命令生成私有配置 `.env` 和 `.env.eci`，保留已有文件。第二条命令读取 `.env`，
-在本机构建 Host 镜像，并通过 Compose 启动 Controller 和 Redis。
+安装器下载仓库原始的 `compose.yaml`、`.env.example` 和 `configs/default.yaml`，仅在缺失时
+生成 `.env`，并拉取已发布的 Controller、Host 和 Redis 镜像。已有配置保留，不启动服务，
+不生成 `.env.eci`。Compose 启动 Controller 和 Redis；每个账号的 Host 由 Controller 动态创建，
+是独立容器。应用镜像提供 AMD64 和 ARM64，Docker 自动选择匹配架构。
+[源码开发启动](docs/deployment.md#source-checkout)
 
 ### 浏览器
 
@@ -203,20 +207,35 @@ OfficeCLI 提供 11 个原始 Skills，agent-browser 提供官方发现 Skill；
 
 在能够访问 ECI 私网的机器上通过 Docker Compose 运行 Controller 和 Redis，例如同一 VPC 内的
 一台 ECS。每个账号的 Agent 云电脑运行在独立的 ECI 实例中。准备好云资源和 Ready 镜像缓存后，
-可通过同一个启动脚本部署。
+由部署者自行启动服务。项目提供准备工具，部署者使用自己的阿里云配置执行；本地 Docker
+Quickstart 的 install.sh 不承担 ECI 准备，也不会创建云资源。
 
-### 1. 准备阿里云资源
+### 1. 拉取仓库并准备本地工具
+
+在 Controller 所在机器上安装 Git、带 Compose v2 的 Docker 和 Bash，然后执行：
+
+```sh
+git clone https://github.com/xyc999-ai/go-bot.git
+cd go-bot
+docker pull ghcr.io/xyc999-ai/go-bot-controller:latest
+docker pull redis:8-alpine
+./scripts/start.sh --init-env
+```
+
+显式初始化会生成 `.env` 和 `.env.eci`，保留已有文件；ECI 使用 `.env.eci`。
+缓存工具已包含在 Controller 镜像中，无需在本机安装 Go 或下载 Host 镜像。
+以上命令不会启动 Controller、Redis 或账号的 Host。
+
+### 2. 准备云资源并填写 `.env.eci`
 
 | 资源 | 需要提前准备 |
 | --- | --- |
 | RAM 凭证 | 创建 RAM 用户及 AccessKey ID、Secret，授予查询、创建和释放 ECI 实例、查询镜像缓存所需的权限。如需制作缓存，再授予创建缓存权限。 [创建 AccessKey](https://www.alibabacloud.com/help/en/ram/user-guide/create-an-accesskey-pair) · [RAM 用户授权](https://www.alibabacloud.com/help/en/ram/user-guide/grant-permissions-to-the-ram-user) |
 | 网络 | 选择地域、交换机和安全组，允许 Controller 通过私网访问 ECI 的 TCP 8080。镜像仓库、模型服务或网页需要公网访问时，可为 ECI 所在交换机配置公网 NAT 网关 SNAT。启动流程不会为每个 Host 分配 EIP。 [VPC 与交换机](https://www.alibabacloud.com/help/en/vpc/vpc-and-vswitch) · [安全组规则](https://www.alibabacloud.com/help/en/ecs/user-guide/security-group-rules) · [ECI 公网访问](https://www.alibabacloud.com/help/en/eci/user-guide/enable-internet-access) |
-| NAS（可选） | 准备 ECI 可访问的 NAS 挂载点。在打开账号前，为该账号创建可写的 `/go-bot/<userId>` 目录。 [ECI 挂载 NAS](https://www.alibabacloud.com/help/en/eci/user-guide/mount-a-nas-volume) |
-| 镜像缓存 | 复用所选地域中已有的 Linux AMD64 Host Ready 缓存，或者准备 ECI 缓存制作服务可访问的镜像仓库。 [管理 ECI 镜像缓存](https://www.alibabacloud.com/help/en/eci/user-guide/manage-an-image-cache) |
+| NAS（可选） | 准备 ECI 可访问、可写的 NAS 挂载点。账号数据使用 NAS 上的 `/go-bot/<userId>`，挂载至 Host 的 `/root/harness`。 [ECI 挂载 NAS](https://www.alibabacloud.com/help/en/eci/user-guide/mount-a-nas-volume) |
+| 镜像缓存 | 在第 3 步使用公共 Host 镜像创建，或者复用所选地域中与 `HOST_IMAGE` 完全对应的 Ready 缓存。 [管理 ECI 镜像缓存](https://www.alibabacloud.com/help/en/eci/user-guide/manage-an-image-cache) |
 
-### 2. 填写 ECI 配置
-
-尚未初始化时，先运行 `./scripts/start.sh --init-env`。编辑已预设 `HARNESS_RUNTIME=eci` 的
+编辑已预设 `HARNESS_RUNTIME=eci` 的
 `.env.eci`，填写 `ECI_REGION`、`ECI_VSWITCH_ID`、`ECI_SECURITY_GROUP_ID`、
 `ALIBABA_CLOUD_ACCESS_KEY_ID` 和 `ALIBABA_CLOUD_ACCESS_KEY_SECRET`。
 
@@ -226,23 +245,19 @@ OfficeCLI 提供 11 个原始 Skills，agent-browser 提供官方发现 Skill；
 
 ### 3. 准备 Host 镜像缓存
 
-已有兼容 Host 镜像的 Ready 缓存时，将 ID 填入 `ECI_IMAGE_CACHE_ID`，直接进入第 4 步。
-制作新缓存时，将 `REGISTRY_PUSH_IMAGE` 设置为带版本标签的完整镜像地址，例如
-`registry.example.com/team/go-bot-host:v0.1.0`。如果推送需要认证，
-在构建机执行 `docker login <registry-host>`。如果阿里云从私有仓库拉取镜像，
-还需成对填写 `REGISTRY_USERNAME` 和 `REGISTRY_PASSWORD`。
-
-构建机需要 Go 1.26 或更高版本，以及带 Buildx 的 Docker。运行：
+`HOST_IMAGE` 保持模板中的公共镜像地址即可。已有与该地址完全对应的 Ready 缓存时，
+填写 `ECI_IMAGE_CACHE_ID` 后直接进入第 4 步；否则由部署者明确执行：
 
 ```sh
-./scripts/buildeci.sh prepare --env-file .env.eci
+./scripts/buildeci.sh --env-file .env.eci
 ```
 
-`prepare` 构建 Linux AMD64 Host 镜像，用 `HOST_IMAGE` 打本地标签，推送到
-`REGISTRY_PUSH_IMAGE`，再向阿里云申请镜像缓存。镜像已发布时，可用
-`./scripts/buildeci.sh cache --env-file .env.eci` 跳过本地构建和推送。
-两条命令都等待缓存进入 Ready，并将 ID 写回所选配置文件的 `ECI_IMAGE_CACHE_ID`。
-[缓存配置与失败恢复](docs/deployment.md#eci-image-cache)
+脚本使用本地 Controller 镜像中的缓存工具，让阿里云拉取公共 `HOST_IMAGE` 对应的 AMD64 镜像。
+无需在本机构建、推送或下载 Host 镜像，也无需安装 Go 或登录镜像仓库。缓存进入 Ready 后，
+工具自动将 ID 写回 `.env.eci` 的 `ECI_IMAGE_CACHE_ID`。制作缓存会使用阿里云计费资源。
+工具直接使用公共 `HOST_IMAGE`，不需要镜像仓库凭证或额外的推送地址配置。
+该命令只准备缓存，不启动 Controller、Redis 或账号 Host；失败或超时不会覆盖已有缓存 ID。
+[接口参数、缓存配置与失败恢复](docs/deployment.md#cache-api-request)
 
 ### 4. 启动 Controller 并打开账号
 
@@ -252,22 +267,26 @@ OfficeCLI 提供 11 个原始 Skills，agent-browser 提供官方发现 Skill；
 ./scripts/start.sh --env-file .env.eci
 ```
 
-脚本校验配置，然后用 Compose 启动 Controller 和 Redis。打开账号时，Controller 才会使用
-指定缓存按需启动 ECI Host。
+脚本校验配置，然后用 Compose 启动 Controller 和 Redis。随后在浏览器打开 Controller 地址，
+创建或打开账号，Controller 才会直接使用 `HOST_IMAGE` 和 `ECI_IMAGE_CACHE_ID` 创建该账号的
+ECI Host。仅制作缓存不会创建用户 Host。更新 Host 镜像时，先重新制作缓存并更新 ID，再替换实例。
 
 ## 配置与检查
 
-`start.sh` 读取指定配置文件，合并显式设置的部署环境变量，校验通过后才将覆盖值写回文件并启动。
-显式传入空值会覆盖文件里的值。模型和网页搜索由用户在设置界面按账号配置；Gemini 生图等能力在插件详情中配置 API Key。
+Controller 启动时读取并校验挂载的 `.env` 和 `configs/default.yaml`，直接用 Compose 启动也会检查。
+普通部署修改 `.env` 即可。仓库中的 `start.sh` 还支持校验并保存 shell 环境覆盖，再启动 Compose；
+它不会拉取或构建镜像。Controller 也会校验并保存显式传入容器的环境覆盖，显式空值会清空已保存值。
+模型和网页搜索由用户在设置界面按账号配置；Gemini 生图等能力在插件详情中配置 API Key。
 
 用下面的命令检查 ECI 配置或运行环境：
 
 ```sh
-go run ./cmd/controller check --env-file .env.eci
-go run ./cmd/controller doctor --env-file .env.eci
+docker compose run --rm --no-deps controller check --env-file /config/.env --config /runtime.yaml
+docker compose run --rm --no-deps controller doctor --env-file /config/.env --config /runtime.yaml
 ```
 
-检查本地 Docker 时把文件换成 `.env`。`check` 离线校验配置及必填项。
+ECI 模式将 `/config/.env` 换成 `/config/.env.eci`。命令使用本地 Controller 镜像中的工具，
+无需安装 Go 或先启动 Redis。`check` 离线校验配置及必填项。
 `doctor` 还会检查本地 Host 镜像或阿里云 Ready 镜像缓存。实际创建 Host、挂载存储，
 以及验证 Controller 到 Host 的连通性，发生在打开账号时。
 [配置字段](docs/configuration.md) · [故障排查](docs/troubleshooting.md)
@@ -276,11 +295,11 @@ go run ./cmd/controller doctor --env-file .env.eci
 
 | 用途 | 在执行命令的机器上安装 |
 | --- | --- |
-| 用 `start.sh` 部署本地 Docker 或 ECI 模式 | Docker、Docker Compose 插件和 Bash。Go 可选，启动脚本可以在 Docker 里运行配置检查工具。 |
-| 用 `buildeci.sh` 制作 ECI 缓存 | Go 1.26 或更高版本、Bash。使用 `prepare` 构建和推送镜像时还需要带 Buildx 的 Docker。 |
+| Quickstart | Docker Engine 或 Docker Desktop、Docker Compose v2、curl 和 Bash。 |
+| 运行 `start.sh` 或制作公共镜像的 ECI 缓存 | Docker、Docker Compose v2 和 Bash，先准备所需镜像；无需在本机安装 Go。 |
 | 在 Docker 外开发 | 后端需要 Go 1.26 或更高版本，原生 Controller 需要 Redis，前端开发需要 Node.js 22.12+ 和 npm。 |
 
-Compose 负责启动 Redis 并构建前端。Agent 使用的 Python、Node.js、Chromium 和通用文档环境已包含在 Host 镜像中；OfficeCLI 与 agent-browser 从插件市场安装。
+Compose 负责启动 Redis 和内嵌前端的已发布 Controller。Agent 使用的 Python、Node.js、Chromium 和通用文档环境已包含在 Host 镜像中；OfficeCLI 与 agent-browser 从插件市场安装。
 
 ## 开发与扩展
 

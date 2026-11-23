@@ -44,7 +44,7 @@ versions; these observations are not a promise to reproduce every Debian byte.
 ## Reproduce locally
 
 ```bash
-make build image
+make build image image-controller
 make test vet check
 make race
 ./scripts/smoke-image.sh
@@ -83,6 +83,37 @@ containers.
 
 Fake cloud tests establish request construction and orchestration behavior,
 not Alibaba account permissions, network reachability or actual NFS guarantees.
+
+## GHCR deployment workflow, 2026-11-23
+
+- `make test vet check` passed. The public-cache configuration test verifies that
+  the unchanged multi-platform `HOST_IMAGE` is used directly. Registry credential
+  fields and local image build/push commands are no longer deployment features.
+  ECI driver tests verify direct image/cache-ID forwarding with zero cache-detail
+  queries during creation; the optional `doctor` path still checks cache readiness.
+- Built the complete Linux ARM64 Controller and Host images. Controller contains
+  Web UI, Docker CLI, `prepare-env` and `buildeci`. The Host environment/plugin
+  image smoke passed. All four Go entry points cross-compiled for Linux AMD64;
+  this run did not execute complete AMD64 images on native hardware.
+- `scripts/test-install.py` passed using local HTTP copies of the actual repository
+  files and real image tools. It covered an empty directory, byte-identical Compose
+  and YAML, only `.env` initialization, mode 0600, repeat installation, literal
+  credential values, shell/container overrides, preservation of file ownership,
+  failed download and missing-image errors. Direct Compose and the independent
+  source launcher each started real Controller/Redis containers on isolated ports.
+  The test replaces registry pulls with local image checks: it does not establish
+  that a public GHCR release already exists.
+- `scripts/smoke-cli.py` passed with real Docker/Redis: two isolated account Hosts,
+  session/model storage, Controller recreation, Redis restart, stop/resume and
+  release. `TestDockerWebChatPreview` passed against the local published-name Host
+  image. No paid model calls or existing service restarts were needed.
+- `actionlint` and Compose configuration validation passed. The image publisher is
+  separate from ordinary CI and supports Git-tag/manual publication, native
+  architecture builds, digest-based manifest assembly, optional manual `latest`
+  promotion and anonymous registry inspection.
+- Remote workflow execution, first GHCR publication/public visibility, anonymous
+  Internet pulls, and live ECI/NAS cache/startup remain release/cloud checks. The
+  installer and images must be published before the main-branch Quickstart works.
 
 ## Environment profile migration, 2026-11-11
 

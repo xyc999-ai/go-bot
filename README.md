@@ -120,16 +120,20 @@ and a PowerPoint deck. [Stanford HAI 2026 AI Index](https://hai.stanford.edu/ai-
 ## Quickstart
 
 Install Docker Engine or Docker Desktop with the Docker Compose plugin
-(`docker compose`). From the repository root, run:
+(`docker compose`), curl and Bash. No source checkout or Go installation is needed:
 
 ```sh
-./scripts/start.sh --init-env
-./scripts/start.sh
+curl -fsSL https://raw.githubusercontent.com/xyc999-ai/go-bot/main/scripts/install.sh | bash
+cd go-bot
+docker compose up -d
 ```
 
-The first command creates private `.env` and `.env.eci` profiles and keeps
-existing files. The second reads `.env`, builds the local Host image, and
-starts Controller and Redis with Compose.
+The installer downloads the repository's `compose.yaml`, `.env.example` and
+`configs/default.yaml`, creates `.env` if missing, and pulls the published
+Controller, Host and Redis images. It keeps existing configuration and does not
+start services or create `.env.eci`. Compose starts Controller and Redis; each
+account's Host is a separate container created by Controller. Images support
+AMD64 and ARM64, selected automatically by Docker. [Source development](docs/deployment.md#source-checkout)
 
 ### Web browser
 
@@ -216,21 +220,37 @@ The mobile app connects to the same Controller from iOS or Android. It provides 
 
 Run Controller and Redis with Docker Compose on a machine that can reach the
 ECI private network, such as an ECS instance in the same VPC. Each account's
-agent computer runs as its own ECI instance. Once the cloud resources and a
-Ready image cache are in place, the same launcher starts the deployment.
+agent computer runs as its own ECI instance. Go Bot provides the preparation
+tools; you run them with your own cloud configuration and then start the services
+yourself. The local-Docker Quickstart installer does not prepare ECI or create
+cloud resources.
 
-### 1. Prepare Alibaba Cloud resources
+### 1. Clone the repository and prepare local tools
+
+On the Controller machine, install Git, Docker with Compose v2, and Bash. Then run:
+
+```sh
+git clone https://github.com/xyc999-ai/go-bot.git
+cd go-bot
+docker pull ghcr.io/xyc999-ai/go-bot-controller:latest
+docker pull redis:8-alpine
+./scripts/start.sh --init-env
+```
+
+This explicitly initializes `.env` and `.env.eci` without overwriting existing
+files. ECI uses `.env.eci`. The Controller image contains the cache tool; no local
+Go installation or Host image download is needed. These commands do not start
+Controller, Redis or an account Host.
+
+### 2. Prepare cloud resources and fill in `.env.eci`
 
 | Resource | What to prepare |
 | --- | --- |
 | RAM credentials | Create a RAM user with an AccessKey ID and Secret. Grant the ECI API permissions needed to list, create and release instances, inspect caches, and create caches if you build them here. [Create an AccessKey pair](https://www.alibabacloud.com/help/en/ram/user-guide/create-an-accesskey-pair) · [Grant RAM permissions](https://www.alibabacloud.com/help/en/ram/user-guide/grant-permissions-to-the-ram-user) |
 | Network | Choose the region, vSwitch and security group. Allow Controller to reach the ECI private IP on TCP 8080. For public registry, model and web access, configure outbound access such as NAT gateway SNAT on the ECI vSwitch. The launcher does not assign an EIP to each Host. [VPCs and vSwitches](https://www.alibabacloud.com/help/en/vpc/vpc-and-vswitch) · [Security group rules](https://www.alibabacloud.com/help/en/ecs/user-guide/security-group-rules) · [ECI internet access](https://www.alibabacloud.com/help/en/eci/user-guide/enable-internet-access) |
-| NAS (optional) | Prepare a reachable NAS mount target. Before opening an account, create a writable `/go-bot/<userId>` directory on NAS for it. [Mount NAS on ECI](https://www.alibabacloud.com/help/en/eci/user-guide/mount-a-nas-volume) |
-| Image cache | Reuse a Ready cache for a Linux AMD64 Host image in the selected region, or prepare a registry that the ECI cache builder can reach. [Manage ECI image caches](https://www.alibabacloud.com/help/en/eci/user-guide/manage-an-image-cache) |
+| NAS (optional) | Prepare a reachable, writable NAS mount target. Each account's data uses `/go-bot/<userId>` on NAS, mounted at `/root/harness` in the Host. [Mount NAS on ECI](https://www.alibabacloud.com/help/en/eci/user-guide/mount-a-nas-volume) |
+| Image cache | Create it in step 3 from the public Host image, or reuse a Ready cache for exactly the same `HOST_IMAGE` in the selected region. [Manage ECI image caches](https://www.alibabacloud.com/help/en/eci/user-guide/manage-an-image-cache) |
 
-### 2. Fill in the ECI profile
-
-Run `./scripts/start.sh --init-env` if you have not initialized the profiles.
 Edit `.env.eci`, which already selects `HARNESS_RUNTIME=eci`. Set
 `ECI_REGION`, `ECI_VSWITCH_ID`, `ECI_SECURITY_GROUP_ID`,
 `ALIBABA_CLOUD_ACCESS_KEY_ID` and `ALIBABA_CLOUD_ACCESS_KEY_SECRET`.
@@ -242,26 +262,23 @@ the Host starts.
 
 ### 3. Prepare the Host image cache
 
-If you have a Ready cache containing a compatible Host image, set
-`ECI_IMAGE_CACHE_ID` and go to step 4. To build a new cache, set
-`REGISTRY_PUSH_IMAGE` to a versioned registry reference such as
-`registry.example.com/team/go-bot-host:v0.1.0`. For a private
-registry, run `docker login <registry-host>` on the build machine if publishing
-requires authentication, and set both `REGISTRY_USERNAME` and
-`REGISTRY_PASSWORD` so Alibaba Cloud can pull it.
-
-On the build machine, install Go 1.26 or newer and Docker with Buildx, then run:
+Leave `HOST_IMAGE` at the public image address supplied by the template. If you
+already have a Ready cache for that exact image, set `ECI_IMAGE_CACHE_ID` and go
+to step 4. Otherwise, explicitly create the cache:
 
 ```sh
-./scripts/buildeci.sh prepare --env-file .env.eci
+./scripts/buildeci.sh --env-file .env.eci
 ```
 
-`prepare` builds the Linux AMD64 Host image, tags it locally with `HOST_IMAGE`,
-pushes it to `REGISTRY_PUSH_IMAGE`, and requests an ECI image cache. If the
-compatible AMD64 image has already been published, use
-`./scripts/buildeci.sh cache --env-file .env.eci` to skip the local build and
-push. Both commands wait for Ready and write `ECI_IMAGE_CACHE_ID` into the
-selected profile. [Cache options and recovery](docs/deployment.md#eci-image-cache)
+The script runs the cache tool inside the already-pulled Controller image.
+Alibaba Cloud pulls the AMD64 variant of the public `HOST_IMAGE`; no local
+Host build, push, Go installation or registry login is needed. It waits for
+Ready and writes `ECI_IMAGE_CACHE_ID` back into `.env.eci`. Cache creation uses
+billable Alibaba Cloud resources. There are no registry credentials or separate
+push-address settings: the cache tool uses the public `HOST_IMAGE` directly.
+This command only prepares the cache; it does not start Controller, Redis or
+an account Host. A failed or timed-out run does not replace the saved cache ID.
+[API parameters, cache options and recovery](docs/deployment.md#cache-api-request)
 
 ### 4. Start Controller and open an account
 
@@ -272,25 +289,33 @@ On the Controller machine, use the completed private profile:
 ```
 
 The launcher validates the deployment profile and starts Controller and Redis
-with Compose. ECI Host instances start on demand from the configured cache
-when you open an account.
+with Compose. Open the Controller URL in your browser and create or open an
+account. Only then does Controller create that account's ECI Host, passing
+`HOST_IMAGE` and `ECI_IMAGE_CACHE_ID` directly to Alibaba Cloud. Preparing a cache
+alone does not create a user Host. When changing the Host image, create a new
+cache and update its ID before replacing the account's instance.
 
 ## Configuration and verification
 
-`start.sh` loads the selected profile, applies explicitly set deployment
-environment variables, validates the merged configuration, and saves valid
-overrides to the profile before launch. An explicitly empty value overrides a
-saved value. Model and web-search settings are saved per account through the UI.
+Controller reads the mounted `.env` and `configs/default.yaml` and validates
+them at startup, including when started directly with Compose. Edit `.env` to
+change deployment settings. The source-only `start.sh` additionally saves
+validated shell overrides before starting Compose; it never pulls or builds
+images. Explicit container environment overrides are also validated and saved
+by Controller. An explicitly empty override clears the saved value.
+Model and web-search settings are saved per account through the UI.
 Gemini media capabilities use the API key configured in the plugin detail.
 
 For an offline configuration check or a read-only runtime check, use:
 
 ```sh
-go run ./cmd/controller check --env-file .env.eci
-go run ./cmd/controller doctor --env-file .env.eci
+docker compose run --rm --no-deps controller check --env-file /config/.env --config /runtime.yaml
+docker compose run --rm --no-deps controller doctor --env-file /config/.env --config /runtime.yaml
 ```
 
-Use `.env` for local Docker. `check` validates configuration, including
+For ECI, change `/config/.env` to `/config/.env.eci`. These commands use tools
+in the existing Controller image and need no local Go or running Redis.
+`check` validates configuration, including
 required fields. `doctor` also checks the selected runtime, such as the local
 Host image or the Ready ECI cache. Opening an account exercises actual Host
 creation, storage and Controller-to-Host connectivity.
@@ -300,11 +325,11 @@ creation, storage and Controller-to-Host connectivity.
 
 | Task | Install on the machine running it |
 | --- | --- |
-| Run the local or ECI deployment with `start.sh` | Docker, the Docker Compose plugin, and Bash. Go is optional because the launcher can run its configuration tools in Docker. |
-| Prepare an ECI cache with `buildeci.sh` | Go 1.26 or newer and Bash. The `prepare` subcommand also needs Docker with Buildx. |
+| Quickstart | Docker Engine or Docker Desktop, Docker Compose v2, curl and Bash. |
+| Run `start.sh` or prepare a public ECI cache | Docker, Docker Compose v2 and Bash; prepare the required images first. No local Go installation is needed. |
 | Develop outside Docker | Go 1.26 or newer for the backend, a Redis instance for a native Controller, and Node.js 22.12+ with npm for frontend development. |
 
-Compose runs Redis and builds the frontend. Python, Node.js, Chromium and
+Compose runs Redis and the published Controller with its embedded frontend. Python, Node.js, Chromium and
 the general document environment are included in the Host image. Install OfficeCLI and agent-browser through the plugin market.
 
 ## Develop and extend

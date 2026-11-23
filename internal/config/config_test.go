@@ -109,7 +109,6 @@ func TestECICredentialsAndOptionalNAS(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Runtime.Provider = "eci"
-	c.Runtime.Image = ""
 	c.Runtime.ECI.ImageCacheID = "imc-fixture"
 	c.Runtime.ECI.VSwitchID = "vsw-test"
 	c.Runtime.ECI.SecurityGroupID = "sg-test"
@@ -118,6 +117,11 @@ func TestECICredentialsAndOptionalNAS(t *testing.T) {
 		t.Fatal("ECI missing credentials accepted")
 	}
 	c.Cloud.Aliyun.Credentials = Credentials{"id", "secret"}
+	c.Runtime.Image = ""
+	if e = c.Validate(false); e == nil || !strings.Contains(e.Error(), "HOST_IMAGE") {
+		t.Fatal("ECI accepted an empty image reference")
+	}
+	c.Runtime.Image = DefaultHostImage
 	if e = c.Validate(false); e != nil {
 		t.Fatal(e)
 	}
@@ -159,10 +163,9 @@ func TestHostEnvironmentHasNoCloudOrPublicToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Cloud.Aliyun.Credentials = Credentials{"cloud-id", "cloud-secret"}
-	c.Registry = Registry{PushImage: "registry.example/host:v1", Username: "registry-user", Password: "registry-secret"}
 	env := c.HostEnvironment("alice", "run", "internal-token")
 	b, _ := json.Marshal(env)
-	for _, secret := range []string{"cloud-id", "cloud-secret", "public-token-secret", "registry-secret", "model-secret", "search-secret"} {
+	for _, secret := range []string{"cloud-id", "cloud-secret", "public-token-secret", "model-secret", "search-secret"} {
 		if strings.Contains(string(b), secret) {
 			t.Fatalf("Host environment exposed %s", secret)
 		}
@@ -196,7 +199,7 @@ func TestEnvironmentTemplateAndPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"ALIBABA_CLOUD_ACCESS_KEY_ID", "ALIBABA_CLOUD_ACCESS_KEY_SECRET", "REGISTRY_PUSH_IMAGE", "REGISTRY_USERNAME", "REGISTRY_PASSWORD"} {
+	for _, key := range []string{"ALIBABA_CLOUD_ACCESS_KEY_ID", "ALIBABA_CLOUD_ACCESS_KEY_SECRET"} {
 		if value, exists := values[key]; !exists || value != "" {
 			t.Errorf("%s must be present and blank in the public template", key)
 		}
@@ -204,12 +207,12 @@ func TestEnvironmentTemplateAndPrecedence(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeFile(t, ".env", string(template))
 	c, err = Load("", "")
-	if err != nil || c.Runtime.Provider != "docker" || c.Storage.Type != "container" || c.ValidateController() != nil {
+	if err != nil || c.Runtime.Provider != "docker" || c.Runtime.Image != DefaultHostImage || c.Storage.Type != "container" || c.ValidateController() != nil {
 		t.Fatalf("template did not produce the default deployment without account credentials: %v", err)
 	}
 	profile := strings.NewReplacer(
 		"HARNESS_RUNTIME=docker", "HARNESS_RUNTIME=eci",
-		"HOST_IMAGE=go-bot/host:local", "HOST_IMAGE=registry.example/host:test",
+		"HOST_IMAGE="+DefaultHostImage, "HOST_IMAGE=registry.example/host:test",
 		"ECI_VSWITCH_ID=", "ECI_VSWITCH_ID=vsw-fixture",
 		"ECI_SECURITY_GROUP_ID=", "ECI_SECURITY_GROUP_ID=sg-fixture",
 		"ECI_IMAGE_CACHE_ID=", "ECI_IMAGE_CACHE_ID=imc-fixture",
@@ -340,7 +343,7 @@ func TestStartupRejectsPublicTemplateAsPrivateProfile(t *testing.T) {
 func TestSaveECIImageCacheIDPreservesProfile(t *testing.T) {
 	t.Chdir(t.TempDir())
 	const path = ".env.eci"
-	const initial = "# deployment\nHARNESS_RUNTIME=eci\nECI_IMAGE_CACHE_ID=imc-old\nREGISTRY_PASSWORD=literal#password=$value\n"
+	const initial = "# deployment\nHARNESS_RUNTIME=eci\nECI_IMAGE_CACHE_ID=imc-old\nALIBABA_CLOUD_ACCESS_KEY_SECRET=literal#password=$value\n"
 	if err := os.WriteFile(path, []byte(initial), 0644); err != nil {
 		t.Fatal(err)
 	}

@@ -5,10 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
+	"go-bot/internal/config"
 	"go-bot/thirdparty/aliyun"
 )
 
@@ -41,29 +41,20 @@ func fixture() options {
 	}
 }
 
-func TestPublishAndCacheRetryKeepsDigestAndClientToken(t *testing.T) {
+func TestCacheRetryKeepsClientToken(t *testing.T) {
 	o := fixture()
 	api := &fakeCache{status: "Ready", loseResponse: true}
 	dir := t.TempDir()
-	digest := "sha256:" + strings.Repeat("a", 64)
-	publishes := 0
-	publish := func(_ context.Context, image string) (string, error) {
-		publishes++
-		if image != o.Request.Image {
-			t.Fatal("wrong publication target")
-		}
-		return digest, nil
-	}
 	ctx := context.Background()
-	if _, err := execute(ctx, o, dir, "default", api, publish, time.Millisecond); err == nil {
+	if _, err := execute(ctx, o, dir, "default", api, time.Millisecond); err == nil {
 		t.Fatal("create uncertainty should be reported")
 	}
-	out, err := execute(ctx, o, dir, "default", api, publish, time.Millisecond)
-	if err != nil || out.CacheID != "imc-test" || out.Digest != digest || publishes != 1 ||
+	out, err := execute(ctx, o, dir, "default", api, time.Millisecond)
+	if err != nil || out.CacheID != "imc-test" ||
 		len(api.tokens) != 2 || api.tokens[0] != api.tokens[1] {
-		t.Fatalf("retry did not reuse publication and operation: %v", err)
+		t.Fatalf("retry did not reuse the cache operation: %v", err)
 	}
-	if _, err := execute(ctx, o, dir, "default", api, publish, time.Millisecond); err != nil || len(api.tokens) != 2 {
+	if _, err := execute(ctx, o, dir, "default", api, time.Millisecond); err != nil || len(api.tokens) != 2 {
 		t.Fatalf("ready cache was not reused: %v", err)
 	}
 }
@@ -74,40 +65,31 @@ func TestWaitCanResumeAndNeverReturnsUnreadyID(t *testing.T) {
 	api := &fakeCache{status: "Creating"}
 	dir := t.TempDir()
 	ctx := context.Background()
-	if out, err := execute(ctx, o, dir, "default", api, nil, time.Millisecond); err == nil || out.CacheID != "" {
+	if out, err := execute(ctx, o, dir, "default", api, time.Millisecond); err == nil || out.CacheID != "" {
 		t.Fatal("timed-out operation returned an unready cache")
 	}
 	api.status = "Failed"
-	if out, err := execute(ctx, o, dir, "default", api, nil, time.Millisecond); err == nil || out.CacheID != "" {
+	if out, err := execute(ctx, o, dir, "default", api, time.Millisecond); err == nil || out.CacheID != "" {
 		t.Fatal("failed operation returned a cache")
 	}
 	api.status = "Ready"
-	if out, err := execute(ctx, o, dir, "default", api, nil, time.Millisecond); err != nil || out.CacheID != "imc-test" || len(api.tokens) != 1 {
+	if out, err := execute(ctx, o, dir, "default", api, time.Millisecond); err != nil || out.CacheID != "imc-test" || len(api.tokens) != 1 {
 		t.Fatalf("resume did not reuse the saved cache: %v", err)
 	}
 }
 
-func TestBuildProfileCanOmitRuntimeOnlyCredentials(t *testing.T) {
+func TestPublicCacheUsesOfficialImageWithoutRegistryCredentials(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".env.eci")
-	profile := "HOST_IMAGE=go-bot/host:eci\nREGISTRY_PUSH_IMAGE=registry.example/host:v1\nECI_VSWITCH_ID=vsw-test\nECI_SECURITY_GROUP_ID=sg-test\nALIBABA_CLOUD_ACCESS_KEY_ID=fixture\nALIBABA_CLOUD_ACCESS_KEY_SECRET=fixture\n"
+	profile := "ECI_VSWITCH_ID=vsw-test\nECI_SECURITY_GROUP_ID=sg-test\nALIBABA_CLOUD_ACCESS_KEY_ID=fixture\nALIBABA_CLOUD_ACCESS_KEY_SECRET=fixture\n"
 	if err := os.WriteFile(path, []byte(profile), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readOptions(path, "", true); err != nil {
+	o, err := readOptions(path, "")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(profile+"REGISTRY_USERNAME=user\nREGISTRY_PASSWORD=fixture\n"), 0600); err != nil {
-		t.Fatal(err)
+	if o.Request.Image != config.DefaultHostImage {
+		t.Fatal("public cache did not preserve the multi-platform image reference for anonymous pulling")
 	}
-	options, err := readOptions(path, "", true)
-	if err != nil || options.LocalImage != "go-bot/host:eci" ||
-		options.Request.Image != "registry.example/host:v1" || options.Request.RegistryServer != "registry.example" {
-		t.Fatalf("registry host was not derived from the push image: %v", err)
-	}
-	if err := os.WriteFile(path, []byte(profile+"REGISTRY_USERNAME=user\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := readOptions(path, "", false); err == nil {
-		t.Fatal("incomplete registry credentials were accepted")
-	}
+
 }

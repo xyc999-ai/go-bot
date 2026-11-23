@@ -30,7 +30,7 @@ ECI supports neither. For ECI, the Controller attempts authenticated Host
 shutdown, then deletes the instance and waits for the runtime to confirm release.
 
 For providers with a separate image preparation step, add a command under
-`cmd/build<provider>`. It can reuse `internal/imagebuild` for image publication.
+`cmd/build<provider>`. Keep cloud cache preparation separate from project image publication.
 The runtime driver consumes the prepared artifact through its own configuration.
 
 ## Language models

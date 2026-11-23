@@ -23,6 +23,9 @@ configs/local.yaml
 **/controller.lock
 **/state.json
 **/*.token
+**/.credentials.yaml
+**/.credential-write-*
+**/.install-*
 **/.write-*
 **/.idea
 **/*.iml
