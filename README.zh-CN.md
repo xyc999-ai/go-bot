@@ -49,7 +49,7 @@ Go Bot 会记住与你交流的背景，持续关注你关心的事，并主动�
     </td>
     <td width="33%" valign="top" align="center">
       <h4>PPT 汇报</h4>
-      <a href="docs/showcase/mobile-slides-demo.gif"><img src="docs/showcase/mobile-slides-demo.gif" width="260" alt="手机制作并修改三页 PPT，随后在 WPS Office 中展示三页成品"></a>
+      <a href="docs/showcase/mobile-slides-demo.gif"><img src="docs/showcase/mobile-slides-demo.gif" width="260" alt="手机制作并修改三页 PPT，随后在 WPS Office 中重点展示第二页成品"></a>
       <p>调整采用率说明，把最后一页改成三步试点计划。<br><a href="docs/showcase/mobile-slides-key.png">查看原尺寸关键帧</a></p>
     </td>
   </tr>
