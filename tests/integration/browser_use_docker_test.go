@@ -46,9 +46,10 @@ func TestDockerBrowserSkillAndSessionIsolation(t *testing.T) {
 	mux.HandleFunc("/responses", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Input []struct {
-				Role, Type      string
-				CallID          string `json:"call_id"`
-				Content, Output []struct{ Text string }
+				Role, Type string
+				CallID     string `json:"call_id"`
+				Content    []struct{ Text string }
+				Output     string
 			}
 			Tools []struct{ Name string }
 		}
@@ -72,8 +73,8 @@ func TestDockerBrowserSkillAndSessionIsolation(t *testing.T) {
 				!strings.HasPrefix(item.Content[0].Text, "Current runtime context.") {
 				userMessage = item.Content[0].Text
 			}
-			if item.Type == "function_call_output" && len(item.Output) > 0 {
-				outputs[item.CallID] = item.Output[0].Text
+			if item.Type == "function_call_output" {
+				outputs[item.CallID] = item.Output
 			}
 		}
 		var output map[string]any

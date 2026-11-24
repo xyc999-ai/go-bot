@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -211,7 +212,7 @@ func TestResponsesToolResultKeepsBlockOrder(t *testing.T) {
 	}
 }
 
-func TestResponsesHistoricalTextToolResultStaysAnArray(t *testing.T) {
+func TestResponsesHistoricalTextToolResultUsesString(t *testing.T) {
 	input, err := encodeResponsesInput([]Item{
 		{Type: "tool_call", CallID: "call-1", Name: "lookup", Arguments: `{}`},
 		{Type: "tool_result", CallID: "call-1", Content: []ContentBlock{{Type: "text", Text: "first"}, {Type: "text", Text: " second"}}},
@@ -223,12 +224,81 @@ func TestResponsesHistoricalTextToolResultStaysAnArray(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := input[1].(map[string]any)["output"].([]any); len(got) != 2 ||
-		got[0].(map[string]string)["text"] != "first" || got[1].(map[string]string)["text"] != " second" {
-		t.Fatalf("historical text tool result lost its block order: %#v", got)
+	if got := input[1].(map[string]any)["output"]; got != "first\n second" {
+		t.Fatalf("historical text tool result = %#v", got)
 	}
 	if parts, ok := input[2].(map[string]any)["content"].([]any); !ok || len(parts) != 2 {
 		t.Fatalf("generated image message lost its ordered blocks: %#v", input[2])
+	}
+}
+
+func TestResponsesTextToolOutputsWorkWithStringOnlyProvider(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		for _, test := range []struct {
+			name    string
+			content []ContentBlock
+			want    string
+		}{
+			{name: "nil"},
+			{name: "empty", content: []ContentBlock{}},
+			{name: "empty text", content: []ContentBlock{{Type: "text"}}},
+			{name: "escaped text", content: []ContentBlock{{Type: "text", Text: "搜索结果：\n\"quoted\" \\ path\tend"}}, want: "搜索结果：\n\"quoted\" \\ path\tend"},
+			{name: "JSON array data", content: []ContentBlock{{Type: "text", Text: `[{"title":"Go","url":"https://go.dev/"}]`}}, want: `[{"title":"Go","url":"https://go.dev/"}]`},
+			{name: "multiple blocks", content: []ContentBlock{{Type: "text", Text: "first"}, {Type: "text", Text: "second"}}, want: "first\nsecond"},
+		} {
+			t.Run(fmt.Sprintf("stream=%t/%s", stream, test.name), func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// Decode into a string field to model a provider that rejects arrays.
+					var request struct {
+						Input []struct {
+							Type   string
+							CallID string `json:"call_id"`
+							Output string
+						}
+					}
+					if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+						t.Errorf("decode string-only tool output: %v", err)
+						http.Error(w, `{"error":{"message":"invalid JSON body"}}`, http.StatusBadRequest)
+						return
+					}
+					outputs := map[string]string{}
+					for _, item := range request.Input {
+						if item.Type == "function_call_output" {
+							outputs[item.CallID] = item.Output
+						}
+					}
+					if !reflect.DeepEqual(outputs, map[string]string{"old-call": "old\nresult", "new-call": test.want}) {
+						t.Errorf("tool outputs = %#v", outputs)
+					}
+					if stream {
+						w.Header().Set("Content-Type", "text/event-stream")
+						fmt.Fprint(w, "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n")
+					} else {
+						fmt.Fprint(w, `{"status":"completed","output":[]}`)
+					}
+				}))
+				defer server.Close()
+				client, err := NewClient(Endpoint{BaseURL: server.URL}, "model", server.Client())
+				if err != nil {
+					t.Fatal(err)
+				}
+				request := Request{Input: []Item{
+					{Type: "tool_call", CallID: "old-call", Name: "lookup", Arguments: `{}`},
+					{Type: "tool_result", CallID: "old-call", Content: []ContentBlock{{Type: "text", Text: "old"}, {Type: "text", Text: "result"}}},
+					{Type: "message", Role: "user", Content: []ContentBlock{{Type: "text", Text: "search again"}}},
+					{Type: "tool_call", CallID: "new-call", Name: "lookup", Arguments: `{}`},
+					{Type: "tool_result", CallID: "new-call", Content: test.content},
+				}}
+				if stream {
+					_, err = client.Stream(context.Background(), request, nil)
+				} else {
+					_, err = client.Generate(context.Background(), request)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
 	}
 }
 

@@ -42,6 +42,14 @@ is the endpoint default. The account default endpoint applies to new chats;
 existing chats keep their selection and can switch endpoints/models independently.
 A switch during generation applies to the next turn.
 
+Responses requests encode text-only function tool outputs as strings, including
+outputs replayed from older sessions, for compatibility with providers that do
+not accept content arrays in `function_call_output.output`. Multiple text blocks
+are joined with newlines; empty results use an empty string. Tool outputs with
+images retain their ordered content arrays at the wire encoder. The main model
+adapter continues to send tool images in a following user message. Stored session
+content and Anthropic encoding are unchanged.
+
 For Anthropic, use `https://api.anthropic.com/v1` or your provider's compatible
 base URL; do not append `/messages`. The Host appends `/messages`, sends
 `x-api-key` and `anthropic-version: 2023-06-01`, and normalizes text, tool use,

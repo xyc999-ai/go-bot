@@ -42,11 +42,11 @@ func encodeResponsesInput(input []Item) ([]any, error) {
 			}
 			out = append(out, value)
 		case "tool_result":
-			parts, err := responsesParts("user", item.Content)
+			output, err := responsesToolOutput(item.Content)
 			if err != nil {
 				return nil, fmt.Errorf("tool result %q: %w", item.CallID, err)
 			}
-			out = append(out, map[string]any{"type": "function_call_output", "call_id": item.CallID, "output": parts})
+			out = append(out, map[string]any{"type": "function_call_output", "call_id": item.CallID, "output": output})
 		default:
 			if len(item.Raw) > 0 {
 				out = append(out, json.RawMessage(item.Raw))
@@ -54,6 +54,19 @@ func encodeResponsesInput(input []Item) ([]any, error) {
 		}
 	}
 	return out, nil
+}
+
+func responsesToolOutput(blocks []ContentBlock) (any, error) {
+	texts := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		if block.Type != "text" {
+			return responsesParts("user", blocks)
+		}
+		texts = append(texts, block.Text)
+	}
+	// Strings also work with Responses providers that do not accept content
+	// arrays in tool outputs. Keep multimodal results as ordered content blocks.
+	return strings.Join(texts, "\n"), nil
 }
 
 func responsesParts(role string, blocks []ContentBlock) ([]any, error) {
