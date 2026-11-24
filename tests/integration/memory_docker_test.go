@@ -78,7 +78,7 @@ func testMemoryAndHistoryRebuild(t *testing.T, profile, account, fixtureURL stri
 				Role    string
 				CallID  string `json:"call_id"`
 				Content []struct{ Text string }
-				Output  []struct{ Text string }
+				Output  string
 			}
 		}
 		raw, err := io.ReadAll(r.Body)
@@ -134,10 +134,10 @@ func testMemoryAndHistoryRebuild(t *testing.T, profile, account, fixtureURL stri
 			}
 			var result *sessionsearch.Result
 			for _, item := range body.Input {
-				if item.Type == "function_call_output" && item.CallID == callID && len(item.Output) == 1 {
+				if item.Type == "function_call_output" && item.CallID == callID {
 					var decoded sessionsearch.Result
-					if err := json.Unmarshal([]byte(item.Output[0].Text), &decoded); err != nil {
-						t.Errorf("session_search output = %q", item.Output[0].Text)
+					if err := json.Unmarshal([]byte(item.Output), &decoded); err != nil {
+						t.Errorf("session_search output = %q", item.Output)
 					}
 					result = &decoded
 				}

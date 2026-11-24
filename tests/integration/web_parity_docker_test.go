@@ -87,7 +87,7 @@ func TestDockerWebToolParity(t *testing.T) {
 			Input []struct {
 				Type   string
 				CallID string `json:"call_id"`
-				Output []struct{ Type, Text string }
+				Output string
 			}
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -105,11 +105,7 @@ func TestDockerWebToolParity(t *testing.T) {
 		observed := map[string]string{}
 		for _, item := range body.Input {
 			if item.Type == "function_call_output" {
-				if len(item.Output) != 1 || item.Output[0].Type != "input_text" {
-					t.Errorf("unexpected tool result content blocks: %v", item.Output)
-					continue
-				}
-				observed[item.CallID] = item.Output[0].Text
+				observed[item.CallID] = item.Output
 			}
 		}
 		var output []map[string]any
