@@ -80,6 +80,9 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 	search := &hostWebSearch{defaultFactory: newSearchProvider}
 	imageGeneration := &hostImageGeneration{}
 	dshHome := filepath.Join(root, skills.UserDSHHomeDir)
+	if err := seedSkillCreator(dshHome, skills.UserAgentsHome); err != nil {
+		return fmt.Errorf("initialize skill-creator: %w", err)
+	}
 	images := attachments.Store{API: attachments.LocalObjectAPI{Root: dshHome}}
 	files := attachments.FileStore{Root: dshHome}
 	requestImages := &attachments.RequestImages{Store: images, MaxWidth: 2048, MaxHeight: 2048, MaxBytes: 4 << 20}

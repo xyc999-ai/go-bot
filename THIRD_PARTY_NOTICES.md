@@ -55,6 +55,22 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+## Skill Creator
+
+The built-in `skill-creator` is adapted from OpenAI's
+https://github.com/openai/skills at commit
+`49f948faa9258a0c61caceaf225e179651397431`, directory
+`skills/.system/skill-creator`, under Apache-2.0. Its original license is retained
+in `internal/host/skills/skill-creator/LICENSE.txt`; `UPSTREAM.md` in the same
+directory records the Go Bot modifications. The bundle is embedded in the Host
+binary and initialized once at `/root/harness/.dsh/skills/skill-creator/`.
+Existing user files, subsequent edits and deletion are preserved; Host upgrades
+do not replace an initialized skill. `agents/openai.yaml` and its generator are
+retained for Codex compatibility; Go Bot does not consume that configuration.
+
+The Host supplies PyYAML 6.0.3 (MIT) for the bundled Python helpers. Its license
+is retained in the installed distribution's metadata.
+
 ## OfficeCLI and image components
 
 Official OfficeCLI: https://github.com/iOfficeAI/OfficeCLI (Apache-2.0).

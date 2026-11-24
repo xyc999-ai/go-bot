@@ -52,6 +52,11 @@ Use Go 1.26. Run `make test vet check`; run race tests for concurrency changes a
 Docker integration for runtime changes. Normal tests must not require credentials,
 Redis or cloud infrastructure. Keep upstream fixtures and source notices intact.
 
+For bundled Skill Creator helper changes, also run
+`python3 -m unittest discover -s tests/skills -v` with PyYAML installed (the Host
+image includes it). The Docker conversation integration covers initialization,
+loading the skill and its generated skills, and deletion across Host replacement.
+
 Keep runtime orchestration in providers, external SDK/API calls in thirdparty,
 and Agent execution in harness. New providers need strict configuration,
 credential validation, cancellation and error tests. Do not expose SDK types in
