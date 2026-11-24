@@ -48,11 +48,15 @@ func TestDockerHostConversationRecoveryAndFiles(t *testing.T) {
 			output = []map[string]any{
 				webCall("tool-test", "shellexecute", `{"command":"officecli create report.docx && officecli save report.docx && printf harness-output > report.txt"}`),
 				webCall("office-docx", "skill", `{"name":"officecli-docx"}`),
+				webCall("skill-creator", "skill", `{"name":"skill-creator"}`),
 				webCall("unknown-skill", "skill", `{"name":"not-installed"}`),
 				webCall("bad-skill-args", "skill", `{"name":9}`),
 			}
 			if strings.Contains(string(b), "Project fixture skill") {
 				output = append(output, webCall("project-skill", "skill", `{"name":"project-fixture"}`))
+			}
+			if strings.Contains(string(b), "Creator smoke fixture") {
+				output = append(output, webCall("created-skill", "skill", `{"name":"creator-smoke"}`))
 			}
 		} else {
 			output = []map[string]any{{"type": "message", "id": "message-test", "role": "assistant", "content": []map[string]string{{"type": "output_text", "text": "Saved report.txt"}}}}
@@ -182,9 +186,18 @@ func TestDockerHostConversationRecoveryAndFiles(t *testing.T) {
 		  test -s "$DSH_HOME/plugins/profile/node_modules/@go-bot/plugin-officecli/skills/$bundle/SKILL.md"
 		done
 		test -s "$DSH_HOME/plugins/profile/node_modules/@go-bot/plugin-officecli/skills/morph-ppt/reference/styles/INDEX.md"
+		test -s "$DSH_HOME/skills/skill-creator/agents/openai.yaml"
+		test -s "$DSH_HOME/skills/skill-creator/LICENSE.txt"
+		python "$DSH_HOME/skills/skill-creator/scripts/quick_validate.py" "$DSH_HOME/skills/skill-creator"
+		python "$DSH_HOME/skills/skill-creator/scripts/init_skill.py" creator-smoke
+		test -s "$DSH_HOME/skills/creator-smoke/agents/openai.yaml"
 	`); e != nil {
 		t.Fatalf("unexpected container skills or environment: %v", e)
 	}
+	manager.Exec(t, ctx, "python", "-c", `from pathlib import Path
+p = Path('/root/harness/.dsh/skills/creator-smoke/SKILL.md')
+p.write_text('---\nname: creator-smoke\ndescription: Creator smoke fixture\nuser-invocable: true\n---\nGenerated skill instructions\n', encoding='utf-8')`)
+	manager.Exec(t, ctx, "python", "/root/harness/.dsh/skills/skill-creator/scripts/quick_validate.py", "/root/harness/.dsh/skills/creator-smoke")
 	direct, e := server.Client().Get(instance.Endpoint + "/readyz")
 	if e != nil {
 		t.Fatal(e)
@@ -213,8 +226,12 @@ func TestDockerHostConversationRecoveryAndFiles(t *testing.T) {
 	_ = readWebTurn(t, otherStream.Body)
 	otherStream.Body.Close()
 	assertDockerSkills(t, manager.Journal(t, ctx, second.SessionID), false, true)
+	if !strings.Contains(string(manager.Journal(t, ctx, second.SessionID)), "Generated skill instructions") {
+		t.Fatal("skill created by the bundled initializer was not discovered and loaded")
+	}
 	writeSkill(".dsh/skills/deleted-user-skill/SKILL.md", "---\nname: deleted-user-skill\ndescription: Deleted user skill\n---\nremoved\n")
 	manager.Exec(t, ctx, "rm", "-r", ".dsh/skills/deleted-user-skill")
+	manager.Exec(t, ctx, "rm", "-r", ".dsh/skills/skill-creator")
 	beforeStop, e := manager.Store.Get(ctx, manager.account)
 	if e != nil || beforeStop.HostEndpoint != instance.Endpoint {
 		t.Fatalf("running Host route was not saved: %v", e)
@@ -251,7 +268,7 @@ func TestDockerHostConversationRecoveryAndFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	manager.Exec(t, ctx, "sh", "-ec", `test ! -e .dsh/skills/deleted-user-skill/SKILL.md; test -f .agents/skills/manual/SKILL.md`)
+	manager.Exec(t, ctx, "sh", "-ec", `test ! -e .dsh/skills/deleted-user-skill/SKILL.md; test ! -e .dsh/skills/skill-creator; test -f .agents/skills/manual/SKILL.md`)
 
 	oldImageID, e := docker.Run(ctx, nil, "container", "inspect", "--format", "{{.Image}}", instance.Ref.ID)
 	if e != nil {
@@ -310,7 +327,7 @@ func TestDockerHostConversationRecoveryAndFiles(t *testing.T) {
 	if status != 200 || string(b) != "harness-output" {
 		t.Fatal("workspace did not survive")
 	}
-	manager.Exec(t, ctx, "sh", "-ec", `test ! -e .dsh/skills/deleted-user-skill/SKILL.md; test -f .agents/skills/manual/SKILL.md`)
+	manager.Exec(t, ctx, "sh", "-ec", `test ! -e .dsh/skills/deleted-user-skill/SKILL.md; test ! -e .dsh/skills/skill-creator; test -f .agents/skills/manual/SKILL.md`)
 	if calls := modelCalls.Load(); calls < 5 {
 		t.Fatalf("expected model calls for two new turns and a resumed turn, got %d", calls)
 	}
@@ -349,7 +366,7 @@ func assertDockerSkills(t *testing.T, journal []byte, project, shared bool) {
 			results[result.Message.ToolCallID] = result
 		}
 	}
-	if !strings.Contains(catalog, "`officecli-docx`") || !strings.Contains(catalog, "`morph-ppt-3d`") ||
+	if !strings.Contains(catalog, "`officecli-docx`") || !strings.Contains(catalog, "`morph-ppt-3d`") || !strings.Contains(catalog, "`skill-creator`") ||
 		strings.Contains(catalog, "`project-fixture`") != project || strings.Contains(catalog, "`manual-fixture`") ||
 		strings.Contains(invocation, "Explicit user instructions") != shared {
 		t.Fatalf("unexpected first skill catalog or invocation: %q / %q", catalog, invocation)
@@ -359,6 +376,7 @@ func assertDockerSkills(t *testing.T, journal []byte, project, shared bool) {
 		failed bool
 	}{
 		"office-docx":    {`<skill_content name="officecli-docx">`, false},
+		"skill-creator":  {`<skill_content name="skill-creator">`, false},
 		"unknown-skill":  {`Error: skill "not-installed" is unknown or no longer available`, true},
 		"bad-skill-args": {`Error: invalid arguments: "name" must be a string`, true},
 	}

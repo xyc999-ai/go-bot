@@ -45,7 +45,7 @@ COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 ENV HOME=/root PATH="/opt/agent-venv/bin:${PATH}"
-RUN python -m pip install --cert /etc/ssl/certs/ca-certificates.crt --no-cache-dir pypdf pdfplumber reportlab PyMuPDF pypdfium2 python-pptx numpy lxml defusedxml pdf2image Pillow pytesseract \
+RUN python -m pip install --cert /etc/ssl/certs/ca-certificates.crt --no-cache-dir PyYAML==6.0.3 pypdf pdfplumber reportlab PyMuPDF pypdfium2 python-pptx numpy lxml defusedxml pdf2image Pillow pytesseract \
     && npm --cafile=/etc/ssl/certs/ca-certificates.crt install --global --ignore-scripts --no-audit --no-fund pdf-lib@1.17.1 pdfjs-dist@4.10.38
 COPY build/fontconfig/60-office-fonts.conf /etc/fonts/conf.d/60-office-fonts.conf
 RUN mkdir -p /root/harness && fc-cache -f

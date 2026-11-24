@@ -8,3 +8,9 @@ agent-browser:
   commit: 1cc19526f3641c8543d55aa6700e7c55b37ac356
   installer: npm
   skills_cli: 1.8.1
+skill-creator:
+  repository: openai/skills
+  commit: 49f948faa9258a0c61caceaf225e179651397431
+  directory: skills/.system/skill-creator
+  license: Apache-2.0
+  python_yaml: 6.0.3
