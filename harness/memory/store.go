@@ -57,10 +57,23 @@ const Instruction = `You have persistent memory across sessions. The current sav
 // sessions in this Host. An invalid file is omitted without hiding valid notes
 // from the other file.
 func (s *Store) Prompt() (string, error) {
+	sections, err := s.PromptSections()
+	var prompt strings.Builder
+	for _, section := range sections {
+		prompt.WriteString(section.Text)
+	}
+	return prompt.String(), err
+}
+
+type PromptSection struct{ Name, Text string }
+
+// PromptSections reads the same account stores while retaining their source
+// identities for Agent composition. It does not create per-preset memory.
+func (s *Store) PromptSections() ([]PromptSection, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var prompt strings.Builder
+	var sections []PromptSection
 	var problems []error
 	for _, file := range []memoryFile{userFile, agentFile} {
 		entries, err := s.read(file)
@@ -70,10 +83,14 @@ func (s *Store) Prompt() (string, error) {
 		}
 		if len(entries) != 0 {
 			body := strings.Join(entries, separator)
-			fmt.Fprintf(&prompt, "\n\n%s (%d/%d characters):\n%s", file.label, utf8.RuneCountInString(body), file.limit, body)
+			name := "memory:user"
+			if file.name == agentFile.name {
+				name = "memory:notes"
+			}
+			sections = append(sections, PromptSection{Name: name, Text: fmt.Sprintf("\n\n%s (%d/%d characters):\n%s", file.label, utf8.RuneCountInString(body), file.limit, body)})
 		}
 	}
-	return prompt.String(), errors.Join(problems...)
+	return sections, errors.Join(problems...)
 }
 
 func (s *Store) Apply(target string, ops []Operation) (Result, error) {

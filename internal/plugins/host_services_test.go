@@ -8,8 +8,32 @@ import (
 	"testing"
 
 	"go-bot/harness/agent"
+	"go-bot/harness/agentpreset"
 	"go-bot/harness/skills"
 )
+
+func TestPresetFiltersPluginPromptContributionsBeforeCallingNode(t *testing.T) {
+	r := bridgeFixture(t, `export const name='prompt';export const inject=['host'];export async function apply(ctx){
+ await ctx.host.prompts.register({id:'system',location:'system',text:()=>{throw new Error('excluded system callback ran')}});
+ await ctx.host.prompts.register({id:'runtime',location:'context',text:()=>{throw new Error('excluded context callback ran')}});
+}`)
+	if _, err := r.Apply(t.Context(), []hostPluginInstance{{ID: "prompt", Package: "fixture", Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	registry := agentpreset.New("research", nil)
+	_, err := registry.Register(agentpreset.Definition{ID: "research", PromptSections: agentpreset.Selection{DenySources: []agentpreset.SourceRef{"plugin:prompt"}}, RuntimeSources: agentpreset.Selection{DenySources: []agentpreset.SourceRef{"plugin:prompt"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, err := registry.Resolve(t.Context(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := r.AssemblePrompt(agentpreset.WithBinding(t.Context(), binding), agent.PromptAssemblyInput{SystemPrompt: "Go core"})
+	if err != nil || out.SystemPrompt != "Go core" || len(out.Contexts) != 0 {
+		t.Fatalf("filtered prompt: %+v %v", out, err)
+	}
+}
 
 func TestHostBridgeSkillsUseGoDiscoveryAndProviderCallbacks(t *testing.T) {
 	r := bridgeFixture(t, `export const name='skills';export const inject=['host'];export async function apply(ctx){

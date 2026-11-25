@@ -139,6 +139,7 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 		return err
 	}
 	defer extensions.Close()
+	presets := newHostPresetRegistry(extensions.PresetCatalog, mcpManager.PresetCatalog)
 	builder.Skills.Providers = extensions.Skills
 	native.PluginsChanges = extensions.Changes
 	native.MCPChanges = mcpManager.Changes
@@ -157,7 +158,16 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 		return atWorkspace(header.CWD), err
 	}
 	native.PrepareMain = func(ctx context.Context, sid, locale string) error {
-		return ensureMainJournal(ctx, root, sid, locale, claims.Acquire)
+		if _, err := findHostSession(ctx, root, sid); err == nil {
+			return nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		preset, err := presets.Resolve(ctx, "")
+		if err != nil {
+			return err
+		}
+		return ensureMainJournal(ctx, root, sid, locale, claims.Acquire, preset.ID())
 	}
 	native.WorkspaceForSession = func(sid string) string {
 		header, _ := findHostSession(context.Background(), root, sid)
@@ -241,14 +251,9 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 		return fmt.Errorf("sync Host session search index: %w", err)
 	}
 	buildRuntime := func(sid, workspace, preset string) (*hostruntime.NativeRuntime, error) {
-		if preset == proactive.PresetID {
-			return nil, errors.New("internal Agent composition cannot be selected by a public Session")
-		}
-		if preset != "" && preset != "standard" {
-			return nil, errors.New("unsupported Agent composition")
-		}
 		return &hostruntime.NativeRuntime{
 			Factory: assembly.NativeFactory{
+				Presets: presets,
 				Storage: executor.NativeFileStorage{Store: atWorkspace(workspace), SessionID: sid},
 				Builder: builder, Model: model, ResolveTurnModel: func(context.Context) (agent.TurnModel, error) {
 					if native.IsMainSession(sid) {
@@ -258,13 +263,7 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 				}, ResolveSelectedModel: models.selected,
 				ToolSource: extensions.Tools, PromptSource: extensions.AssemblePrompt, ToolInvocationSource: extensions.ToolInvocations,
 				ExtensionScope: func() assembly.NativeExtensionScope { return mcpManager.NewScope() },
-				SystemContextSource: func(_ context.Context, sessionID string) ([]agent.RuntimeContextSection, error) {
-					if native.IsMainSession(sessionID) {
-						return []agent.RuntimeContextSection{{Name: "conversation:role", Text: "This is the user's main conversation for ongoing everyday assistance."}}, nil
-					}
-					return nil, nil
-				},
-				Provider: "unconfigured", ModelID: "unconfigured", SystemPrompt: assembly.DefaultCoreSystemPrompt,
+				Provider:       "unconfigured", ModelID: "unconfigured", SystemPrompt: assembly.DefaultCoreSystemPrompt,
 				Limits: agent.Limits{MaxSteps: 128, MaxToolCalls: 256, MaxModelCalls: 160, MaxParallelToolCalls: 4,
 					ContextWindowTokens: config.ModelContextWindow, ReservedOutputTokens: 16 * 1024, ContextHeadroomTokens: 8 * 1024},
 				Schedule: native.Schedule, FileAttachments: files, Memory: accountMemory, SessionSearch: history,
@@ -328,6 +327,9 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 		}
 	}()
 	native.BuildInWorkspace = func(sid string, create schedule.TargetCreate) (*hostruntime.NativeRuntime, error) {
+		if create.AgentPreset == proactive.PresetID {
+			return nil, errors.New("internal Agent composition cannot be selected by a public Session")
+		}
 		workspace := create.CWD
 		if workspace == "" {
 			workspace = root
@@ -347,6 +349,9 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 			header, err := findHostSession(context.Background(), root, sid)
 			if err != nil {
 				return nil, err
+			}
+			if header.AgentPreset == proactive.PresetID {
+				return nil, errors.New("internal Agent composition cannot be selected by a public Session")
 			}
 			return buildRuntime(sid, header.CWD, header.AgentPreset)
 		}

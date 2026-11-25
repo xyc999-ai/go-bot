@@ -28,6 +28,8 @@ type Tool struct {
 	options    ToolOptions
 }
 
+func (t *Tool) ContributionSource() string { return "mcp:" + t.connection.Name }
+
 func NewTool(connection *Connection, definition ToolDefinition, options ToolOptions) *Tool {
 	definition.InputSchema = append(json.RawMessage(nil), definition.InputSchema...)
 	definition.OutputSchema = append(json.RawMessage(nil), definition.OutputSchema...)

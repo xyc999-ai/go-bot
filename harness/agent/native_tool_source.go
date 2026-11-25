@@ -29,6 +29,12 @@ func ToolSourceInfoFromContext(ctx context.Context) (ToolSourceInfo, bool) {
 	return value, ok
 }
 
+// WithToolSourceInfo lets an assembly adapter describe its resolved base
+// capabilities to existing providers without changing tool execution.
+func WithToolSourceInfo(ctx context.Context, info ToolSourceInfo) context.Context {
+	return context.WithValue(ctx, toolSourceInfoKey{}, info)
+}
+
 func (a *NativeLoop) SetToolSource(source ToolSource) { a.toolSource = source }
 
 func (a *NativeLoop) refreshTools(ctx context.Context) error {

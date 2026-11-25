@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go-bot/extensions/catalog"
+	"go-bot/harness/agentpreset"
 	"go-bot/harness/assembly"
 	"go-bot/harness/session"
 	"go-bot/internal/durablefs"
@@ -36,7 +37,7 @@ func mainWelcome(locale string) string {
 	return text + "\n\nWhat would you like a hand with today?"
 }
 
-func ensureMainJournal(ctx context.Context, root, id, locale string, claim sessionformat.OwnerClaim) error {
+func ensureMainJournal(ctx context.Context, root, id, locale string, claim sessionformat.OwnerClaim, presetIDs ...string) error {
 	if _, err := findHostSession(ctx, root, id); err == nil {
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -54,7 +55,11 @@ func ensureMainJournal(ctx context.Context, root, id, locale string, claim sessi
 	if err != nil {
 		return err
 	}
-	header := sessionformat.Header{Type: "session", Version: sessionformat.Version, ID: id, CreatedAt: now, CWD: workspace}
+	preset := agentpreset.Standard
+	if len(presetIDs) > 0 {
+		preset = presetIDs[0]
+	}
+	header := sessionformat.Header{Type: "session", Version: sessionformat.Version, ID: id, CreatedAt: now, CWD: workspace, AgentPreset: preset}
 	system, err := json.Marshal(map[string]any{"message": map[string]any{
 		"id": uuid.NewString(), "role": "system", "source": map[string]string{"kind": "go-bot/initial-system"},
 		"content": []map[string]string{{"type": "text", "text": assembly.DefaultCoreSystemPrompt}},

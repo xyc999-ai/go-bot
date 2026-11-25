@@ -491,6 +491,7 @@ paths:
               schema: {$ref: '#/components/schemas/ProactiveStatus'}
         '400': {description: Invalid settings}
         '404': {description: Account not found}
+        '409': {description: model_not_configured or model_selection_unavailable; enabling rejected before saving the preference}
         '503': {description: Storage unavailable or settings_saved_host_apply_failed after a successful Redis save}
   /healthz:
     get:
@@ -2056,7 +2057,7 @@ components:
       type: object
       required: [enabled, phase]
       properties:
-        enabled: {type: boolean}
+        enabled: {type: boolean, default: false}
         phase: {type: string, enum: [waiting, running, waiting-for-model, waiting-for-main, disabled, host-stopped, unavailable, error]}
         nextCheckAt: {type: integer, format: int64, description: Last successful AI decision's next check, in Unix milliseconds}
         nextCheckReason: {type: string}

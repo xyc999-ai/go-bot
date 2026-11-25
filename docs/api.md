@@ -400,6 +400,12 @@ field and synchronously applies it to a running Host. `503
 settings_saved_host_apply_failed` means the preference was saved but not applied;
 the same PUT can be retried. No run-now endpoint is provided.
 
+The default is off. Enabling validates the main chat's explicit model selection,
+or the account default when no selection exists, before saving the preference.
+`409 model_not_configured` or `409 model_selection_unavailable` rejects enabling
+without changing the saved preference or starting a Host. Disabling does not
+require a model. Validation checks configuration, without a model API request.
+
 The JSON response contains `enabled`, `phase`, optional `nextCheckAt`,
 `nextCheckReason`, `lastRunStartedAt`, `lastCompletedAt`, and a safe `error` code.
 All timestamps are Unix milliseconds. Phases are `waiting`, `running`,

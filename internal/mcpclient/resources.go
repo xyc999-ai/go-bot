@@ -36,6 +36,8 @@ type resourceTool struct {
 	name    string
 }
 
+func (t *resourceTool) ContributionSource() string { return "builtin:mcp" }
+
 func (t *resourceTool) Spec() agent.ToolSpec {
 	parameters := json.RawMessage(`{"type":"object","properties":{"server":{"type":"string"}},"required":["server"],"additionalProperties":false}`)
 	description := "List resources from an explicitly configured MCP server."

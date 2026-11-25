@@ -45,6 +45,8 @@ type hostTool struct {
 	sessionID, cwd, workspace string
 }
 
+func (t *hostTool) ContributionSource() string { return "plugin:" + t.row.Owner }
+
 func (r *hostBridge) newTool(row *hostContribution) (*hostTool, error) {
 	t := &hostTool{runtime: r, row: row}
 	if err := decodeHostJSON(row.Descriptor, &t.definition); err != nil {

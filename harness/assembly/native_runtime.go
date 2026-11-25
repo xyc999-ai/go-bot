@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"go-bot/harness/agent"
+	"go-bot/harness/agentpreset"
 	"go-bot/harness/attachments"
 	"go-bot/harness/goal"
 	"go-bot/harness/interaction"
@@ -64,7 +64,10 @@ type NativeExtensionScope interface {
 
 // NativeFactory assembles one v4 Session and Agent inside the user Host.
 type NativeFactory struct {
-	Composition          *NativeComposition
+	Presets              *agentpreset.Registry
+	Preset               *agentpreset.Binding
+	PresetToolProviders  map[string]NativePresetToolProvider
+	LocalToolSource      agent.ToolSource
 	Storage              NativeStorage
 	Builder              NativeBuilder
 	Model                agent.Model
@@ -87,6 +90,7 @@ type NativeFactory struct {
 	SystemPrompt    string
 	Limits          agent.Limits
 	Children        tools.ChildCoordinator
+	SubagentPresets tools.SubagentPresetSelection
 	Schedule        *schedule.Service
 	FileAttachments attachments.FileStore
 	Memory          *memory.Store
@@ -101,6 +105,7 @@ type NativeFactory struct {
 }
 
 type NativeLive struct {
+	Preset         *agentpreset.Binding
 	Agent          *agent.NativeLoop
 	Session        *sessionformat.LiveSession
 	Goals          *goal.NativeService
@@ -108,6 +113,7 @@ type NativeLive struct {
 	Questions      *interaction.NativeQuestions
 	Resource       Resources
 	Structured     *tools.NativeStructuredOutput
+	checkPreset    func(context.Context) error
 	closeMu        sync.Once
 	closeErr       error
 	extensionScope NativeExtensionScope
@@ -127,9 +133,7 @@ func (l *NativeLive) Close() error {
 }
 
 func (f NativeFactory) validate(identity NativeRuntimeIdentity) error {
-	if f.Composition != nil && (f.Composition.ID == "" || f.Composition.ID != identity.AgentPreset) {
-		return errors.New("Agent composition differs from the saved preset")
-	}
+
 	if f.Storage == nil || f.Builder == nil || f.Model == nil || f.Provider == "" || f.ModelID == "" ||
 		f.SystemPrompt == "" || f.Limits.MaxSteps <= 0 || f.Limits.MaxToolCalls <= 0 ||
 		identity.UserID == "" || identity.SessionID == "" || !filepath.IsAbs(identity.Workspace) ||
@@ -171,6 +175,14 @@ func (f NativeFactory) Resume(ctx context.Context, identity NativeRuntimeIdentit
 		_ = journal.Close()
 		return nil, errors.New("native Session header differs from its worker identity")
 	}
+	identity.AgentPreset, err = sessionformat.EffectiveAgentPreset(artifact.Header, artifact.Events)
+	if err == nil {
+		f, identity, err = f.resolvePreset(ctx, identity)
+	}
+	if err != nil {
+		_ = journal.Close()
+		return nil, err
+	}
 	s, err := sessionformat.RestoreLiveSession(artifact, journal)
 	if err != nil {
 		_ = journal.Close()
@@ -190,7 +202,11 @@ func (f NativeFactory) ActivateChild(ctx context.Context, root NativeRuntimeIden
 }
 
 func (f NativeFactory) ActivateChildAt(ctx context.Context, root NativeRuntimeIdentity, parent *NativeLive, childID, label, cwd string) (*NativeLive, error) {
-	return f.activateChild(ctx, root, parent, childID, label, cwd, nil)
+	return f.activateChild(ctx, root, parent, childID, label, cwd, nil, "")
+}
+
+func (f NativeFactory) ActivateChildWithPresetAt(ctx context.Context, root NativeRuntimeIdentity, parent *NativeLive, childID, label, cwd, preset string) (*NativeLive, error) {
+	return f.activateChild(ctx, root, parent, childID, label, cwd, nil, preset)
 }
 
 // ForkChild captures only the parent's last fully closed turn. The copied
@@ -212,12 +228,12 @@ func (f NativeFactory) ForkChildAt(ctx context.Context, root NativeRuntimeIdenti
 		}
 	}
 	if cut < 0 {
-		return f.activateChild(ctx, root, parent, childID, label, cwd, nil)
+		return f.activateChild(ctx, root, parent, childID, label, cwd, nil, "")
 	}
-	return f.activateChild(ctx, root, parent, childID, label, cwd, events[:cut+1])
+	return f.activateChild(ctx, root, parent, childID, label, cwd, events[:cut+1], "")
 }
 
-func (f NativeFactory) activateChild(ctx context.Context, root NativeRuntimeIdentity, parent *NativeLive, childID, label, cwd string, seed []sessionformat.Event) (*NativeLive, error) {
+func (f NativeFactory) activateChild(ctx context.Context, root NativeRuntimeIdentity, parent *NativeLive, childID, label, cwd string, seed []sessionformat.Event, preset string) (*NativeLive, error) {
 	if parent == nil || childID == "" || childID == parent.Session.Header().ID || label == "" {
 		return nil, errors.New("invalid native child identity")
 	}
@@ -231,8 +247,19 @@ func (f NativeFactory) activateChild(ctx context.Context, root NativeRuntimeIden
 	}
 	childFactory := f
 	childFactory.Storage = childStorage
+	childFactory.Preset = parent.Preset
+	if preset != "" {
+		if f.Presets == nil {
+			return nil, errors.New("child Agent Preset registry is unavailable")
+		}
+		childFactory.Preset, err = f.Presets.Resolve(ctx, preset)
+		if err != nil {
+			return nil, err
+		}
+	}
 	identity := root
 	identity.SessionID = childID
+	identity.AgentPreset = childFactory.Preset.ID()
 	identity.PermissionCeiling = func() permission.Mode { return permission.Read(parent.Session.Events()).Mode }
 	parentCWD := nativeSessionCWD(parent.Session.Header().CWD, parent.Session.Events())
 	if cwd == "" {
@@ -250,7 +277,7 @@ func (f NativeFactory) activateChild(ctx context.Context, root NativeRuntimeIden
 		CreatedAt: time.Now().UTC().UnixMilli(), CWD: parentHeader.CWD,
 		ParentSession: parentHeader.ID, Origin: "subagent", IsSeeded: len(seed) > 0,
 		DelegationDepth: parentHeader.DelegationDepth + 1,
-		AgentPreset:     parentHeader.AgentPreset,
+		AgentPreset:     identity.AgentPreset,
 	}
 	journal, err := childStorage.CreateNative(ctx, header)
 	if err != nil {
@@ -327,6 +354,15 @@ func (f NativeFactory) ResumeChild(ctx context.Context, root NativeRuntimeIdenti
 		return nil, err
 	}
 	identity.CWD = nativeSessionCWD(artifact.Header.CWD, artifact.Events)
+	identity.AgentPreset, err = sessionformat.EffectiveAgentPreset(artifact.Header, artifact.Events)
+	childFactory.Preset = nil
+	if err == nil {
+		childFactory, identity, err = childFactory.resolvePreset(ctx, identity)
+	}
+	if err != nil {
+		_ = journal.Close()
+		return nil, err
+	}
 	if err := childFactory.validate(identity); err != nil {
 		_ = journal.Close()
 		return nil, err
@@ -412,7 +448,7 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 		_ = resource.close()
 		return nil, errors.New("native container Builder omitted base capabilities")
 	}
-	resource.Skills = f.Composition.skills(resource.Skills)
+	resource.Skills = f.presetSkills(resource.Skills)
 	toolset, err := baseTools(resource)
 	if err != nil {
 		_ = s.Close()
@@ -474,12 +510,17 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 		for _, name := range []string{"schedule_create", "schedule_list", "schedule_view", "schedule_edit"} {
 			toolset = append(toolset, tools.NativeSchedule{Service: f.Schedule, SessionID: identity.SessionID,
 				Name: name, Delegated: s.Header().Origin == "subagent",
-				CWD: s.Header().CWD, AgentPreset: s.Header().AgentPreset})
+				CWD: s.Header().CWD, AgentPreset: f.Preset.ID()})
 		}
 	}
 	if f.Children != nil {
+		if err := f.SubagentPresets.ValidateConfig(false); err != nil {
+			_ = s.Close()
+			_ = resource.close()
+			return nil, err
+		}
 		toolset = append(toolset,
-			tools.Subagent{Coordinator: f.Children, ParentID: identity.SessionID},
+			tools.Subagent{Coordinator: f.Children, ParentID: identity.SessionID, PresetSelection: f.SubagentPresets},
 			tools.Subagent{Coordinator: f.Children, ParentID: identity.SessionID, Fork: true},
 			tools.SendMessage{Coordinator: f.Children, SenderID: identity.SessionID},
 			tools.InterruptAgent{Coordinator: f.Children, ParentID: identity.SessionID},
@@ -498,6 +539,24 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 	if f.SessionSearch != nil {
 		toolset = append(toolset, tools.NativeSessionSearch{Index: f.SessionSearch, SessionID: identity.SessionID})
 	}
+	var presetLocal, activationLocal []agent.Tool
+	if f.Preset != nil {
+		for _, name := range f.Preset.Definition().LocalTools {
+			provider := f.PresetToolProviders[name]
+			if provider == nil {
+				_ = s.Close()
+				_ = resource.close()
+				return nil, fmt.Errorf("unknown preset tool provider %q", name)
+			}
+			rows, e := provider(ctx, identity, s, resource)
+			if e != nil {
+				_ = s.Close()
+				_ = resource.close()
+				return nil, e
+			}
+			presetLocal = append(presetLocal, rows...)
+		}
+	}
 	var structured *tools.NativeStructuredOutput
 	if f.WorkflowSchema != nil {
 		if s.Header().Origin != "subagent" {
@@ -511,31 +570,28 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 			_ = resource.close()
 			return nil, err
 		}
-		toolset = append(toolset, structured)
+		activationLocal = append(activationLocal, structured)
 	}
-	toolset = f.Composition.tools(toolset)
+	inheritedTools := append([]agent.Tool(nil), toolset...)
+	toolset, err = f.presetTools(toolset, presetLocal, activationLocal)
+	if err != nil {
+		_ = s.Close()
+		_ = resource.close()
+		return nil, err
+	}
+	activeToolset := toolset
 	cwd := resource.DefaultWorkdir
 	if cwd == "" {
 		cwd = nativeCWD(identity)
 	}
-	corePrompt := f.SystemPrompt
-	if f.Composition != nil && f.Composition.SystemPrompt != "" {
-		corePrompt = f.Composition.SystemPrompt
+	basePrompt, err := f.renderPresetPrompt(identity, activeToolset, cwd, false, structured != nil)
+	if err != nil {
+		_ = s.Close()
+		_ = resource.close()
+		return nil, err
 	}
-	if f.Composition != nil && f.Composition.SystemSuffix != "" {
-		corePrompt += "\n\n" + f.Composition.SystemSuffix
-	}
-	basePrompt := composePrompt(corePrompt, toolset, cwd)
-	if f.Memory != nil {
-		basePrompt += "\n\n" + memory.Instruction
-	}
-	if f.SessionSearch != nil {
-		basePrompt += "\n\nIf the user refers to an earlier conversation, or relevant context may be in a previous session, look it up with session_search before asking the user to repeat it."
-	}
-	if structured != nil {
-		basePrompt += "\n\n" + tools.NativeStructuredOutputInstruction
-	}
-	loop, err := agent.NewNativeLoop(s, f.Model, f.Provider, f.ModelID, basePrompt, toolset,
+
+	loop, err := agent.NewNativeLoop(s, f.Model, f.Provider, f.ModelID, basePrompt, nil,
 		f.Limits.MaxSteps, f.Limits.MaxToolCalls)
 	if err != nil {
 		_ = s.Close()
@@ -546,14 +602,44 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 	loop.SetSandboxModeSource(func() string { return string(permissionState().Mode) })
 	loop.SetTurnModelResolver(f.ResolveTurnModel)
 	loop.SetModelSelectionResolver(f.ResolveSelectedModel)
-	loop.SetToolSource(f.ToolSource)
 	loop.SetToolInvocationSource(f.ToolInvocationSource)
 	loop.SetToolQuestions(questions)
-	loop.SetRuntimeContextSource(f.ContextSource)
-	loop.SetPromptAssembler(f.PromptSource)
+	loop.SetRuntimeContextSource(func(ctx context.Context, id string) ([]agent.RuntimeContextSection, error) {
+		if f.Preset != nil {
+			persona := f.Preset.Definition().Persona
+			if persona.IncludeRuntimeContext != nil && !*persona.IncludeRuntimeContext {
+				return nil, nil
+			}
+		}
+		if f.ContextSource == nil {
+			return nil, nil
+		}
+		rows, e := f.ContextSource(agentpreset.WithBinding(ctx, f.Preset), id)
+		return filterPresetContexts(f.Preset, rows, true), e
+	})
+	loop.SetPromptAssembler(func(ctx context.Context, input agent.PromptAssemblyInput) (agent.PromptAssembly, error) {
+		out := agent.PromptAssembly{SystemPrompt: input.SystemPrompt, Tools: input.Tools}
+		var e error
+		if f.PromptSource != nil {
+			out, e = f.PromptSource(agentpreset.WithBinding(ctx, f.Preset), input)
+		}
+		if f.Preset.Definition().Persona.Complete {
+			out.SystemPrompt = input.SystemPrompt
+		} else {
+			suffix, err := f.presetSuffix(identity, cwd)
+			if err != nil {
+				return out, err
+			}
+			if suffix != "" {
+				out.SystemPrompt += "\n\n" + suffix
+			}
+		}
+		out.Contexts = filterPresetContexts(f.Preset, out.Contexts, true)
+		return out, e
+	})
 	// The clock is standard-preset context for every Agent, including a child;
 	// only the four Schedule management tools are root-only.
-	if f.Schedule != nil {
+	if f.Schedule != nil && presetSectionAllowed(f.Preset, "time-context", "builtin:time", true) {
 		if err := loop.EnableTimeContext("UTC", 10*time.Minute); err != nil {
 			_ = s.Close()
 			_ = resource.close()
@@ -594,11 +680,11 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 	if resource.ConfineMutation != nil {
 		loop.SetRuntimeContext(func() []agent.RuntimeContextSection {
 			file, approval := permission.Guidance(permissionState(), permissionRoot)
-			return []agent.RuntimeContextSection{
+			return filterPresetContexts(f.Preset, []agent.RuntimeContextSection{
 				{Name: "working-directory:current", Text: fmt.Sprintf("Current working directory: %q.", skillLookup().CWD)},
 				{Name: "sandbox:policy", Text: file},
 				{Name: "approval:policy", Text: approval},
-			}
+			}, true)
 		})
 	}
 
@@ -645,18 +731,7 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 		if err != nil {
 			return "", err
 		}
-		prompt := basePrompt
-		if mode.Active {
-			prompt += "\n\n" + plan.Policy
-		}
-		if f.Memory != nil {
-			notes, err := f.Memory.Prompt()
-			if err != nil {
-				slog.Warn("read account memory", "error", err)
-			}
-			prompt += notes
-		}
-		return prompt, nil
+		return f.renderPresetPrompt(identity, activeToolset, cwd, mode.Active, structured != nil)
 	})
 	instructionReader := &nativeInstructionReader{}
 	loop.SetInstructionProvider(func(stepCtx context.Context, touched []string) (agent.NativeInstructionSnapshot, error) {
@@ -694,6 +769,10 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 		scope = f.ExtensionScope()
 	}
 	loop.SetSystemContextSource(func(ctx context.Context, sid string) ([]agent.RuntimeContextSection, error) {
+		if f.Preset != nil && f.Preset.Definition().Persona.Complete {
+			return nil, nil
+		}
+		ctx = agentpreset.WithBinding(ctx, f.Preset)
 		var sections []agent.RuntimeContextSection
 		if f.SystemContextSource != nil {
 			rows, err := f.SystemContextSource(ctx, sid)
@@ -709,29 +788,64 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 			}
 			sections = append(sections, rows...)
 		}
-		return sections, nil
+		return filterPresetContexts(f.Preset, sections, false), nil
 	})
-	if scope != nil || (f.Composition != nil && f.ToolSource != nil) {
-		loop.SetToolSource(func(ctx context.Context, sid string) ([]agent.Tool, error) {
-			var tools []agent.Tool
+	var refreshPresetTools agent.ToolSource
+	if f.Preset != nil {
+		refreshPresetTools = func(ctx context.Context, sid string) ([]agent.Tool, error) {
+			info, _ := agent.ToolSourceInfoFromContext(ctx)
+			info.Tools = nil
+			for _, tool := range activeToolset {
+				info.Tools = append(info.Tools, tool.Spec())
+			}
+			ctx = agent.WithToolSourceInfo(agentpreset.WithBinding(ctx, f.Preset), info)
+			inherited := append([]agent.Tool(nil), inheritedTools...)
 			if f.ToolSource != nil {
-				rows, err := f.ToolSource(ctx, sid)
-				if err != nil {
-					return nil, err
+				rows, e := f.ToolSource(ctx, sid)
+				if e != nil {
+					return nil, e
 				}
-				tools = append(tools, rows...)
+				inherited = append(inherited, rows...)
 			}
 			if scope != nil {
-				rows, err := scope.Tools(ctx, sid)
-				if err != nil {
-					return nil, err
+				rows, e := scope.Tools(ctx, sid)
+				if e != nil {
+					return nil, e
 				}
-				tools = append(tools, rows...)
+				inherited = append(inherited, rows...)
 			}
-			return f.Composition.tools(tools), nil
-		})
+			local := append([]agent.Tool(nil), activationLocal...)
+			if f.LocalToolSource != nil {
+				rows, e := f.LocalToolSource(ctx, sid)
+				if e != nil {
+					return nil, e
+				}
+				local = append(local, rows...)
+			}
+			resolved, e := f.presetTools(inherited, presetLocal, local)
+			if e != nil {
+				return nil, e
+			}
+			activeToolset = resolved
+			return resolved, nil
+		}
+		loop.SetToolSource(refreshPresetTools)
 	}
-	live := &NativeLive{Agent: loop, Session: s, Goals: goals, Plan: plans, Questions: questions, Resource: resource, Structured: structured, extensionScope: scope}
+	live := &NativeLive{Preset: f.Preset, Agent: loop, Session: s, Goals: goals, Plan: plans, Questions: questions, Resource: resource, Structured: structured, extensionScope: scope}
+	live.checkPreset = func(checkCtx context.Context) error {
+		// Validate Go-owned resources without starting optional business plugins.
+		// Dynamic plugin/MCP contributions still resolve through the original step boundary.
+		prompt, e := f.renderPresetPrompt(identity, toolset, cwd, false, structured != nil)
+		if e != nil {
+			return e
+		}
+		_, e = agent.NewNativeLoop(s, f.Model, f.Provider, f.ModelID, prompt, toolset, f.Limits.MaxSteps, f.Limits.MaxToolCalls)
+		return e
+	}
+	if err := live.checkPreset(ctx); err != nil {
+		return nil, errors.Join(err, live.Close())
+	}
+
 	if f.BeforePublish != nil {
 		if err := f.BeforePublish(ctx, live); err != nil {
 			return nil, errors.Join(err, live.Close())
