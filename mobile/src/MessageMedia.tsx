@@ -8,7 +8,7 @@ import type { Controller } from './api'
 import { useLocale } from './locale'
 import { saveRemote, shareDownload, shareLibraryItem, type RemoteFile, type WorkspaceFileSource } from './library'
 import { FileIcon } from './FileIcon'
-import { accent, edge, glass, Hint, muted, ink, s } from './ui'
+import { accent, edge, glass, Hint, muted, ink, s } from './messageTheme'
 
 // The library's legacy NativeMethods class intersection predates React 19 types.
 // Keep its documented props at this boundary; the native component is unchanged.

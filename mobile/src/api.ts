@@ -149,6 +149,7 @@ export class Controller {
   }
   createSession(workspaceSessionId?: string) { return this.request<{ sessionId: string }>('/v1/sessions', workspaceSessionId
     ? json('POST', { workspaceSessionId }) : { method: 'POST' }) }
+  rename(id: string, title: string) { return this.request<{title: string}>(session(id) + '/title', json('PUT', {title})) }
   archive(id: string, stopActivity = false) { return this.request(session(id) + (stopActivity ? '?stopActivity=true' : ''), { method: 'DELETE' }) }
   transcript(id: string, before: number | null, signal?: AbortSignal) {
     return this.request<TranscriptPage>(session(id) + '/transcript?limit=20' + (before === null ? '' : '&before=' + before), { signal })

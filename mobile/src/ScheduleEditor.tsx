@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ApiError, Controller, type Schedule, type ScheduleCreate, type ScheduleKind, type SchedulePatch, type ScheduleTarget, type ScheduleTiming, type SessionRow } from './api'
+import { useState } from 'react'
+import { Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker'
+import { CalendarDays, ChevronDown, ChevronUp, Clock3 } from 'lucide-react-native'
+import { ApiError, Controller, type Schedule, type ScheduleCreate, type ScheduleKind, type ScheduleTarget } from './api'
 import { useLocale, type Language } from './locale'
-import { Button, Field, Hint, SheetScroll, accent, edge, glass, s, wash } from './ui'
+import { automaticTaskTitle, initialScheduleForm, scheduleSubmission, ScheduleFormError, type ScheduleField, type ScheduleForm, type SimpleScheduleKind } from './scheduleForm'
+import { Button, Field, Hint, SheetScroll, accent, edge, glass, ink, muted, s, wash } from './ui'
 
 export const timingLabels: Record<ScheduleKind, string> = {
   at: '指定时间', after: '延时一次', every: '固定间隔', daily: '每天', weekly: '每周', cron: 'Cron', rrule: 'RRULE',
@@ -10,183 +13,144 @@ export const timingLabels: Record<ScheduleKind, string> = {
 export const targetLabels: Record<ScheduleTarget['kind'], string> = {
   session: '已有会话', new_once: '首次新建，之后复用', new: '每次新建会话',
 }
-
 export function scheduleError(error: unknown) {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'schedule_conflict': return '任务刚有变化。请重新打开任务后再修改。'
       case 'schedule_execution_pending': return '任务仍在排队、执行或投递间隔内。'
       case 'schedule_not_found': return '此任务已删除。'
-      case 'schedule_input_invalid': return error.detail?.split('\n').at(-1) || '请检查任务指令、时间规则和投递目标。'
+      case 'schedule_input_invalid': return '请检查任务内容和执行时间。'
     }
   }
   return '任务操作未完成，请重试。'
 }
-
 export function WeekdayLabels(language: Language) {
   return Array.from({ length: 7 }, (_, index) => new Intl.DateTimeFormat(language, { weekday: 'short', timeZone: 'UTC' })
     .format(new Date(Date.UTC(2026, 0, 5 + index))))
 }
-
-const defaultZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-const localParts = (at: Date) => {
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return { date: [at.getFullYear(), pad(at.getMonth() + 1), pad(at.getDate())].join('-'),
-    time: [pad(at.getHours()), pad(at.getMinutes()), pad(at.getSeconds())].join(':') }
-}
-
+const kinds: { kind: SimpleScheduleKind; label: string }[] = [
+  { kind: 'at', label: '仅一次' }, { kind: 'daily', label: '每天' }, { kind: 'weekly', label: '每周' }, { kind: 'every', label: '固定间隔' },
+]
+const unitLabels = { minutes: '分钟', hours: '小时', days: '天' } as const
 export function ScheduleEditor({ api, task, onSaved, onCancel }: {
   api: Controller; task?: Schedule; onSaved: () => void; onCancel: () => void
 }) {
   const { t, language } = useLocale()
-  const record = task?.record
-  const planned = localParts(record ? new Date(record.scheduledAt) : new Date(Date.now() + 3600000))
-  const [title, setTitle] = useState(record?.title ?? '')
-  const [prompt, setPrompt] = useState(record?.prompt ?? '')
-  const [kind, setKind] = useState<ScheduleKind>(record?.kind === 'after' ? 'at' : record?.kind ?? 'at')
-  const [zone, setZone] = useState(record?.timeZone ?? defaultZone)
-  const [date, setDate] = useState(planned.date)
-  const [time, setTime] = useState(record?.time ?? planned.time)
-  const [seconds, setSeconds] = useState(String(record?.everySeconds ?? record?.afterSeconds ?? 3600))
-  const [weekdays, setWeekdays] = useState<number[]>(record?.weekdays ?? [1])
-  const [expression, setExpression] = useState(record?.expression ?? '')
-  const [rrule, setRrule] = useState(record?.rrule ?? '')
-  const [target, setTarget] = useState<ScheduleTarget['kind']>(task?.target?.kind ?? 'new_once')
-  const [sessionId, setSessionId] = useState(task?.target?.sessionId ?? '')
-  const [timingChanged, setTimingChanged] = useState(!task)
-  const [targetChanged, setTargetChanged] = useState(!task)
-  const [cwd, setCwd] = useState(task?.target?.create?.cwd ?? '')
-  const [workspaces, setWorkspaces] = useState<{ path: string; name: string }[]>([])
-  const [sessions, setSessions] = useState<SessionRow[]>([])
-  const [cursor, setCursor] = useState<string>()
-  const [sessionError, setSessionError] = useState(false)
-  const [loadingSessions, setLoadingSessions] = useState(false)
+  const [initial] = useState(() => initialScheduleForm(task))
+  const [form, setForm] = useState(initial)
+  const [more, setMore] = useState(false)
+  const [picker, setPicker] = useState<'date' | 'time'>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-
-  async function loadSessions(next?: string) {
-    setLoadingSessions(true)
-    setSessionError(false)
-    try {
-      const page = await api.sessions(next)
-      setSessions(previous => next ? [...previous, ...page.sessions] : page.sessions)
-      setCursor(page.nextCursor)
-    } catch {
-      setSessionError(true)
-    } finally {
-      setLoadingSessions(false)
-    }
+  const [fieldError, setFieldError] = useState<{ field: ScheduleField; message: string }>()
+  const change = (patch: Partial<ScheduleForm>, timing = false) => {
+    setForm(previous => ({ ...previous, ...patch, ...(timing && { timingChanged: true }) }))
+    setFieldError(undefined); setError('')
   }
-
-  useEffect(() => {
-    void loadSessions()
-    const controller = new AbortController()
-    if (target !== 'session') {
-      void api.hostFiles('workspaces', 0, controller.signal).then(page => {
-        if (!controller.signal.aborted) {
-          setWorkspaces(page.files.filter(item => item.isDir).map(item => ({ path: page.rootPath + '/' + item.path, name: item.name })))
-        }
-      }).catch(() => {})
+  const locale = language === 'zh-CN' ? 'zh-CN' : 'en-US'
+  const timeLabel = form.when.toLocaleTimeString(locale, { timeZone: form.zone, hour: '2-digit', minute: '2-digit', hour12: false })
+  const dateLabel = form.when.toLocaleDateString(locale, { timeZone: form.zone, year: 'numeric', month: 'short', day: 'numeric' })
+  const days = WeekdayLabels(language)
+  const intervalUnit = language === 'en' ? { minutes: 'minute', hours: 'hour', days: 'day' }[form.unit] + (Number(form.interval) === 1 ? '' : 's') : unitLabels[form.unit]
+  const summary = form.kind === 'at' ? `${dateLabel} ${timeLabel}` : form.kind === 'daily' ? `${t('每天')} ${timeLabel}`
+    : form.kind === 'weekly' ? `${t('每周')} ${form.weekdays.slice().sort((a,b) => a-b).map(day => days[day - 1]).join(language === 'en' ? ', ' : '、')} ${timeLabel}`
+    : form.kind === 'every' ? `${t('每')} ${form.interval || '—'} ${intervalUnit}` : ''
+  function chooseKind(kind: SimpleScheduleKind) {
+    if (form.kind === kind) return
+    setPicker(undefined)
+    const patch: Partial<ScheduleForm> = { kind }
+    if (!task && (kind === 'daily' || kind === 'weekly') && form.kind === 'at') {
+      const nine = new Date(); nine.setHours(9, 0, 0, 0); patch.when = nine
     }
-    return () => controller.abort()
-  }, [api, target])
-
-  function timing(): ScheduleTiming {
-    const clock = time.trim().length === 5 ? time.trim() + ':00' : time.trim()
-    const local = { time: clock, time_zone: zone.trim() }
-    switch (kind) {
-      case 'at': return { kind, at: { date: date.trim(), ...local } }
-      case 'after': return { kind, after_seconds: Number(seconds) }
-      case 'every': return { kind, every_seconds: Number(seconds) }
-      case 'daily': return { kind, daily: local }
-      case 'weekly': return { kind, weekly: { ...local, weekdays: weekdays.slice().sort((a, b) => a - b) } }
-      case 'cron': return { kind, cron: { expression: expression.trim(), time_zone: local.time_zone } }
-      case 'rrule': return { kind, rrule: rrule.trim() }
-    }
+    change(patch, true)
   }
-
+  function pick(mode: 'date' | 'time') {
+    Keyboard.dismiss()
+    if (Platform.OS === 'android') DateTimePickerAndroid.open({
+      mode, value: form.when, timeZoneName: form.zone, is24Hour: true,
+      positiveButton: { label: t('确定'), textColor: accent }, negativeButton: { label: t('取消'), textColor: muted },
+      onValueChange: (_event, when) => change({ when }, true),
+    })
+    else setPicker(previous => previous === mode ? undefined : mode)
+  }
+  const inlineError = (field: ScheduleField) => fieldError?.field === field ? <Hint error>{t(fieldError.message)}</Hint> : null
   async function save() {
-    setError('')
-    setBusy(true)
-    const destination: ScheduleTarget = target === 'session' ? { kind: target, sessionId } : { kind: target, ...(cwd.trim() ? { create: { cwd: cwd.trim() } } : {}) }
+    Keyboard.dismiss(); setError(''); setFieldError(undefined)
     try {
+      const input = scheduleSubmission(form, task, api.mainSessionId)
+      setBusy(true)
       if (task) {
-        const patch: SchedulePatch = {}
-        if (title.trim() !== record?.title) patch.title = title.trim()
-        if (prompt.trim() !== record?.prompt) patch.prompt = prompt.trim()
-        if (timingChanged) patch.timing = timing()
-        if (targetChanged) patch.target = destination
-        if (Object.keys(patch).length) await api.editSchedule(task.record.id, task.updatedAt ?? null, patch)
-      } else {
-        const input: ScheduleCreate = { title: title.trim(), prompt: prompt.trim(), timing: timing(), target: destination }
-        await api.createSchedule(input)
-      }
+        if (Object.keys(input).length) await api.editSchedule(task.record.id, task.updatedAt ?? null, input)
+      } else await api.createSchedule(input as ScheduleCreate)
       onSaved()
     } catch (cause) {
-      setError(scheduleError(cause))
-    } finally {
-      setBusy(false)
-    }
+      if (cause instanceof ScheduleFormError) { setFieldError({ field: cause.field, message: cause.message }); if (cause.field === 'title') setMore(true) }
+      else setError(cause instanceof Error && cause.message === '主会话未能准备完成。' ? cause.message : scheduleError(cause))
+    } finally { setBusy(false) }
   }
-
-  const kinds: ScheduleKind[] = ['at', 'after', 'every', 'daily', 'weekly', 'cron', 'rrule']
-  const targets: ScheduleTarget['kind'][] = ['session', 'new_once', 'new']
-  const timeInput = (value: string) => { setTime(value); setTimingChanged(true) }
   return <SheetScroll>
-    <Field label={t('任务名称')} value={title} onChangeText={setTitle} maxLength={120} />
-    <Field label={t('任务指令')} value={prompt} onChangeText={setPrompt} multiline />
-    <Text style={s.caption}>{t('时间规则')}</Text>
-    <View style={styles.choices}>{kinds.map(value => <Choice key={value} label={t(timingLabels[value])} selected={kind === value}
-      onPress={() => { if (kind !== value) { setKind(value); setTimingChanged(true) } }} />)}</View>
-    {kind === 'at' && <Field label={t('日期')} placeholder="YYYY-MM-DD" value={date} onChangeText={value => { setDate(value); setTimingChanged(true) }} />}
-    {(kind === 'at' || kind === 'daily' || kind === 'weekly') && <Field label={t('时间')} placeholder="HH:mm" value={time} onChangeText={timeInput} />}
-    {(kind === 'at' || kind === 'daily' || kind === 'weekly' || kind === 'cron') && <Field label={t('时区')} placeholder="Asia/Shanghai"
-      value={zone} onChangeText={value => { setZone(value); setTimingChanged(true) }} />}
-    {kind === 'weekly' && <View style={styles.choices}>{WeekdayLabels(language).map((day, index) => <Choice key={index} label={day} selected={weekdays.includes(index + 1)}
-      onPress={() => { setWeekdays(previous => previous.includes(index + 1) ? previous.filter(value => value !== index + 1) : [...previous, index + 1]); setTimingChanged(true) }} />)}</View>}
-    {(kind === 'after' || kind === 'every') && <Field label={t('间隔秒数')} keyboardType="number-pad" value={seconds}
-      onChangeText={value => { setSeconds(value); setTimingChanged(true) }} />}
-    {kind === 'cron' && <Field label={t('Cron 表达式')} placeholder="0 9 * * 1-5" value={expression}
-      onChangeText={value => { setExpression(value); setTimingChanged(true) }} />}
-    {kind === 'rrule' && <Field label={t('RRULE 规则')} multiline placeholder={'DTSTART;TZID=Asia/Shanghai:20270101T090000\nRRULE:FREQ=DAILY'}
-      value={rrule} onChangeText={value => { setRrule(value); setTimingChanged(true) }} />}
-    <Text style={s.caption}>{t('投递目标')}</Text>
-    <View style={styles.choices}>{targets.map(value => <Choice key={value} label={t(targetLabels[value])} selected={target === value}
-      onPress={() => { if (target !== value) { setTarget(value); setTargetChanged(true) } }} />)}</View>
-    {target === 'session' && <>
-      {sessions.map(row => <Choice key={row.sessionId} label={row.title || t('未命名会话')} selected={row.sessionId === sessionId}
-        onPress={() => { setSessionId(row.sessionId); setTargetChanged(true) }} />)}
-      {loadingSessions && <Hint>{t('正在读取会话…')}</Hint>}
-      {sessionError && <Button label={t('重新加载')} onPress={() => void loadSessions()} />}
-      {cursor && <Button label={t('加载更多')} disabled={loadingSessions} onPress={() => void loadSessions(cursor)} />}
-      {!loadingSessions && !sessionError && !sessions.length && <Hint>{t('还没有会话。')}</Hint>}
-    </>}
-    {target !== 'session' && <>
-      <Field label={t('工作目录')} value={cwd} placeholder={t('Host 默认目录')}
-        onChangeText={value => { setCwd(value); setTargetChanged(true) }} />
-      <View style={styles.choices}>
-        {[...new Map([...workspaces.map(row => [row.path, row.name] as const),
-          ...sessions.filter(row => row.cwd).map(row => [row.cwd!, row.title || row.cwd!] as const)]).entries()]
-          .slice(0, 6).map(([path, name]) => <Choice key={path} label={name} selected={path === cwd}
-            onPress={() => { setCwd(path); setTargetChanged(true) }} />)}
-      </View>
-    </>}
+    <Field label={t('任务内容')} placeholder={t('需要助手到时做什么？')} value={form.prompt} editable={!busy} onChangeText={prompt => change({ prompt })} multiline />
+    {inlineError('prompt')}
+    <View style={styles.section}>
+      <Text style={s.caption}>{t('执行时间')}</Text>
+      {form.kind === 'custom' ? <>
+        <Text style={s.body}>{t('保留现有时间安排')}</Text>
+        <Hint>{t(task?.status === 'active' ? '下次运行' : '触发时间') + ' · ' + dateLabel + ' ' + timeLabel}</Hint>
+        <Hint>{t('只修改任务内容或名称，不会改变原来的时间安排。')}</Hint>
+        <Button label={t('修改执行时间')} disabled={busy} onPress={() => chooseKind('at')} />
+      </> : <>
+        <View style={styles.choices}>{kinds.map(({ kind, label }) => <Choice key={kind} label={t(label)} disabled={busy} selected={form.kind === kind} onPress={() => chooseKind(kind)} />)}</View>
+        {(form.kind === 'at' || form.kind === 'daily' || form.kind === 'weekly') && <>
+          <View style={styles.dateRow}>
+            {form.kind === 'at' && <Pressable accessibilityRole="button" accessibilityLabel={t('日期') + ': ' + dateLabel} accessibilityState={{ expanded: picker === 'date' }} disabled={busy} onPress={() => pick('date')} style={({ pressed }) => [styles.dateButton, pressed && s.pressed]}>
+              <CalendarDays size={18} color={muted} /><Text style={styles.dateText}>{dateLabel}</Text>
+            </Pressable>}
+            <Pressable accessibilityRole="button" accessibilityLabel={t('时间') + ': ' + timeLabel} accessibilityState={{ expanded: picker === 'time' }} disabled={busy} onPress={() => pick('time')} style={({ pressed }) => [styles.dateButton, pressed && s.pressed]}>
+              <Clock3 size={18} color={muted} /><Text style={styles.dateText}>{timeLabel}</Text>
+            </Pressable>
+          </View>
+          {picker && Platform.OS === 'ios' && <View style={styles.picker}>
+            <DateTimePicker value={form.when} mode={picker} display="spinner" disabled={busy} timeZoneName={form.zone} locale={locale} themeVariant="light" textColor={ink} accentColor={accent} onValueChange={(_event, when) => change({ when }, true)} />
+            <Button label={t('确定')} onPress={() => setPicker(undefined)} />
+          </View>}
+          <Hint>{t('时区') + ' · ' + form.zone}</Hint>
+          {inlineError('time')}
+        </>}
+        {form.kind === 'weekly' && <>
+          <View style={styles.choices}>{days.map((label, index) => <Choice key={index} label={label} disabled={busy} selected={form.weekdays.includes(index + 1)} onPress={() => change({ weekdays: form.weekdays.includes(index + 1) ? form.weekdays.filter(day => day !== index + 1) : [...form.weekdays, index + 1] }, true)} />)}</View>
+          {inlineError('weekdays')}
+        </>}
+        {form.kind === 'every' && <>
+          <Field label={t('每隔')} value={form.interval} editable={!busy} keyboardType="number-pad" onChangeText={interval => change({ interval }, true)} />
+          <View style={styles.choices}>{(Object.keys(unitLabels) as (keyof typeof unitLabels)[]).map(unit => <Choice key={unit} label={t(unitLabels[unit])} disabled={busy} selected={form.unit === unit} onPress={() => change({ unit }, true)} />)}</View>
+          {inlineError('interval')}
+        </>}
+        {task && form.timingChanged && <Button label={t('撤销时间修改')} disabled={busy} onPress={() => { setForm(previous => ({ ...initial, title: previous.title, prompt: previous.prompt })); setPicker(undefined); setFieldError(undefined) }} />}
+        <View style={styles.summary}><Clock3 size={16} color={muted} /><Text style={[s.meta, { flex: 1 }]}>{summary}</Text></View>
+      </>}
+    </View>
+    <Pressable accessibilityRole="button" accessibilityLabel={t('更多选项')} accessibilityState={{ expanded: more }} onPress={() => setMore(value => !value)} style={({ pressed }) => [styles.more, pressed && s.pressed]}>
+      <Text style={s.caption}>{t('更多选项')}</Text>{more ? <ChevronUp size={17} color={muted} /> : <ChevronDown size={17} color={muted} />}
+    </Pressable>
+    {more && <><Field label={t('任务名称（选填）')} placeholder={automaticTaskTitle(form.prompt) || t('根据任务内容自动命名')} value={form.title} editable={!busy} maxLength={120} onChangeText={title => change({ title })} />{inlineError('title')}</>}
     <Hint error>{error && t(error)}</Hint>
-    <Button label={t(task ? '保存修改' : '创建任务')} primary busy={busy}
-      disabled={!title.trim() || !prompt.trim() || (target === 'session' && !sessionId)} onPress={() => void save()} />
+    <Button label={t(task ? '保存修改' : '创建任务')} primary busy={busy} disabled={!form.prompt.trim()} onPress={() => void save()} />
     <Button label={t('取消')} disabled={busy} onPress={onCancel} />
   </SheetScroll>
 }
-
-export function Choice({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress}
+export function Choice({ label, selected, onPress, disabled = false }: { label: string; selected: boolean; onPress: () => void; disabled?: boolean }) {
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => [styles.choice, selected && styles.selected, pressed && s.pressed]}>
     <Text numberOfLines={1} style={[s.caption, selected && { color: accent }]}>{label}</Text>
   </Pressable>
 }
-
 const styles = StyleSheet.create({
-  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  section: { gap: 12 }, choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   choice: { minHeight: 38, borderWidth: 1, borderColor: edge, borderRadius: 13, backgroundColor: glass, justifyContent: 'center', paddingHorizontal: 11 },
   selected: { backgroundColor: wash, borderColor: 'transparent' },
+  dateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  dateButton: { flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 48, paddingHorizontal: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: edge, backgroundColor: glass },
+  dateText: { color: ink, fontSize: 15 }, picker: { backgroundColor: glass, borderRadius: 16, overflow: 'hidden', paddingBottom: 8 },
+  more: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  summary: { flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 10 },
 })

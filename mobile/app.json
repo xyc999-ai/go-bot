@@ -59,7 +59,8 @@
         }
       ],
       "expo-localization",
-      "expo-video"
+      "expo-video",
+      "@react-native-community/datetimepicker"
     ],
     "icon": "./assets/app-icon.png"
   }

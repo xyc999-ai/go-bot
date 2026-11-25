@@ -2,37 +2,112 @@ import { ProtocolDropdown } from './ProtocolDropdown'
 import { imageGenerationSettingsEnabled } from '../../frontend/src/features'
 import { changeProtocolURL, modelProtocol, modelRequestURL, protocolNames, protocolURLs, type ModelProtocol } from '../../frontend/src/settings/modelProtocol'
 import { languages, useLocale } from './locale'
-import { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Camera, ChevronRight, Images, Image as Drawing, Languages, Layers2, LogOut, Power, Search, Server, Sparkles } from 'lucide-react-native'
+import { useEffect, useRef, useState, type RefObject } from 'react'
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View, Animated, Easing } from 'react-native'
+import { ArrowLeft, Camera, ChevronRight, Clock3, Images, Image as Drawing, Languages, Layers2, LogOut, Pencil, Power, Puzzle, Search, Server, Settings2, Sparkles } from 'lucide-react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import type { TranscriptCache } from '../../frontend/src/chat/transcriptCache'
+import { Tasks } from './Tasks'
+import { Plugins } from './extensions/Plugins'
 import { Proactive } from './Proactive'
 import { Controller, problem, type ModelSettings, type ProviderPage, type ProviderSettings } from './api'
 import { getAvatar, pickAvatar } from './library'
 import { LanguageSheet } from './LanguageSheet'
-import { accent, Button, Field, Hint, IconButton, edge, glass, ink, muted, Panel, s, Sheet, SheetScroll, wash } from './ui'
+import { accent, Button, danger, Field, Hint, IconButton, edge, glass, ink, logo, muted, Panel, s, Sheet, SheetScroll, useReducedMotion, wash, type PageChrome } from './ui'
 
 const providerLabels = { 'web-search': '网页搜索', 'image-generation': '图片生成' }
 export type Section = 'models' | ProviderPage | 'proactive'
 
-export function Me({ api, section, open, close, exitAccount }: {
-  api: Controller; section: Section | null; open: (section: Section) => void; close: () => void; exitAccount: () => void
+export type MePage = 'tasks' | 'settings' | 'plugins'
+export type LeaveGuard = (proceed: () => void) => void
+const pages = [
+  { id: 'tasks', label: 'Scheduled tasks', Icon: Clock3 },
+  { id: 'settings', label: '设置', Icon: Settings2 },
+  { id: 'plugins', label: 'Plugin market', Icon: Puzzle },
+] as const
+
+export function Me({ api, cache, active, page, onPageChange, section, open, close, exitAccount, bottomInset, openChat, returnToChat, backToChat, leaveGuard }: {
+  api: Controller; cache: TranscriptCache; active: boolean; page: MePage; onPageChange: (page: MePage) => void
+  section: Section | null; open: (section: Section) => void; close: () => void; exitAccount: () => void
+  bottomInset: number; openChat: (id: string) => void; returnToChat?: () => void; backToChat: () => void; leaveGuard: RefObject<LeaveGuard | undefined>
+}) {
+  const { t } = useLocale(), inset = useSafeAreaInsets(), account = api.profile.account
+  const [avatar, setAvatar] = useState<string | undefined>(() => getAvatar(account))
+  const [avatarMenu, setAvatarMenu] = useState(false), [avatarError, setAvatarError] = useState('')
+  const [dirty, setDirty] = useState(false), [pluginKey, setPluginKey] = useState(0)
+  function leave(proceed: () => void) {
+    if (!dirty) { proceed(); return }
+    Alert.alert(t('放弃未保存的修改？'), undefined, [
+      { text: t('取消'), style: 'cancel' },
+      { text: t('放弃修改'), style: 'destructive', onPress: () => { setDirty(false); setPluginKey(value => value + 1); proceed() } },
+    ])
+  }
+  useEffect(() => { leaveGuard.current = leave; return () => { leaveGuard.current = undefined } }, [dirty])
+  async function changeAvatar(camera: boolean) {
+    setAvatarError('')
+    try { const uri = await pickAvatar(account, camera); if (uri) setAvatar(uri) }
+    catch (error) { setAvatarError(error instanceof Error ? error.message : '无法更新头像。') }
+  }
+  const header = <View style={me.profile}>
+    {returnToChat && <View style={me.return}><IconButton label={t('返回聊天')} onPress={returnToChat}><ArrowLeft size={21} color={ink} /></IconButton></View>}
+    <Pressable accessibilityRole="button" accessibilityLabel={t('更换头像')} onPress={() => setAvatarMenu(true)} style={({ pressed }) => [me.avatar, pressed && s.pressed]}>
+      {avatar ? <Image source={{ uri: avatar }} style={me.avatarImage} /> : <Image source={logo} style={me.defaultAvatar} resizeMode="contain" />}
+      <View style={me.edit}><Pencil size={16} color={ink} strokeWidth={1.6} /></View>
+    </Pressable>
+    <Text accessibilityRole="header" numberOfLines={2} style={me.account}>{account}</Text>
+    {!!avatarError && <Hint error>{t(avatarError)}</Hint>}
+  </View>
+  const navigation = <ProfileTabs page={page} choose={next => leave(() => { close(); onPageChange(next) })} />
+  const chrome = { header, navigation, bottomInset }
+  return <View style={{ flex: 1, paddingTop: inset.top, backgroundColor: '#fff' }}>
+    <View style={page === 'tasks' ? me.page : me.hidden}><Tasks api={api} cache={cache} active={active && page === 'tasks'} openChat={openChat} {...chrome} /></View>
+    <View style={page === 'settings' ? me.page : me.hidden}><Settings api={api} section={section} open={open} close={close} exitAccount={exitAccount} chrome={chrome} /></View>
+    <View style={page === 'plugins' ? me.page : me.hidden}><Plugins key={pluginKey} api={api} cache={cache} active={active && page === 'plugins'} embedded {...chrome} onDirtyChange={setDirty} onBusyChange={ignoreBusy} onExit={backToChat} /></View>
+    {avatarMenu && <Sheet title={t('更换头像')} onClose={() => setAvatarMenu(false)}>{afterClose => <SheetScroll>
+      <Button label={t('从图库选择')} onPress={() => afterClose(() => changeAvatar(false))}><Images size={20} color={ink} /></Button>
+      <Button label={t('拍照')} onPress={() => afterClose(() => changeAvatar(true))}><Camera size={20} color={ink} /></Button>
+    </SheetScroll>}</Sheet>}
+  </View>
+}
+function ignoreBusy(_busy: boolean) {}
+
+function ProfileTabs({ page, choose }: { page: MePage; choose: (page: MePage) => void }) {
+  const { t } = useLocale(), reduced = useReducedMotion()
+  const [width, setWidth] = useState(0), position = useRef(new Animated.Value(pages.findIndex(item => item.id === page))).current
+  useEffect(() => { const animation = Animated.timing(position, { toValue: pages.findIndex(item => item.id === page), duration: reduced ? 0 : 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }); animation.start(); return () => animation.stop() }, [page, reduced, position])
+  const itemWidth = (width - 6) / 3
+  return <View style={me.navigation}><View accessibilityRole="tablist" style={me.track} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
+    {width > 0 && <Animated.View pointerEvents="none" style={[me.selected, { width: itemWidth, transform: [{ translateX: Animated.multiply(position, itemWidth) }] }]} />}
+    {pages.map(({ id, label, Icon }, index) => <Pressable key={id} accessibilityRole="tab" accessibilityState={{ selected: id === page }} accessibilityLabel={t(label)} onPress={() => choose(id)} style={({ pressed }) => [me.tab, pressed && s.pressed]}>
+      <Icon size={20} color={id === page ? ink : muted} strokeWidth={1.55} />
+      {index < pages.length - 1 && page !== id && page !== pages[index + 1].id && <View pointerEvents="none" style={me.separator} />}
+    </Pressable>)}
+  </View></View>
+}
+const me = StyleSheet.create({
+  page: { flex: 1 }, hidden: { display: 'none' },
+  profile: { alignItems: 'center', paddingTop: 29, paddingBottom: 35, paddingHorizontal: 24, gap: 16 },
+  avatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: '#f0f0f1', alignItems: 'center', justifyContent: 'center' },
+  avatarImage: { width: 96, height: 96, borderRadius: 48 }, defaultAvatar: { width: 88, height: 88 },
+  edit: { position: 'absolute', right: -5, bottom: -3, width: 32, height: 32, borderRadius: 16, backgroundColor: '#f5f5f6', borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  account: { color: ink, fontSize: 24, lineHeight: 30, fontWeight: '500', letterSpacing: -.5, textAlign: 'center' },
+  return: { position: 'absolute', top: 8, left: 12 },
+  navigation: { paddingHorizontal: 20, paddingVertical: 8, width: '100%', maxWidth: 620, alignSelf: 'center', backgroundColor: '#fff' },
+  track: { flexDirection: 'row', padding: 3, borderRadius: 24, backgroundColor: '#f3f4f5' },
+  selected: { position: 'absolute', top: 3, bottom: 3, left: 3, borderRadius: 21, backgroundColor: '#fff', boxShadow: '0 2px 9px rgba(23,25,28,0.07)' },
+  separator: { position: 'absolute', right: 0, height: 18, width: StyleSheet.hairlineWidth, backgroundColor: '#dadddf' },
+  tab: { flex: 1, minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 6 },
+})
+
+function Settings({ api, section, open, close, exitAccount, chrome }: {
+  chrome: PageChrome; api: Controller; section: Section | null; open: (section: Section) => void; close: () => void; exitAccount: () => void
 }) {
   const { t, language } = useLocale()
-  const { account } = api.profile
-  const [avatar, setAvatar] = useState<string | undefined>(() => getAvatar(account))
-  const [avatarMenu, setAvatarMenu] = useState(false)
   const [languageOpen, setLanguageOpen] = useState(false)
   const [serverOpen, setServerOpen] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [modelDirty, setModelDirty] = useState(false)
   const [error, setError] = useState('')
-  async function changeAvatar(camera: boolean) {
-    setError('')
-    try {
-      const uri = await pickAvatar(account, camera)
-      if (uri) setAvatar(uri)
-    } catch (issue) { setError(issue instanceof Error ? issue.message : '无法更新头像。') }
-  }
   async function stop() {
     setStopping(true)
     setError('')
@@ -41,18 +116,7 @@ export function Me({ api, section, open, close, exitAccount }: {
   }
 
   return <>
-    <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 30, gap: 16, maxWidth: 620, width: '100%', alignSelf: 'center' }}>
-      <Text accessibilityRole="header" style={s.title}>{t('我的')}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('更换头像')} onPress={() => setAvatarMenu(true)}
-        style={[s.row, { gap: 16, minHeight: 74, marginTop: 2, marginBottom: 5, alignSelf: 'flex-start', maxWidth: '100%' }]}>
-        <View style={{ width: 70, height: 70, borderRadius: 35, backgroundColor: '#dfd8f7', borderColor: '#fff', borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' }}>
-          {avatar ? <Image source={{ uri: avatar }} style={{ width: 67, height: 67, borderRadius: 34 }} /> : <Text style={{ fontSize: 28, fontWeight: '600', color: accent }}>{account.charAt(0).toUpperCase()}</Text>}
-          <View style={{ position: 'absolute', right: -2, bottom: -2, backgroundColor: '#fff', borderRadius: 10, padding: 4 }}>
-            <Camera size={12} color={accent} strokeWidth={1.7} />
-          </View>
-        </View>
-        <Text numberOfLines={2} style={{ flexShrink: 1, fontSize: 23, fontWeight: '700', letterSpacing: -0.35, color: ink }}>{account}</Text>
-      </Pressable>
+    <SheetScroll embedded {...chrome}>
       <Panel style={{ gap: 0, paddingVertical: 4 }}>
         {([
           ['models', '模型', Layers2],
@@ -62,7 +126,7 @@ export function Me({ api, section, open, close, exitAccount }: {
           ['language', '语言', Languages],
         ] as const).filter(([id]) => id !== 'image-generation' || imageGenerationSettingsEnabled).map(([id, label, Icon], index) => <Pressable accessibilityRole="button" key={id}
           onPress={() => id === 'language' ? setLanguageOpen(true) : open(id)}
-          style={[s.row, { minHeight: 54, gap: 14 }, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: edge }]}>
+          style={[s.row, { minHeight: 60, gap: 14 }, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: edge }]}>
           <Icon size={20} color={muted} strokeWidth={1.7} />
           <Text style={[s.body, { flex: 1 }]}>{t(label)}</Text>
           {id === 'language' && <Text style={s.caption}>{languages.find(item => item.id === language)?.name}</Text>}
@@ -85,20 +149,16 @@ export function Me({ api, section, open, close, exitAccount }: {
         { text: t('返回'), style: 'cancel' }, { text: 'Stop Host', style: 'destructive', onPress: stop },
       ])}>
         <Panel style={[s.row, { paddingVertical: 15, gap: 12 }]}>
-          <Power size={20} color="#a04656" strokeWidth={1.7} />
-          <Text style={[s.body, { color: '#a04656' }]}>Stop Host</Text>{stopping && <ActivityIndicator color={accent} />}
+          <Power size={20} color={danger} strokeWidth={1.7} />
+          <Text style={[s.body, { color: danger }]}>Stop Host</Text>{stopping && <ActivityIndicator color={accent} />}
         </Panel>
       </Pressable>
       <Hint error>{t(error)}</Hint>
-    </ScrollView>
+    </SheetScroll>
     {languageOpen && <LanguageSheet onClose={() => setLanguageOpen(false)} />}
     {serverOpen && <Sheet title={t('服务器地址')} onClose={() => setServerOpen(false)} raised={62}><SheetScroll>
       <Panel><Text selectable style={s.body}>{api.profile.server}</Text></Panel>
     </SheetScroll></Sheet>}
-    {avatarMenu && <Sheet title={t('更换头像')} onClose={() => setAvatarMenu(false)} raised={62}>{afterClose => <SheetScroll>
-      <Button label={t('从图库选择')} onPress={() => afterClose(() => changeAvatar(false))}><Images size={19} color={accent} /></Button>
-      <Button label={t('拍照')} onPress={() => afterClose(() => changeAvatar(true))}><Camera size={19} color={accent} /></Button>
-    </SheetScroll>}</Sheet>}
     {section === 'models' && <Sheet title={t('模型')} onClose={() => { setModelDirty(false); close() }} beforeDismiss={proceed => {
       if (!modelDirty) { proceed(); return }
       Alert.alert(t('放弃未保存的修改？'), undefined, [{ text: t('取消'), style: 'cancel' }, { text: t('放弃修改'), style: 'destructive', onPress: proceed }])

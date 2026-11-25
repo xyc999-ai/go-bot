@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, BackHandler } from 'react-native'
 import { ChevronRight, KeyRound, MoreHorizontal, Plus, Puzzle, RefreshCw, Trash2 } from 'lucide-react-native'
 import { useLocale } from '../locale'
-import { accent, Button, edge, Hint, IconButton, ink, muted, Panel, s, Sheet, SheetScroll } from '../ui'
+import { accent, Button, edge, Hint, IconButton, ink, muted, Panel, s, Sheet, SheetScroll, type PageChrome } from '../ui'
 import { installPackage, loadPlugins, removePackage, restartPlugins, setPluginEnabled, updatePackage } from './api'
 import { confirmChange, Empty, Fact, Feedback, Fold, Loading, State, TextAction, Toggle, Toolbar, useManagement, x, type ScreenProps } from './shared'
 import { Authorizations, usePluginAuthorizations } from './Authorizations'
@@ -12,9 +12,10 @@ import { Linking } from 'react-native'
 import { PluginTutorial } from './PluginTutorial'
 import { PluginIcon } from './PluginIcon'
 
-export function Plugins(props: ScreenProps) {
+export function Plugins(props: ScreenProps & PageChrome & { embedded?: boolean; active?: boolean; onExit?: () => void }) {
  const { api } = props, { t, language } = useLocale(), m = useManagement(props, loadPlugins)
  const [tab, setTab] = useState<'market' | 'installed'>('market'), [selected, setSelected] = useState<string>(), [authorization, setAuthorization] = useState(false), [menu, setMenu] = useState<string>()
+ const listOffset = useRef(0)
  const selectedBusy = !!selected && m.busy.endsWith(':' + selected)
  const busyName = m.view?.catalog.find(row => m.busy.endsWith(':' + row.package))?.name
  const view = m.view, info = view?.status.packages.find(pkg => pkg.name === selected), saved = selected ? view?.settings.packages[selected] : undefined
@@ -26,8 +27,13 @@ export function Plugins(props: ScreenProps) {
   const release = view?.catalog.find(row => row.package === name)
   if (release) await m.run('install:' + name, () => installPackage(api, release.pluginId), 'Plugin and dependencies installed. Enable it to use its capabilities.')
  }
+ useEffect(() => {
+  if (!props.active) return
+  const listener = BackHandler.addEventListener('hardwareBackPress', () => { if (authorization) setAuthorization(false); else if (selected) { setSelected(undefined); setTab('market') } else if (props.onExit) props.onExit(); else return false; return true })
+  return () => listener.remove()
+ }, [props.active, selected, authorization, props.onExit])
  return <>
- <SheetScroll key={authorization ? 'authorization' : selected ?? tab}>
+ <SheetScroll key={authorization ? 'authorization' : selected ?? tab} embedded={props.embedded} scrollOffset={!selected ? listOffset : undefined} bottomInset={props.bottomInset} header={!selected ? props.header : undefined} navigation={!selected ? props.navigation : undefined}>
   {authorization ? <Authorizations connections={connections} onBusyChange={props.onBusyChange} onBack={() => setAuthorization(false)} />
    : selected && view ? <>
     <Toolbar title="Plugin details" onBack={() => { setSelected(undefined); setTab('market') }}>{saved && <IconButton label={t('More options')} disabled={!!m.busy || ['installing', 'loading'].includes(actual?.state ?? '')} onPress={() => setMenu(selected)}><MoreHorizontal size={20} color={muted} /></IconButton>}</Toolbar>
@@ -56,7 +62,7 @@ export function Plugins(props: ScreenProps) {
       const release = view.catalog.find(row => row.package === name), saved = view.settings.packages[name], state = view.status.instances.find(row => row.package === name)
       const label = release ? release.name : view.status.packages.find(pkg => pkg.name === name)?.title || name
       return <View key={name} style={market.tile}>
-       <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => setSelected(name)} style={({pressed}) => [market.tileMain,pressed && s.pressed]}><PluginIcon api={api} icon={release?.icon} /><View style={{flex:1,gap:7}}><Text style={market.title}>{label}</Text><Text numberOfLines={2} style={market.summary}>{release ? localize(release.description,language).split('\n')[0] : name}</Text>{view.status.packages.find(row => row.name === name)?.availableVersion && <Text style={market.update}>{t('Update available')}</Text>}{(tab === 'installed' || ['installing', 'installation-failed'].includes(state?.state ?? '')) && <State value={state?.state ?? (saved?.enabled ? 'unavailable' : 'disabled')} />}</View></Pressable>
+       <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => setSelected(name)} style={({pressed}) => [market.tileMain,pressed && s.pressed]}><PluginIcon api={api} icon={release?.icon} /><View style={{flex:1,gap:5}}><Text style={market.title}>{label}</Text><Text numberOfLines={2} style={market.summary}>{release ? localize(release.description,language).split('\n')[0] : name}</Text>{view.status.packages.find(row => row.name === name)?.availableVersion && <Text style={market.update}>{t('Update available')}</Text>}{(tab === 'installed' || ['installing', 'installation-failed'].includes(state?.state ?? '')) && <State value={state?.state ?? (saved?.enabled ? 'unavailable' : 'disabled')} />}</View></Pressable>
        {m.busy === 'install:' + name || state?.state === 'installing' ? <ActivityIndicator style={{width:44}} color={accent} /> : <IconButton label={t(saved ? 'More options' : 'Install plugin') + ': ' + label} disabled={!!m.busy || state?.state === 'loading'} onPress={() => { if (saved) setMenu(name); else void install(name) }}>{saved ? <MoreHorizontal size={20} color={muted} /> : <Plus size={22} color={muted} />}</IconButton>}
       </View>
      })}</View>
@@ -72,13 +78,13 @@ export function Plugins(props: ScreenProps) {
  </>
 }
 const market = StyleSheet.create({
- tabs:{flexDirection:'row',gap:8,paddingBottom:8},
- tab:{flex:1,alignItems:'center',justifyContent:'center',minHeight:44,paddingHorizontal:12,borderRadius:14,borderWidth:1,borderColor:'transparent'},
- selected:{backgroundColor:'#ffffffb8',borderColor:edge},label:{color:muted,fontSize:14,fontWeight:'500'},selectedLabel:{color:accent},
+ tabs:{flexDirection:'row',gap:26,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:edge},
+ tab:{alignItems:'center',justifyContent:'center',minHeight:44,paddingHorizontal:2,borderBottomWidth:2,borderBottomColor:'transparent'},
+ selected:{borderBottomColor:ink},label:{color:muted,fontSize:14,fontWeight:'500'},selectedLabel:{color:accent},
  tile:{flexDirection:'row',alignItems:'center',gap:4,borderRadius:17},
- tileMain:{flex:1,flexDirection:'row',alignItems:'center',gap:15,paddingVertical:20},
- title:{color:ink,fontSize:16,fontWeight:'600',letterSpacing:-.2},summary:{color:muted,fontSize:13,lineHeight:20},
+ tileMain:{flex:1,flexDirection:'row',alignItems:'center',gap:15,paddingVertical:16},
+ title:{color:ink,fontSize:16,fontWeight:'500',letterSpacing:-.2},summary:{color:muted,fontSize:13,lineHeight:20},
  detailHead:{flexDirection:'row',alignItems:'flex-start',gap:18,paddingVertical:14},detailTitle:{fontSize:25,color:ink,fontWeight:'600',letterSpacing:-.6},
- update:{fontSize:11,color:'#5d70a0',fontWeight:'600'},
- section:{gap:16,paddingVertical:24,borderBottomWidth:1,borderBottomColor:'#27344c10'},heading:{color:ink,fontWeight:'600',fontSize:14},
+ update:{fontSize:11,color:'#3e6a52',fontWeight:'600'},
+ section:{gap:16,paddingVertical:24,borderBottomWidth:1,borderBottomColor:'#e9eaec'},heading:{color:ink,fontWeight:'600',fontSize:14},
 })

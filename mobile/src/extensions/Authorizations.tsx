@@ -4,7 +4,7 @@ import { Check, ExternalLink, KeyRound } from 'lucide-react-native'
 import type { AuthorizationEntry, AuthorizationPrompt, MCPServer } from '../../../frontend/src/api/extensions'
 import { authorizationLabel, authorizationURL, useAuthorization } from '../../../frontend/src/extensions/useAuthorization'
 import { useLocale } from '../locale'
-import { accent, Button, edge, Field, Hint, ink, muted, Panel, s } from '../ui'
+import { accent, Button, edge, Field, Hint, ink, muted, Panel, s, success } from '../ui'
 import { authorizationAPI, mcpAuthorizationAPI } from './api'
 import { useMCPAuthorization } from '../../../frontend/src/extensions/useMCPAuthorization'
 import { authorizationEntryLabels, connectionLabel, connectionTitle, mcpAuthorizationLabel, mcpAuthorizationRunning } from '../../../frontend/src/extensions/connections'
@@ -35,7 +35,7 @@ export function Authorizations({ connections, onBusyChange, onBack }: Pick<Scree
       </Panel>)}
       {attempt.prompts.map(prompt => <Question key={prompt.id} prompt={prompt} busy={state.busy} onAnswer={(answer, decline) => { void state.answer(prompt.id, answer, decline) }} />)}
       {attempt.status === 'running' && !attempt.prompts.length && <View style={a.status}><ActivityIndicator color={accent} size="small" /><Text style={[s.meta, { flex: 1 }]}>{t('Waiting for authorization to finish…')}</Text></View>}
-      {attempt.status === 'authorized' && <View style={a.status}><Check size={20} color="#397863" /><Text style={[s.body, { color: '#397863', flex: 1 }]}>{t('Authorization is ready.')}</Text></View>}
+      {attempt.status === 'authorized' && <View style={a.status}><Check size={20} color={success} /><Text style={[s.body, { color: success, flex: 1 }]}>{t('Authorization is ready.')}</Text></View>}
       <Hint error>{attempt.error ? t(attempt.error) : undefined}</Hint><Button label={t(attempt.status === 'running' ? 'Cancel authorization' : 'Done')} disabled={state.busy} onPress={() => { if (attempt.status === 'running') void state.cancel(); else state.close() }} />
       {attempt.status === 'running' && <Hint>{t('Closing this panel keeps the authorization running. You can return to it from this plugin.')}</Hint>}
     </> : mcp.attempt && mcp.selected ? <MCPDetails state={mcp} /> : <>
@@ -67,7 +67,7 @@ function MCPDetails({ state }: { state: ReturnType<typeof useMCPAuthorization> }
  return <><View style={a.status}><KeyRound size={19} color={muted} /><Text style={s.meta}>{t(mcpAuthorizationLabel(attempt))}</Text></View>
   {active && url && <Panel style={a.panel}><Text style={a.message}>{t('Authorize access on the service website, then return here.')}</Text><Pressable accessibilityRole="link" style={a.link} onPress={() => { void Linking.openURL(url).catch(() => {}) }}><Text style={a.linkText}>{t('Continue in browser')}</Text><ExternalLink size={15} color={accent} /></Pressable></Panel>}
   {active && <View style={a.status}><ActivityIndicator size="small" color={accent} /><Text style={[s.meta, { flex: 1 }]}>{t('Waiting for authorization to finish…')}</Text></View>}
-  {attempt.phase === 'authorized' && <View style={a.status}><Check size={20} color="#397863" /><Text style={[s.body, { flex: 1 }]}>{t('Authorization is ready.')}</Text></View>}
+  {attempt.phase === 'authorized' && <View style={a.status}><Check size={20} color={success} /><Text style={[s.body, { flex: 1 }]}>{t('Authorization is ready.')}</Text></View>}
   <Hint error>{attempt.error || server.error}</Hint><Button label={t(active ? 'Cancel authorization' : 'Done')} disabled={state.busy} onPress={() => { if (active) void state.cancel(); else state.close() }} />
   {active && <Hint>{t('Closing this panel keeps the authorization running. You can return to it from this plugin.')}</Hint>}
  </>
@@ -93,7 +93,7 @@ const a = StyleSheet.create({
   link: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 }, linkText: { color: accent, fontSize: 14 },
   question: { color: ink, fontSize: 15, fontWeight: '500', lineHeight: 23 },
   option: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 17, borderRadius: 13, borderWidth: 1, borderColor: edge, backgroundColor: '#ffffffa0' },
-  selected: { borderColor: '#b8b4d1', backgroundColor: '#f2f0fa' },
+  selected: { borderColor: '#d9dbde', backgroundColor: '#eff0f2' },
   radio: { width: 19, height: 19, borderWidth: 1, borderColor: '#bec3d0', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: accent },
 })

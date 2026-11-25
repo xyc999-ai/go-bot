@@ -5,9 +5,19 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "paths": {
-      "react": ["./node_modules/@types/react/index.d.ts"],
-      "react/*": ["./node_modules/@types/react/*"],
-      "eventsource-parser/stream": ["./node_modules/eventsource-parser/dist/stream"]
+      "react": [
+        "./node_modules/@types/react/index.d.ts"
+      ],
+      "react/*": [
+        "./node_modules/@types/react/*"
+      ],
+      "eventsource-parser/stream": [
+        "./node_modules/eventsource-parser/dist/stream"
+      ]
     }
-  }
+  },
+  "include": [
+    "App.tsx",
+    "src"
+  ]
 }

@@ -7,6 +7,7 @@ import { proactiveChinese } from '../../frontend/src/settings/proactiveState'
 const extensionEnglish = Object.fromEntries(Object.entries(extensionChinese).map(([en, zh]) => [zh, en]))
 
 const english: Record<string, string> = {
+  '重命名会话': 'Rename chat', '会话标题': 'Chat title', '会话操作': 'Chat actions', '无法重命名会话，请重试。': 'Could not rename chat. Try again.',
   '复制表格': 'Copy table', '复制代码': 'Copy code', '已复制': 'Copied', '复制失败，重试': 'Copy failed. Retry', '代码': 'Code', '表格': 'Table', '表格，可左右滚动': 'Table — scroll horizontally', '代码，可左右滚动': 'Code — scroll horizontally',
   '主会话': 'Main chat', '配置模型': 'Configure model', '查看插件': 'View plugins',
   '主会话未能准备完成。': 'The main chat could not be prepared.',
@@ -26,7 +27,7 @@ const english: Record<string, string> = {
   '仅允许这一次操作，会话权限保持不变。': 'Allow once applies to this operation only.',
   '无法切换会话权限。': 'Could not change chat permission.',
 
-  '任务': 'Tasks', '会话': 'Chats', '我的': 'Me', '语言': 'Language', '设置': 'Settings',
+  '聊天': 'Chat', '返回聊天': 'Back to chat', '任务': 'Tasks', '会话': 'Chats', '我的': 'Me', '语言': 'Language', '设置': 'Settings',
   '连接服务器': 'Connect to server', '服务器地址': 'Server address', '账号': 'Account', '输入已有账号': 'Enter an existing account',
   '正在连接…': 'Connecting…', '连接': 'Connect', '创建账号并连接': 'Create account and connect',
   '退出登录': 'Sign out',
@@ -112,6 +113,14 @@ const english: Record<string, string> = {
   '没有可显示的图片。': 'No images to display.', '图片暂不可用，重试': 'Image unavailable. Retry',
   '下载': 'Download', '文件暂不可用。': 'File unavailable.', '工具调用': 'Tool calls', '已交付': 'Delivered',
   '收起': 'Dismiss', '关闭': 'Close', '保存语言失败，请重试。': 'Could not save the language. Try again.',
+  '任务内容': 'Task content', '需要助手到时做什么？': 'What should the assistant do when it is time?',
+  '执行时间': 'When to run', '每隔': 'Repeat every', '每': 'Every', '天': 'day(s)', '确定': 'Done',
+  '更多选项': 'More options', '任务名称（选填）': 'Task name (optional)', '根据任务内容自动命名': 'Named automatically from the task content',
+  '保留现有时间安排': 'Keep the current schedule', '只修改任务内容或名称，不会改变原来的时间安排。': 'Editing the content or name keeps the existing schedule.',
+  '修改执行时间': 'Change timing', '撤销时间修改': 'Undo timing changes', '请选择新的执行时间。': 'Choose a new time.',
+  '请填写任务内容。': 'Enter the task content.', '任务名称不能超过 120 个字符。': 'Task names can contain up to 120 characters.',
+  '请输入大于零的整数间隔。': 'Enter a positive whole-number interval.', '请选择有效的日期和时间。': 'Choose a valid date and time.',
+  '请选择未来的执行时间。': 'Choose a time in the future.', '请至少选择一天。': 'Select at least one day.', '请检查任务内容和执行时间。': 'Check the task content and timing.',
   '新建任务': 'New task', '编辑任务': 'Edit task', '创建任务': 'Create task', '任务名称': 'Task name', '任务指令': 'Task instructions',
   '时间规则': 'Timing rule', '指定时间': 'At a specified time', '延时一次': 'Once after a delay', '固定间隔': 'Fixed interval', '每天': 'Daily', '每周': 'Weekly',
   '日期': 'Date', '时间': 'Time', '时区': 'Time zone', '间隔秒数': 'Interval in seconds', 'Cron 表达式': 'Cron expression', 'RRULE 规则': 'RRULE expression',
@@ -138,12 +147,13 @@ const english: Record<string, string> = {
 }
 const notices: Record<string, string> = {
   ...proactiveChinese,
+  'Working': '处理中',
   'Approve this plan and leave plan mode?': '确认方案后开始执行，或提出修改意见继续规划。',
   'Approve': '按此方案执行', 'Keep planning': '继续完善方案',
   'Leave plan mode; the plan is carried out from the next step.': '退出规划模式，从下一步开始执行方案。',
   'Stay in plan mode; feedback goes back to the model.': '保持规划模式，将修改意见交给助手。',
 
-  'Scheduled task': '定时任务',
+  'Scheduled task': '定时任务', 'Scheduled tasks': '定时任务',
   'Background task': '后台任务',
   'The reply was interrupted.': '回复已中断。',
   'The agent could not finish its reply.': '助手未能完成回复。',
