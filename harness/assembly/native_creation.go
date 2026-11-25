@@ -76,6 +76,17 @@ func (f NativeFactory) ActivateWithSessionOptions(ctx context.Context, identity 
 			identity.AgentPreset = *meta.AgentPreset
 		}
 	}
+	var err error
+	identity.AgentPreset, err = sessionformat.EffectiveAgentPreset(header, options.Seed)
+	if err == nil {
+		f, identity, err = f.resolvePreset(ctx, identity)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if header.AgentPreset == "" {
+		header.AgentPreset = identity.AgentPreset
+	}
 	if err := f.validate(identity); err != nil {
 		return nil, err
 	}

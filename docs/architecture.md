@@ -81,7 +81,7 @@ Host uses pnpm for missing packages and Cordis for activation. Installed matchin
 releases are reused, and later logins respect user disable/uninstall decisions.
 
 Proactive assistance is a separate Go Host service and persistent Agent, not a
-fork or Cordis core plugin. It assembles an internal Go composition and drives
+fork or Cordis core plugin. It binds an internal Go AgentPreset and drives
 the existing `RunNext` with standard Inbox inputs. AgentLoop, tool pipeline,
 checkpoint and compaction execution remain shared. The composition chooses real
 static/dynamic tools and a consistent Skill view; ordinary chat keeps its full
@@ -103,6 +103,26 @@ background scheduling loop and never connects to Host SQLite. The small
 `internal/proactivesettings` wire contract keeps Agent and SQLite dependencies
 out of Controller's Alpine image. See [configuration](configuration.md#proactive-assistance)
 and the [design and verification plan](proactive-discovery-plan.zh-CN.md).
+
+## Agent Presets
+
+One Go-owned `harness/agentpreset.Registry` serves the Host. Ordinary chats and
+its main chat use the same `standard` preset; the main chat differs only by its
+stable account identity, greeting, archive restriction and delivery role.
+Background research uses `go-bot-proactive` through the same assembly pipeline.
+
+An immutable binding selects inherited tools, Skills, System sections and runtime
+sources. Local tool contributions merge before execution. Plugins and MCP still
+refresh through the existing step boundary; memory refreshes normally. Presets
+neither install plugins nor change their Cordis lifecycle. They do not choose a
+model or replace execution permissions.
+
+The creation Header stores the initial identity. Before the first turn, trusted
+Go callers can select another preset by appending `agent-preset/selected`.
+Recovery reads the effective projection; missing definitions fail execution
+without hiding stored history. Live bindings retain their definitions across
+registry replacements, and forks inherit the parent's current binding.
+See the [Go design and implementation record](agent-preset-go-plan.zh-CN.md).
 
 ## Storage
 

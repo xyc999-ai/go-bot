@@ -110,9 +110,11 @@ func newBackgroundFixture(t *testing.T, root, main, endpoint string, prepareMain
 		t.Fatal(err)
 	}
 	var b *backgroundService
+	presets := newHostPresetRegistry()
 	build := func(id, cwd, preset string) (*hostruntime.NativeRuntime, error) {
 		return &hostruntime.NativeRuntime{
 			Factory: assembly.NativeFactory{Storage: executor.NativeFileStorage{Store: store(cwd), SessionID: id}, Builder: backgroundTestBuilder{root: root}, Model: models.base,
+				Presets:          presets,
 				ResolveTurnModel: func(context.Context) (agent.TurnModel, error) { return models.backgroundRoute(main) }, ResolveSelectedModel: models.selected,
 				Provider: "test", ModelID: "test-model", SystemPrompt: assembly.DefaultCoreSystemPrompt, Schedule: native.Schedule, SessionSearch: history, Limits: agent.Limits{MaxSteps: 4, MaxToolCalls: 8, MaxModelCalls: 8}},
 			Identity: assembly.NativeRuntimeIdentity{UserID: "test", SessionID: id, Workspace: cwd, AgentPreset: preset}, HostOwnsSchedule: true,
@@ -179,6 +181,88 @@ func waitBackground(t *testing.T, check func() bool) {
 			t.Fatal("background condition did not settle")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestBackgroundPresetCanSaveResearchWithoutPresentingOrNotifyingMain(t *testing.T) {
+	var calls atomic.Int64
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Tools []struct{ Name string } `json:"tools"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		names := make(map[string]bool)
+		for _, spec := range req.Tools {
+			names[spec.Name] = true
+		}
+		for _, name := range []string{"writefile", "readfile", "shellexecute", "skill", "schedule_list", "schedule_view", "structured_output"} {
+			if !names[name] {
+				t.Errorf("background model is missing available capability %s", name)
+			}
+		}
+		for _, name := range []string{"present", "askuserquestion", "ask_user_question", "exitplanmode", "exit_plan_mode", "get_goal", "create_goal", "update_goal", "subagent", "subagent_fork", "send_message", "interrupt_agent", "list_agents", "workflow", "schedule_create", "schedule_edit"} {
+			if names[name] {
+				t.Errorf("background model received excluded capability %s", name)
+			}
+		}
+		step := calls.Add(1)
+		var name, args string
+		switch step {
+		case 1:
+			name, args = "writefile", `{"path":"finding.txt","content":"Verified research note."}`
+		default:
+			name = "structured_output"
+			raw, _ := json.Marshal(proactive.Result{WorkSummary: "Saved a research note without contacting the user.", NextCheck: proactive.Check{At: time.Now().Add(24 * time.Hour).Format(time.RFC3339Nano), Reason: "Check for new information later."}})
+			args = string(raw)
+		}
+		payload, _ := json.Marshal(map[string]any{"type": "response.completed", "response": map[string]any{"id": uuid.NewString(), "status": "completed", "output": []any{map[string]any{"type": "function_call", "id": fmt.Sprint("out-", step), "call_id": fmt.Sprint("call-", step), "name": name, "arguments": args}}}})
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "event: response.completed\ndata: %s\n\n", payload)
+	}))
+	defer backend.Close()
+	root, main := t.TempDir(), uuid.NewString()
+	f := newBackgroundFixture(t, root, main, backend.URL)
+	out := httptest.NewRecorder()
+	f.b.handler(out, httptest.NewRequest(http.MethodPut, proactivePath, strings.NewReader(`{"enabled":true,"mainSessionId":"`+main+`"}`)))
+	if out.Code != http.StatusNoContent {
+		t.Fatalf("configure: %d %s", out.Code, out.Body.String())
+	}
+	waitBackground(t, func() bool { return f.b.service.Snapshot().ResultTurn == 1 })
+	state := f.b.service.Snapshot()
+	artifact, err := f.b.artifact(f.ctx, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	presented := 0
+	for _, event := range artifact.Events {
+		if event.Type == "deliverables/presented" {
+			presented++
+		}
+		if event.Type == "tool/result" {
+			var result struct{ Message struct{ IsError bool } }
+			if err := json.Unmarshal(event.Data, &result); err != nil || result.Message.IsError {
+				t.Fatalf("background tool failed: %s (%v)", event.Data, err)
+			}
+		}
+	}
+	if presented != 0 || calls.Load() != 2 {
+		t.Fatalf("presented=%d model calls=%d", presented, calls.Load())
+	}
+	if data, err := os.ReadFile(filepath.Join(artifact.Header.CWD, "finding.txt")); err != nil || string(data) != "Verified research note." {
+		t.Fatalf("research file: %q %v", data, err)
+	}
+	mainArtifact, err := f.native.ReadSession(f.ctx, main)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range mainArtifact.Events {
+		if event.Type == "deliverables/presented" || (event.Type == "user/message" && strings.Contains(string(event.Data), "agent-message")) {
+			t.Fatal("background research bypassed the quiet notification decision")
+		}
 	}
 }
 

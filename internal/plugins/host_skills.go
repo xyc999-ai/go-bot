@@ -118,7 +118,7 @@ func (r *hostBridge) Skills(_ context.Context, _ skills.Lookup) ([]skills.Provid
 	var result []skills.Provider
 	for _, kind := range []string{"skill", "skill-directory", "skill-provider"} {
 		for _, row := range r.rows(kind) {
-			provider := skills.Provider{Name: row.Owner + ":" + row.ID}
+			provider := skills.Provider{Name: row.Owner + ":" + row.ID, Source: "plugin:" + row.Owner}
 			provider.List = func(ctx context.Context, lookup skills.Lookup) (skills.ProviderSnapshot, error) {
 				if row.ctx.Err() != nil {
 					return skills.ProviderSnapshot{}, failure("UNAVAILABLE", "Skill contribution was disposed")

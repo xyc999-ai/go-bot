@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"go-bot/harness/agent"
+	"go-bot/harness/agentpreset"
 	"go-bot/harness/skills"
 	"go-bot/harness/tools"
 )
@@ -47,18 +48,19 @@ func TestCompositionSelectsRealToolsAndAllSkillEntryPoints(t *testing.T) {
 		}
 	}
 	shared := &skills.Registry{CustomDirs: []string{dir}}
+	allowTools := []string{"readfile", "skill", "plugin-visible"}
+	allowSkills := []string{"visible-skill"}
+	presets := agentpreset.New("research-test", nil)
+	_, err := presets.Register(agentpreset.Definition{ID: "research-test", Persona: agentpreset.PersonaSpec{Suffix: "Independent research identity."}, Tools: agentpreset.Selection{AllowNames: &allowTools}, Skills: agentpreset.Selection{AllowNames: &allowSkills}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	model := &observingModel{}
 	factory := NativeFactory{
 		Storage: &nativeMemoryStorage{}, Model: model,
 		Builder:  compositionBuilder{nativeTestBuilder: nativeTestBuilder{newContainerTestBuilder(t, t.TempDir())}, registry: shared},
 		Provider: "p", ModelID: "m", SystemPrompt: "Base system.", Limits: agent.Limits{MaxSteps: 3, MaxToolCalls: 3},
-		Composition: &NativeComposition{
-			ID: "research-test", SystemSuffix: "Independent research identity.",
-			AllowTool: func(spec agent.ToolSpec) bool {
-				return slices.Contains([]string{"readfile", "skill", "plugin-visible"}, spec.Name)
-			},
-			AllowSkill: func(name string) bool { return name == "visible-skill" },
-		},
+		Presets: presets,
 		ToolSource: func(context.Context, string) ([]agent.Tool, error) {
 			return []agent.Tool{compositionTool("plugin-visible"), compositionTool("plugin-hidden")}, nil
 		},
@@ -103,8 +105,12 @@ func TestCompositionSelectsRealToolsAndAllSkillEntryPoints(t *testing.T) {
 	if err != nil || len(all.Entries) != 2 || shared.Visible != nil {
 		t.Fatalf("composition changed the Host registry: %+v %v", all, err)
 	}
-	identity.AgentPreset = "unrecognized"
-	if _, err := factory.Resume(t.Context(), identity); err == nil {
-		t.Fatal("restoring the wrong composition silently used the research tools")
+	unregister, err := presets.Register(agentpreset.Definition{ID: "unused"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unregister()
+	if _, err := presets.Resolve(t.Context(), "unused"); err == nil {
+		t.Fatal("removed preset silently resolved")
 	}
 }

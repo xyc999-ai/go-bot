@@ -31,9 +31,10 @@ type ChildStatus struct {
 }
 
 type Subagent struct {
-	Coordinator ChildCoordinator
-	ParentID    string
-	Fork        bool
+	Coordinator     ChildCoordinator
+	ParentID        string
+	Fork            bool
+	PresetSelection SubagentPresetSelection
 }
 
 type SendMessage struct {
@@ -56,6 +57,7 @@ type subagentArgs struct {
 	Provider                 string `json:"provider,omitempty"`
 	Model                    string `json:"model,omitempty"`
 	ReasoningEffort          string `json:"reasoning_effort,omitempty"`
+	AgentPreset              string `json:"agent_preset,omitempty"`
 }
 
 func (t Subagent) Spec() agent.ToolSpec {
@@ -65,7 +67,14 @@ func (t Subagent) Spec() agent.ToolSpec {
 		name = "subagent_fork"
 		description = "Delegate a task to a subagent seeded with this conversation's completed turns. It does not see the current in-flight turn. The runtime returns its id immediately and notifies you when it finishes."
 	}
-	return agent.ToolSpec{Name: name, Description: description, Parameters: json.RawMessage(`{"type":"object","properties":{"cwd":{"type":"string"},"description":{"type":"string"},"prompt":{"type":"string"}},"required":["description","prompt"]}`), ParallelSafe: true}
+	parameters := json.RawMessage(`{"type":"object","properties":{"cwd":{"type":"string"},"description":{"type":"string"},"prompt":{"type":"string"}},"required":["description","prompt"]}`)
+	if !t.Fork && len(t.PresetSelection.AllowedAgentPresets) > 0 {
+		var schema map[string]any
+		_ = json.Unmarshal(parameters, &schema)
+		schema["properties"].(map[string]any)["agent_preset"] = map[string]any{"type": "string", "enum": t.PresetSelection.AllowedAgentPresets, "description": "Agent preset for this child; omission uses the configured default or inherits the parent."}
+		parameters, _ = json.Marshal(schema)
+	}
+	return agent.ToolSpec{Name: name, Description: description, Parameters: parameters, ParallelSafe: true}
 }
 
 func (t Subagent) Validate(raw json.RawMessage) error {
@@ -79,6 +88,16 @@ func (t Subagent) Validate(raw json.RawMessage) error {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil {
 		return err
+	}
+	_, provided := fields["agent_preset"]
+	selected, err := t.PresetSelection.Select(request.AgentPreset, provided, t.Fork)
+	if err != nil {
+		return err
+	}
+	if selected != "" {
+		if _, ok := t.Coordinator.(ChildPresetCoordinator); !ok {
+			return errors.New("child Agent Preset selection is unavailable in this worker")
+		}
 	}
 	if strings.TrimSpace(request.Description) == "" || strings.TrimSpace(request.Prompt) == "" || len(request.Description) > 120 || len(request.Prompt) > 100000 {
 		return errors.New("subagent description or prompt is invalid")
@@ -108,7 +127,13 @@ func (t Subagent) Execute(ctx context.Context, raw json.RawMessage) (string, err
 	_ = json.Unmarshal(raw, &request)
 	var id string
 	var err error
-	if coordinator, ok := t.Coordinator.(ChildDirectoryCoordinator); ok {
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &fields)
+	_, provided := fields["agent_preset"]
+	selected, _ := t.PresetSelection.Select(request.AgentPreset, provided, t.Fork)
+	if selected != "" {
+		id, err = t.Coordinator.(ChildPresetCoordinator).SpawnChildWithPreset(ctx, t.ParentID, request.Description, request.Prompt, request.CWD, selected, t.Fork)
+	} else if coordinator, ok := t.Coordinator.(ChildDirectoryCoordinator); ok {
 		id, err = coordinator.SpawnChildAt(ctx, t.ParentID, request.Description, request.Prompt, request.CWD, t.Fork)
 	} else {
 		id, err = t.Coordinator.SpawnChild(ctx, t.ParentID, request.Description, request.Prompt, t.Fork)

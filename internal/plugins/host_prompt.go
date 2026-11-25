@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"go-bot/harness/agent"
+	"go-bot/harness/agentpreset"
 )
 
 type hostPromptDefinition struct {
@@ -39,6 +40,17 @@ func (r *hostBridge) AssemblePrompt(ctx context.Context, input agent.PromptAssem
 	size := 0
 	for _, row := range rows {
 		d := definition(row)
+		if binding := agentpreset.FromContext(ctx); binding != nil {
+			preset := binding.Definition()
+			name, source := row.Owner+"/"+d.ID, agentpreset.SourceRef("plugin:"+row.Owner)
+			if d.Location == "system" {
+				if preset.Persona.Complete || !preset.PromptSections.Allows(name, source) {
+					continue
+				}
+			} else if (preset.Persona.IncludeRuntimeContext != nil && !*preset.Persona.IncludeRuntimeContext) || !preset.RuntimeSources.Allows(name, source) {
+				continue
+			}
+		}
 		text := ""
 		if d.Text != nil {
 			text = *d.Text
@@ -58,7 +70,7 @@ func (r *hostBridge) AssemblePrompt(ctx context.Context, input agent.PromptAssem
 		if d.Location == "system" {
 			output.SystemPrompt += "\n\n" + text
 		} else {
-			output.Contexts = append(output.Contexts, agent.RuntimeContextSection{Name: row.Owner + "/" + d.ID, Text: text})
+			output.Contexts = append(output.Contexts, agent.RuntimeContextSection{Name: row.Owner + "/" + d.ID, Text: text, Source: "plugin:" + row.Owner})
 		}
 	}
 	return output, ctx.Err()

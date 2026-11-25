@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	"go-bot/harness/agentpreset"
 	"go-bot/harness/assembly"
 	"go-bot/harness/permission"
 	"go-bot/harness/session"
@@ -19,6 +20,10 @@ func TestNativeFactoryCreatesFromExactSeedAndMetadataUsingActualGoJournal(t *tes
 		t.Fatal(err)
 	}
 	cwd, parent, preset := store.ProjectCWD, "parent-metadata", "reporter"
+	runtime.Factory.Presets = agentpreset.New(agentpreset.Standard, nil)
+	if _, err := runtime.Factory.Presets.Register(agentpreset.Definition{ID: preset}); err != nil {
+		t.Fatal(err)
+	}
 	seeded, count := true, uint64(4)
 	seed := []sessionformat.Event{
 		{Type: "permission/preset", Seq: 0, Time: 1, Data: json.RawMessage(`{"preset":"read-only"}`)},
@@ -131,6 +136,18 @@ func TestNativeFactoryCreatesFromIndependentSubagentOrigin(t *testing.T) {
 func TestHostProgrammaticCreationUsesActualRuntimeAndReleasesBorrowedInputs(t *testing.T) {
 	host, _ := lifecycleFileHost(t)
 	preset := "initial-preset"
+	registry := agentpreset.New(agentpreset.Standard, nil)
+	if _, err := registry.Register(agentpreset.Definition{ID: preset}); err != nil {
+		t.Fatal(err)
+	}
+	build := host.Build
+	host.Build = func(id string, resume bool) (*NativeRuntime, error) {
+		r, err := build(id, resume)
+		if err == nil {
+			r.Factory.Presets = registry
+		}
+		return r, err
+	}
 	options := assembly.NativeSessionOptions{Meta: &assembly.NativeSessionMeta{AgentPreset: &preset}, Seed: []sessionformat.Event{}}
 	runtime, err := host.ActivateWithSessionOptions(t.Context(), "programmatic-host", options, func(ctx context.Context, live *assembly.NativeLive) error {
 		preset = "late-caller-change"

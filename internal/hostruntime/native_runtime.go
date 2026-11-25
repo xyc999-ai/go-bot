@@ -1103,6 +1103,14 @@ func (r *NativeRuntime) SpawnChildAt(ctx context.Context, parentID, label, promp
 	return children.SpawnChildAt(ctx, parentID, label, prompt, cwd, fork)
 }
 
+func (r *NativeRuntime) SpawnChildWithPreset(ctx context.Context, parentID, label, prompt, cwd, preset string, fork bool) (string, error) {
+	children, err := r.childCoordinator()
+	if err != nil {
+		return "", err
+	}
+	return children.SpawnChildWithPreset(ctx, parentID, label, prompt, cwd, preset, fork)
+}
+
 func (r *NativeRuntime) RunWorkflowChild(ctx context.Context, parentID, prompt string, options workflow.AgentOptions) (workflow.AgentResult, error) {
 	return r.RunWorkflowChildObserved(ctx, parentID, prompt, options, nil)
 }

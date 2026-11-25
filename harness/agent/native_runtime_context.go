@@ -10,8 +10,9 @@ import (
 )
 
 type RuntimeContextSection struct {
-	Name string `json:"name"`
-	Text string `json:"text"`
+	Name   string `json:"name"`
+	Text   string `json:"text"`
+	Source string `json:"source,omitempty"`
 }
 
 // SetSystemContextSource supplies dynamic system sections at each model step.

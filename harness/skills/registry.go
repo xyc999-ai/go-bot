@@ -57,15 +57,17 @@ type Registry struct {
 	Providers  func(context.Context, Lookup) ([]Provider, error)
 	// Visible is an optional Agent composition view, applied equally by
 	// catalog discovery and Find. It does not change installed skills.
-	Visible func(Lookup, string) bool
+	Visible          func(Lookup, string) bool
+	VisibleCandidate func(Lookup, Candidate) bool
 }
 
 // Provider supplements filesystem discovery. Candidates retain the selected
 // provider's loader; a later same-name registration cannot replace that loader.
 type Provider struct {
-	Name string
-	List func(context.Context, Lookup) (ProviderSnapshot, error)
-	Load func(context.Context, Lookup, ProviderEntry) (Loaded, error)
+	Name   string
+	Source string
+	List   func(context.Context, Lookup) (ProviderSnapshot, error)
+	Load   func(context.Context, Lookup, ProviderEntry) (Loaded, error)
 }
 
 type ProviderEntry struct {
@@ -110,15 +112,26 @@ type Loaded struct {
 
 type Candidate struct {
 	Summary
-	source       skillRoot
-	root         string
-	path         string
-	base         string
-	loader       func(context.Context) (Loaded, error)
-	rank         float64
-	priority     int
-	presentation *CatalogSkill
-	providerName string
+	source         skillRoot
+	root           string
+	path           string
+	base           string
+	loader         func(context.Context) (Loaded, error)
+	rank           float64
+	priority       int
+	presentation   *CatalogSkill
+	providerName   string
+	providerSource string
+}
+
+func (c Candidate) ContributionSource() string {
+	if c.providerName != "" {
+		if c.providerSource != "" {
+			return c.providerSource
+		}
+		return "builtin:skill-provider:" + c.providerName
+	}
+	return "builtin:filesystem-skills"
 }
 
 type Snapshot struct {
@@ -217,12 +230,12 @@ func (r *Registry) Snapshot(ctx context.Context, lookup Lookup) (Snapshot, error
 				if prior, exists := winners[entry.Name]; exists && (prior.priority > entry.Priority || (prior.priority == entry.Priority && prior.rank <= entry.Rank)) {
 					continue
 				}
-				winners[entry.Name] = Candidate{Summary: entry.Summary, rank: entry.Rank, priority: entry.Priority, presentation: entry.Presentation, providerName: provider.Name, loader: func(ctx context.Context) (Loaded, error) { return provider.Load(ctx, lookup, entry) }}
+				winners[entry.Name] = Candidate{Summary: entry.Summary, rank: entry.Rank, priority: entry.Priority, presentation: entry.Presentation, providerName: provider.Name, providerSource: provider.Source, loader: func(ctx context.Context) (Loaded, error) { return provider.Load(ctx, lookup, entry) }}
 			}
 		}
 	}
 	for _, entry := range winners {
-		if r.Visible == nil || r.Visible(lookup, entry.Name) {
+		if (r.Visible == nil || r.Visible(lookup, entry.Name)) && (r.VisibleCandidate == nil || r.VisibleCandidate(lookup, entry)) {
 			snapshot.Entries = append(snapshot.Entries, entry)
 		}
 	}

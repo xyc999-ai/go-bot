@@ -108,10 +108,10 @@ func (s *Scope) Context(_ context.Context, _ string) ([]agent.RuntimeContextSect
 	for _, view := range views {
 		names = append(names, view.name)
 	}
-	sections = append(sections, agent.RuntimeContextSection{Name: "mcp:servers", Text: "Configured MCP servers: " + strings.Join(names, ", ") + ". MCP resource tools require an explicit server name."})
+	sections = append(sections, agent.RuntimeContextSection{Name: "mcp:servers", Source: "builtin:mcp", Text: "Configured MCP servers: " + strings.Join(names, ", ") + ". MCP resource tools require an explicit server name."})
 	for _, view := range views {
 		if view.discovery.Instructions != "" {
-			sections = append(sections, agent.RuntimeContextSection{Name: "mcp:" + view.name + ":instructions", Text: "MCP server " + view.name + " instructions (literal text):\n" + view.discovery.Instructions})
+			sections = append(sections, agent.RuntimeContextSection{Name: "mcp:" + view.name + ":instructions", Source: "mcp:" + view.name, Text: "MCP server " + view.name + " instructions (literal text):\n" + view.discovery.Instructions})
 		}
 		if view.loading != "on-demand" || len(view.tools) == 0 {
 			continue
@@ -137,7 +137,7 @@ func (s *Scope) Context(_ context.Context, _ string) ([]agent.RuntimeContextSect
 			catalog = append(catalog, line)
 		}
 		lines = append(lines, strings.Join(catalog, "\n"))
-		sections = append(sections, agent.RuntimeContextSection{Name: "mcp:" + view.name + ":catalog", Text: strings.Join(lines, "\n\n")})
+		sections = append(sections, agent.RuntimeContextSection{Name: "mcp:" + view.name + ":catalog", Source: "mcp:" + view.name, Text: strings.Join(lines, "\n\n")})
 	}
 	return sections, nil
 }
@@ -178,6 +178,8 @@ type loaderTool struct {
 	scope *Scope
 	view  serverView
 }
+
+func (t *loaderTool) ContributionSource() string { return "mcp:" + t.view.name }
 
 func (t *loaderTool) Spec() agent.ToolSpec {
 	return agent.ToolSpec{Name: PublicToolName(t.view.name, "load_tools"), Description: fmt.Sprintf("Add tools from MCP server %s to your tool list. The system prompt lists them under \"On-demand tools from MCP server %s\".", t.view.name, t.view.name), Parameters: json.RawMessage(`{"type":"object","properties":{"tools":{"type":"array","items":{"type":"string"},"minItems":1}},"required":["tools"],"additionalProperties":false}`)}

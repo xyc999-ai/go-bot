@@ -114,10 +114,17 @@ func (m *nativeChildManager) SpawnChild(ctx context.Context, parentID, label, pr
 }
 
 func (m *nativeChildManager) SpawnChildAt(ctx context.Context, parentID, label, prompt, cwd string, fork bool) (string, error) {
-	return m.spawnChildAt(ctx, parentID, label, prompt, cwd, fork)
+	return m.spawnChildAt(ctx, parentID, label, prompt, cwd, "", fork)
 }
 
-func (m *nativeChildManager) spawnChildAt(ctx context.Context, parentID, label, prompt, cwd string, fork bool) (string, error) {
+func (m *nativeChildManager) SpawnChildWithPreset(ctx context.Context, parentID, label, prompt, cwd, preset string, fork bool) (string, error) {
+	if fork && preset != "" {
+		return "", errors.New("fork cannot choose an independent Agent Preset")
+	}
+	return m.spawnChildAt(ctx, parentID, label, prompt, cwd, preset, fork)
+}
+
+func (m *nativeChildManager) spawnChildAt(ctx context.Context, parentID, label, prompt, cwd, preset string, fork bool) (string, error) {
 	childFactory := m.factory
 	m.mu.Lock()
 	if m.closed || len(m.children)+m.creating >= maxNativeChildren {
@@ -149,7 +156,7 @@ func (m *nativeChildManager) spawnChildAt(ctx context.Context, parentID, label, 
 	if fork {
 		child, err = childFactory.ForkChildAt(ctx, m.identity, parent, id, label, cwd)
 	} else {
-		child, err = childFactory.ActivateChildAt(ctx, m.identity, parent, id, label, cwd)
+		child, err = childFactory.ActivateChildWithPresetAt(ctx, m.identity, parent, id, label, cwd, preset)
 	}
 	if err != nil {
 		return "", err

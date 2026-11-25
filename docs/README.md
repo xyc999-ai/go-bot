@@ -28,12 +28,13 @@ commands, use the guides above.
 | [Controller and Redis](redis-multi-host-controller-plan.zh-CN.md) | Account data, multiple Hosts and synchronous lifecycle requests |
 | [Container distribution](container-release-plan.zh-CN.md) | Separate GHCR images, installer and Docker/ECI startup boundaries |
 | [Main chat and first run](main-chat-and-first-run-plan.zh-CN.md) | Main Session, greeting, model checks and default plugins |
-| [Agent Preset proposal](agent-preset-go-plan.zh-CN.md) | Proposed Go registry and bindings; full subsystem not yet implemented |
+| [Agent Presets](agent-preset-go-plan.zh-CN.md) | Implemented Go registry, immutable bindings and per-Agent capability composition |
 | [Models and sessions](model-settings-and-session-routing-plan.zh-CN.md) | Endpoint settings and per-session model selection |
 | [Model protocols](anthropic-model-protocol-plan.zh-CN.md) | OpenAI/Anthropic adapters and protocol selection |
 | [Long-term memory](hermes-agent-memory-design.zh-CN.md) | Memory files, prompt integration and SQLite FTS5 recall |
 | [Schedules and workspaces](schedule-parity-plan.zh-CN.md) | Delivery, working directories and archival |
 | [Proactive assistance](proactive-discovery-plan.zh-CN.md) | Background context, wake decisions and main-chat delivery |
+| [Proactive experience evaluation](proactive-service-real-world-test-plan.zh-CN.md) | Planned week-long multi-session history and real-model observation from the user's perspective |
 | [Permissions and approvals](permission-parity-plan.zh-CN.md) | Per-session execution permissions and human approval |
 | [Host event stream](host-event-stream-plan.zh-CN.md) | Shared client stream and in-chat questions/approvals |
 | [Business plugin system](host-bridge-plugin-system-plan.zh-CN.md) | Cordis, asynchronous Host Bridge and Go core services |

@@ -170,7 +170,7 @@ func (b *backgroundService) prepare(ctx context.Context, state proactive.State) 
 		return errors.New("background_assembly_unavailable")
 	}
 	factory, identity := runtime.Factory, runtime.Identity
-	identity.AgentPreset, factory.Composition = proactive.PresetID, proactive.Composition()
+	identity.AgentPreset = proactive.PresetID
 	factory.ResolveTurnModel = func(context.Context) (agent.TurnModel, error) { return b.models.backgroundRoute(state.MainSessionID) }
 	factory.Children = nil
 	factory.MemoryChanged = nil // own research does not wake itself recursively
@@ -183,8 +183,8 @@ func (b *backgroundService) prepare(ctx context.Context, state proactive.State) 
 		}
 		return b.withRetainedDecision(), nil
 	}
-	extra := factory.ToolSource
-	factory.ToolSource = func(ctx context.Context, sid string) ([]agent.Tool, error) {
+	extra := factory.LocalToolSource
+	factory.LocalToolSource = func(ctx context.Context, sid string) ([]agent.Tool, error) {
 		var rows []agent.Tool
 		if extra != nil {
 			var err error
