@@ -199,3 +199,39 @@ func FoldSubagentDescriptor(events []Event) (*SubagentDescriptor, error) {
 	}
 	return nil, nil
 }
+
+type childCatalogState struct {
+	inherited uint64
+	entries   []SubagentCatalogEntry
+}
+
+var childCatalogDefinition = ProjectionDefinition[childCatalogState]{Key: "subagentCatalog", Version: 1,
+	Init: func(_ Header, inherited uint64) childCatalogState {
+		return childCatalogState{inherited: inherited, entries: []SubagentCatalogEntry{}}
+	},
+	Apply: func(s childCatalogState, e Event) (childCatalogState, error) {
+		if e.Type != "subagent/catalog" || e.Seq < s.inherited {
+			return s, nil
+		}
+		entry, err := DecodeSubagentCatalog(e.Data)
+		if err != nil {
+			return s, err
+		}
+		s.entries = append(s.entries, entry)
+		return s, nil
+	},
+}
+
+func (s *LiveSession) Children(cut ProjectionCut) ([]SubagentCatalogEntry, error) {
+	return ReadProjection(ProjectionHandle[childCatalogState]{s, &childCatalogDefinition}, cut, func(state childCatalogState) []SubagentCatalogEntry {
+		out := make([]SubagentCatalogEntry, len(state.entries))
+		for i, entry := range state.entries {
+			out[i] = entry
+			if entry.Label != nil {
+				label := *entry.Label
+				out[i].Label = &label
+			}
+		}
+		return out
+	})
+}

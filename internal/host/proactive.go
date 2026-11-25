@@ -126,6 +126,16 @@ func (b *backgroundService) artifact(ctx context.Context, state proactive.State)
 }
 
 func (b *backgroundService) recover(ctx context.Context, state proactive.State) (*proactive.Completed, error) {
+	if b.live != nil {
+		result, found, err := proactive.SessionResult(b.live.Session, 0)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, nil
+		}
+		return &result, nil
+	}
 	artifact, err := b.artifact(ctx, state)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -141,6 +151,16 @@ func (b *backgroundService) recover(ctx context.Context, state proactive.State) 
 }
 
 func (b *backgroundService) readResult(ctx context.Context, state proactive.State, turn uint64) (proactive.Completed, error) {
+	if b.live != nil {
+		result, found, err := proactive.SessionResult(b.live.Session, turn)
+		if err != nil {
+			return result, err
+		}
+		if !found {
+			return result, errors.New("background_result_unavailable")
+		}
+		return result, nil
+	}
 	artifact, err := b.artifact(ctx, state)
 	if err != nil {
 		return proactive.Completed{}, errors.New("background_history_unavailable")
@@ -210,6 +230,9 @@ func (b *backgroundService) prepare(ctx context.Context, state proactive.State) 
 	}
 	if err != nil {
 		return errors.New("background_session_unavailable")
+	}
+	if err := proactive.RegisterResultProjection(b.live.Session); err != nil {
+		return err
 	}
 	// This is the existing clock composition. The periodic interval remains
 	// unchanged; Execute samples one extra standard snapshot before each run.
@@ -364,11 +387,14 @@ func (b *backgroundService) execute(ctx context.Context, state proactive.State, 
 	if _, captured := b.output.Captured(); !ran || !captured {
 		return proactive.Completed{}, errors.New("background_result_missing")
 	}
-	results := proactive.CommittedResults(b.live.Session.DurableEvents())
-	if len(results) == 0 || results[len(results)-1].Turn <= state.ResultTurn {
+	result, found, projectionErr := proactive.SessionResult(b.live.Session, 0)
+	if projectionErr != nil {
+		return proactive.Completed{}, projectionErr
+	}
+	if !found || result.Turn <= state.ResultTurn {
 		return proactive.Completed{}, errors.New("background_result_missing")
 	}
-	return results[len(results)-1], nil
+	return result, nil
 }
 
 func (b *backgroundService) deliver(ctx context.Context, state proactive.State, completed proactive.Completed, id string) error {

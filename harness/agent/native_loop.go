@@ -1,11 +1,14 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +63,7 @@ type NativeLoop struct {
 	contextHeadroomTokens     int
 	pressureMeter             *nativePressureMeter
 	requestLogged             bool
+	modelProjection           map[uint64]nativeModelCacheEntry
 	retryPolicy               nativeRetryPolicy
 	filePath                  NativeFilePathResolver
 	goalClaim                 func(json.RawMessage, sessionformat.InboxState) (bool, error)
@@ -537,7 +541,7 @@ func (a *NativeLoop) runClaimed(ctx context.Context, releaseAdmission func()) (a
 	}
 	defer releaseClaim()
 	a.modelCalls = 0
-	turn := nextNativeTurn(a.session.Events())
+	turn := a.session.TurnBoundary(sessionformat.LiveCut).LastTurn + 1
 	if _, err = a.append("turn/start", map[string]any{"turn": turn}, nil, nil); err != nil {
 		return "", err
 	}
@@ -557,7 +561,7 @@ func (a *NativeLoop) runClaimed(ctx context.Context, releaseAdmission func()) (a
 		}
 		settle := context.Background()
 		if stepOpen {
-			_, closeErr := a.append("step/end", map[string]any{"turn": turn, "step": currentNativeStep(a.session.Events(), turn)}, nil, nil)
+			_, closeErr := a.append("step/end", map[string]any{"turn": turn, "step": a.session.TurnBoundary(sessionformat.LiveCut).Step}, nil, nil)
 			err = errors.Join(err, closeErr)
 		}
 		reason := map[string]any{"kind": "completed"}
@@ -681,7 +685,7 @@ func (a *NativeLoop) runClaimed(ctx context.Context, releaseAdmission func()) (a
 		if err != nil {
 			return "", err
 		}
-		messages, projectionErr := nativeModelMessages(a.session, a.filePath)
+		messages, projectionErr := a.modelMessages()
 		if projectionErr != nil {
 			return "", projectionErr
 		}
@@ -830,7 +834,7 @@ func (a *NativeLoop) ensureSystem(ctx context.Context, turn uint64, step int) er
 	if assemblyErr != nil {
 		return assemblyErr
 	}
-	surface, err := a.session.Surface()
+	surface, err := a.session.ModelSurface()
 	if err != nil {
 		return err
 	}
@@ -839,15 +843,14 @@ func (a *NativeLoop) ensureSystem(ctx context.Context, turn uint64, step int) er
 	operation := json.RawMessage(`"append"`)
 	var sources []uint64
 	if len(surface.Nodes) > 0 {
-		events := a.session.Events()
 		head := surface.Nodes[0]
-		if events[head].Type == "system/message" {
+		if surface.NodeTypes[head] == "system/message" {
 			var existing struct {
 				Message struct {
 					Content []struct{ Type, Text string } `json:"content"`
 				} `json:"message"`
 			}
-			if json.Unmarshal(events[head].Data, &existing) != nil {
+			if json.Unmarshal(surface.NodeMessages[head], &existing.Message) != nil {
 				return errors.New("invalid prior system message")
 			}
 			prior := ""
@@ -877,11 +880,8 @@ func (a *NativeLoop) logRequest(turn uint64, step int) error {
 		return err
 	}
 	reason := "initial"
-	for _, event := range a.session.Events() {
-		if event.Type == "request/header" {
-			reason = "resume"
-			break
-		}
+	if a.session.HasRequestHeader() {
+		reason = "resume"
 	}
 	if _, err := a.append("request/header", map[string]any{"header": header, "reason": reason}, nil, nil); err != nil {
 		return err
@@ -1207,7 +1207,7 @@ func (a *NativeLoop) logToolResult(turn uint64, step int, callSeq uint64, result
 }
 
 func latestToolQuestion(s *sessionformat.LiveSession) string {
-	surface, err := s.Surface()
+	surface, err := s.ModelSurface()
 	if err != nil {
 		return ""
 	}
@@ -1232,25 +1232,35 @@ func latestToolQuestion(s *sessionformat.LiveSession) string {
 }
 
 func nativeModelMessages(s *sessionformat.LiveSession, resolveFile NativeFilePathResolver) ([]Message, error) {
-	surface, err := s.Surface()
+	return nativeModelMessagesCached(s, resolveFile, nil)
+}
+
+type nativeModelCacheEntry struct {
+	raw     json.RawMessage
+	message Message
+}
+
+func (a *NativeLoop) modelMessages() ([]Message, error) {
+	if a.modelProjection == nil {
+		a.modelProjection = make(map[uint64]nativeModelCacheEntry)
+	}
+	return nativeModelMessagesCached(a.session, a.filePath, a.modelProjection)
+}
+func nativeModelMessagesCached(s *sessionformat.LiveSession, resolveFile NativeFilePathResolver, cache map[uint64]nativeModelCacheEntry) ([]Message, error) {
+	surface, err := s.ModelSurface()
 	if err != nil {
 		return nil, err
 	}
-	toolNames := make(map[string]string)
-	for _, event := range s.Events() {
-		if event.Type != "tool/call" {
+
+	messages := make([]Message, 0, len(surface.Messages))
+	retained := make(map[uint64]bool, len(surface.MessageSeqs))
+	for index, raw := range surface.Messages {
+		seq := surface.MessageSeqs[index]
+		retained[seq] = true
+		if cached, ok := cache[seq]; ok && bytes.Equal(cached.raw, raw) && (cached.message.Role != "tool" || cached.message.ToolName == s.ToolCallName(cached.message.ToolCallID)) {
+			messages = append(messages, cloneNativeModelMessage(cached.message))
 			continue
 		}
-		var data struct {
-			CallID string `json:"callId"`
-			Name   string `json:"name"`
-		}
-		if json.Unmarshal(event.Data, &data) == nil {
-			toolNames[data.CallID] = data.Name
-		}
-	}
-	messages := make([]Message, 0, len(surface.Messages))
-	for _, raw := range surface.Messages {
 		var value struct {
 			ProviderReplay *modeldata.ProviderReplay `json:"providerReplay"`
 			IsError        bool                      `json:"isError"`
@@ -1342,12 +1352,39 @@ func nativeModelMessages(s *sessionformat.LiveSession, resolveFile NativeFilePat
 		message.ContentBlocksComplete = true
 		message.OrderedAssistantBlocks = assistantOrder
 		if value.Role == "tool" {
-			message.ToolName = toolNames[value.ToolCallID]
+			message.ToolName = s.ToolCallName(value.ToolCallID)
 			if message.ToolName == "" {
 				return nil, fmt.Errorf("tool result %q has no prior call", value.ToolCallID)
 			}
 		}
+		if cache != nil {
+			cache[seq] = nativeModelCacheEntry{append(json.RawMessage(nil), raw...), cloneNativeModelMessage(message)}
+		}
 		messages = append(messages, message)
 	}
+	for seq := range cache {
+		if !retained[seq] {
+			delete(cache, seq)
+		}
+	}
 	return messages, nil
+}
+func cloneNativeModelMessage(message Message) Message {
+	message.ContentBlocks = agentcontent.CloneContentBlocks(message.ContentBlocks)
+	message.OrderedAssistantBlocks = slices.Clone(message.OrderedAssistantBlocks)
+	message.ToolCalls = slices.Clone(message.ToolCalls)
+	if message.Source != nil {
+		source := *message.Source
+		message.Source = &source
+	}
+	if message.ProviderReplay != nil {
+		replay := *message.ProviderReplay
+		replay.Content = make([]json.RawMessage, len(message.ProviderReplay.Content))
+		for i, raw := range message.ProviderReplay.Content {
+			replay.Content[i] = slices.Clone(raw)
+		}
+		message.ProviderReplay = &replay
+	}
+	message.OffloadedImageIndexes = maps.Clone(message.OffloadedImageIndexes)
+	return message
 }

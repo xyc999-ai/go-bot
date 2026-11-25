@@ -35,7 +35,7 @@ func NewNative(s *sessionformat.LiveSession) (*NativeService, error) {
 	if s == nil {
 		return nil, errors.New("goal requires a live Session v4")
 	}
-	if _, err := sessionformat.FoldGoal(s.Events()); err != nil {
+	if _, err := s.Goal(); err != nil {
 		return nil, err
 	}
 	return &NativeService{session: s, activation: "disarmed"}, nil
@@ -48,7 +48,7 @@ func (s *NativeService) Get() (NativeView, bool, error) {
 }
 
 func (s *NativeService) getLocked() (NativeView, bool, error) {
-	state, err := sessionformat.FoldGoal(s.session.Events())
+	state, err := s.session.Goal()
 	if err != nil || state.Goal == nil {
 		return NativeView{}, false, err
 	}

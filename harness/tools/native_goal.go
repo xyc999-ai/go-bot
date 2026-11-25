@@ -46,47 +46,14 @@ func nativeGoalExecution(ctx context.Context, session *sessionformat.LiveSession
 	if !ok || session == nil {
 		return false, nil, nil, errors.New("goal tool requires an active native Agent turn")
 	}
-	events := session.Events()
-	start := -1
-	for index, event := range events {
-		if event.Type != "turn/start" {
-			continue
-		}
-		var data struct {
-			Turn uint64 `json:"turn"`
-		}
-		if json.Unmarshal(event.Data, &data) == nil && data.Turn == turn {
-			start = index
-		}
-	}
-	if start < 0 {
+	boundary := session.TurnBoundary(sessionformat.LiveCut)
+	if !boundary.Open || boundary.Turn != turn {
 		return false, nil, nil, errors.New("goal tool requires a durable open turn")
 	}
-	for _, event := range events[start+1:] {
-		if event.Type == "turn/end" {
-			return false, nil, nil, errors.New("goal tool requires a durable open turn")
-		}
-		if event.Type != "user/message" {
-			continue
-		}
-		var data struct {
-			Source struct {
-				Kind     string `json:"kind"`
-				GoalID   string `json:"goalId"`
-				Revision uint64 `json:"revision"`
-				Round    uint64 `json:"round"`
-			} `json:"source"`
-		}
-		if err := json.Unmarshal(event.Data, &data); err != nil {
-			return false, nil, nil, err
-		}
-		if data.Source.Kind == "user" && session.Header().Origin != "subagent" {
-			directHuman = true
-		}
-		if data.Source.Kind == "goal" {
-			sources = append(sources, sessionformat.GoalRef{ID: data.Source.GoalID, Revision: data.Source.Revision})
-			rounds = append(rounds, data.Source.Round)
-		}
+	directHuman = boundary.DirectHuman && session.Header().Origin != "subagent"
+	for _, source := range boundary.GoalRounds {
+		sources = append(sources, source.GoalRef)
+		rounds = append(rounds, source.Round)
 	}
 	return directHuman, sources, rounds, nil
 }

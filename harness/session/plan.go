@@ -51,56 +51,85 @@ func planCommandSelection(data map[string]json.RawMessage) (id string, wanted bo
 // FoldPlan mirrors the current DeepSeek plan projection. A standalone mode
 // event is log-only and whole-value replacing; request/header captures the
 // mode last exposed to the model for later change narration.
-func FoldPlan(events []Event) (PlanProjection, error) {
-	var state PlanProjection
-	var runningID string
-	var runningWanted bool
-	for _, event := range events {
-		switch event.Type {
-		case "plan/mode":
-			active, err := DecodePlanMode(event.Data)
-			if err != nil {
-				return PlanProjection{}, fmt.Errorf("plan/mode at seq %d: %w", event.Seq, err)
-			}
-			state.Active, state.Wanted = active, nil
-		case "command/run":
-			data, err := objectValue(event.Data)
-			if err != nil {
-				return PlanProjection{}, fmt.Errorf("command/run at seq %d: %w", event.Seq, err)
-			}
-			id, wanted, applies, err := planCommandSelection(data)
-			if err != nil {
-				return PlanProjection{}, fmt.Errorf("command/run at seq %d: %w", event.Seq, err)
-			}
-			if applies {
-				runningID, runningWanted = id, wanted
-			}
-		case "command/done":
-			data, err := objectValue(event.Data)
-			if err != nil {
-				return PlanProjection{}, fmt.Errorf("command/done at seq %d: %w", event.Seq, err)
-			}
-			var id string
-			if json.Unmarshal(data["commandId"], &id) == nil && runningID != "" && id == runningID {
-				if bytes.Equal(data["kind"], []byte(`"success"`)) && runningWanted != state.Active {
-					selected := runningWanted
-					state.Wanted = &selected
-				} else {
-					state.Wanted = nil
-				}
-				runningID = ""
-			}
-		case "request/header":
-			active := state.Active
-			state.ActiveAtLastHeader = &active
+type planFoldState struct {
+	PlanProjection
+	runningID     string
+	runningWanted bool
+}
+
+func nextPlan(state planFoldState, event Event) (planFoldState, error) {
+	switch event.Type {
+	case "plan/mode":
+		active, err := DecodePlanMode(event.Data)
+		if err != nil {
+			return planFoldState{}, fmt.Errorf("plan/mode at seq %d: %w", event.Seq, err)
 		}
+		state.Active, state.Wanted = active, nil
+	case "command/run":
+		data, err := objectValue(event.Data)
+		if err != nil {
+			return planFoldState{}, fmt.Errorf("command/run at seq %d: %w", event.Seq, err)
+		}
+		id, wanted, applies, err := planCommandSelection(data)
+		if err != nil {
+			return planFoldState{}, fmt.Errorf("command/run at seq %d: %w", event.Seq, err)
+		}
+		if applies {
+			state.runningID, state.runningWanted = id, wanted
+		}
+	case "command/done":
+		data, err := objectValue(event.Data)
+		if err != nil {
+			return planFoldState{}, fmt.Errorf("command/done at seq %d: %w", event.Seq, err)
+		}
+		var id string
+		if json.Unmarshal(data["commandId"], &id) == nil && state.runningID != "" && id == state.runningID {
+			if bytes.Equal(data["kind"], []byte(`"success"`)) && state.runningWanted != state.Active {
+				selected := state.runningWanted
+				state.Wanted = &selected
+			} else {
+				state.Wanted = nil
+			}
+			state.runningID = ""
+		}
+	case "request/header":
+		active := state.Active
+		state.ActiveAtLastHeader = &active
 	}
-	target := state.Wanted
-	if runningID != "" {
-		wanted := runningWanted
+	return state, nil
+}
+func planView(state planFoldState) PlanProjection {
+	view := state.PlanProjection
+	target := view.Wanted
+	if state.runningID != "" {
+		wanted := state.runningWanted
 		target = &wanted
 	}
-	state.Pending = target != nil && *target != state.Active
-	state.Wanted = target
-	return state, nil
+	view.Pending = target != nil && *target != view.Active
+	if target != nil {
+		v := *target
+		view.Wanted = &v
+	}
+	if view.ActiveAtLastHeader != nil {
+		v := *view.ActiveAtLastHeader
+		view.ActiveAtLastHeader = &v
+	}
+	return view
+}
+func FoldPlan(events []Event) (PlanProjection, error) {
+	var state planFoldState
+	for _, event := range events {
+		var err error
+		state, err = nextPlan(state, event)
+		if err != nil {
+			return PlanProjection{}, err
+		}
+	}
+	return planView(state), nil
+}
+
+var planDefinition = ProjectionDefinition[planFoldState]{Key: "plan", Version: 1, Init: func(Header, uint64) planFoldState { return planFoldState{} }, Apply: nextPlan}
+
+func (s *LiveSession) Plan() (PlanProjection, error) {
+	return ReadProjection(ProjectionHandle[planFoldState]{s, &planDefinition}, LiveCut, planView)
 }

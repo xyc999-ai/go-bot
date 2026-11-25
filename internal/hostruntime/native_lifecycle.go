@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"go-bot/harness/assembly"
+	"go-bot/harness/interaction"
 	"go-bot/harness/session"
 )
 
@@ -154,4 +155,45 @@ func (h *NativeHost) finishOperation(id string, operation *hostSessionOperation,
 	delete(h.operations, id)
 	close(operation.done)
 	h.mu.Unlock()
+}
+
+// SessionHistoryWindow observes the real fsync cut, including unpublished live
+// owners, and uses explicit indexed storage only when no live owner exists.
+func (h *NativeHost) SessionHistoryWindow(ctx context.Context, id string, request sessionformat.HistoryRequest) (value sessionformat.HistoryWindow, err error) {
+	err = h.WithSessionHistory(ctx, id, func() error {
+		if live := h.sessionHistory(id); live != nil {
+			var readErr error
+			value, readErr = live.HistoryWindow(ctx, request)
+			return readErr
+		}
+		if h.ReadHistory != nil {
+			var readErr error
+			value, readErr = h.ReadHistory(ctx, id, request)
+			return readErr
+		}
+		if h.ReadSession == nil {
+			return errors.New("Session history storage is unavailable")
+		}
+		artifact, readErr := h.ReadSession(ctx, id)
+		if readErr != nil {
+			return readErr
+		}
+		value, readErr = sessionformat.HistoryFromArtifact(ctx, artifact, request, func(s *sessionformat.LiveSession) error {
+			_, err := interaction.RegisterQuestionProjection(s)
+			return err
+		})
+		return readErr
+	})
+	return value, err
+}
+
+// DurableSessionPage reads an active owner's bounded prefix without reacquiring
+// a lifecycle gate already held by history consumers.
+func (h *NativeHost) DurableSessionPage(ctx context.Context, id string, request sessionformat.HistoryRequest) (sessionformat.HistoryWindow, bool, error) {
+	live := h.sessionHistory(id)
+	if live == nil {
+		return sessionformat.HistoryWindow{}, false, nil
+	}
+	value, err := live.HistoryWindow(ctx, request)
+	return value, true, err
 }

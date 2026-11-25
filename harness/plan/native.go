@@ -22,7 +22,7 @@ func NewNative(record *sessionformat.LiveSession) (*NativeService, error) {
 	if record == nil {
 		return nil, errors.New("plan mode requires a live Session v4")
 	}
-	if _, err := sessionformat.FoldPlan(record.Events()); err != nil {
+	if _, err := record.Plan(); err != nil {
 		return nil, err
 	}
 	return &NativeService{session: record}, nil
@@ -31,7 +31,7 @@ func NewNative(record *sessionformat.LiveSession) (*NativeService, error) {
 func (s *NativeService) View() (View, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	state, err := sessionformat.FoldPlan(s.session.Events())
+	state, err := s.session.Plan()
 	if err != nil {
 		return View{}, err
 	}
@@ -49,7 +49,7 @@ func (s *NativeService) View() (View, error) {
 func (s *NativeService) Queue(active bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	state, err := sessionformat.FoldPlan(s.session.Events())
+	state, err := s.session.Plan()
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (s *NativeService) ApplyPending(ctx context.Context) error {
 }
 
 func (s *NativeService) appendLocked(ctx context.Context, active bool) error {
-	state, err := sessionformat.FoldPlan(s.session.Events())
+	state, err := s.session.Plan()
 	if err != nil {
 		return err
 	}

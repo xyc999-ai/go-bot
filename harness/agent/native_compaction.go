@@ -88,10 +88,14 @@ func selectNativeCompactRange(surface sessionformat.Surface, events []sessionfor
 	balanced[0] = true
 	openCalls := 0
 	for index, seq := range nodes {
-		if seq >= uint64(len(events)) {
+		if surface.NodeTypes == nil && seq >= uint64(len(events)) {
 			return nil, errors.New("native compaction surface names a missing event")
 		}
-		switch events[seq].Type {
+		kind := surface.NodeTypes[seq]
+		if surface.NodeTypes == nil {
+			kind = events[seq].Type
+		}
+		switch kind {
 		case "assistant/message":
 			var data struct {
 				Message struct {
@@ -100,7 +104,15 @@ func selectNativeCompactRange(surface sessionformat.Surface, events []sessionfor
 					} `json:"content"`
 				} `json:"message"`
 			}
-			if err := json.Unmarshal(events[seq].Data, &data); err != nil {
+			raw := surface.NodeMessages[seq]
+			if surface.NodeMessages == nil {
+				var wrapped struct{ Message json.RawMessage }
+				if err := json.Unmarshal(events[seq].Data, &wrapped); err != nil {
+					return nil, err
+				}
+				raw = wrapped.Message
+			}
+			if err := json.Unmarshal(raw, &data.Message); err != nil {
 				return nil, err
 			}
 			for _, block := range data.Message.Content {
@@ -117,7 +129,11 @@ func selectNativeCompactRange(surface sessionformat.Surface, events []sessionfor
 		balanced[index+1] = openCalls == 0
 	}
 	first := 0
-	if events[nodes[0]].Type == "system/message" {
+	headType := surface.NodeTypes[nodes[0]]
+	if surface.NodeTypes == nil {
+		headType = events[nodes[0]].Type
+	}
+	if headType == "system/message" {
 		first = 1
 	}
 	accumulated, keepFrom := 0, len(nodes)
@@ -225,12 +241,12 @@ func (a *NativeLoop) compactNativeWithCommand(ctx context.Context, turn uint64, 
 		return data
 	}
 	a.mu.Lock()
-	surface, err := a.session.Surface()
+	surface, err := a.session.ModelSurface()
 	if err != nil {
 		a.mu.Unlock()
 		return false, err
 	}
-	selection, err := selectNativeCompactRange(surface, a.session.Events(), retainTokens, a.filePath)
+	selection, err := selectNativeCompactRange(surface, nil, retainTokens, a.filePath)
 	if err != nil || selection == nil {
 		a.mu.Unlock()
 		return false, err
@@ -281,7 +297,7 @@ func (a *NativeLoop) compactNativeWithCommand(ctx context.Context, turn uint64, 
 		if !changed {
 			break
 		}
-		current, surfaceErr := a.session.Surface()
+		current, surfaceErr := a.session.ModelSurface()
 		if surfaceErr != nil || !nativeCompactSpanStable(current.Nodes, selection) {
 			fatalErr = errors.Join(surfaceErr, errors.New("native summary region changed after image offload"))
 			summarizeErr = errors.Join(summarizeErr, surfaceErr, errors.New("native summary region changed after image offload"))
@@ -339,7 +355,7 @@ func (a *NativeLoop) compactNativeWithCommand(ctx context.Context, turn uint64, 
 		return false, errors.Join(cause, endErr, flushErr)
 	}
 	if summarizeErr == nil {
-		current, surfaceErr := a.session.Surface()
+		current, surfaceErr := a.session.ModelSurface()
 		if surfaceErr != nil {
 			fatalErr = surfaceErr
 			summarizeErr = surfaceErr
@@ -427,7 +443,7 @@ func nativeCompactSpanStable(nodes []uint64, selected *nativeCompactRange) bool 
 }
 
 func (a *NativeLoop) nativeSummaryMessages(surface sessionformat.Surface, selected *nativeCompactRange) ([]Message, error) {
-	all, err := nativeModelMessages(a.session, a.filePath)
+	all, err := a.modelMessages()
 	if err != nil {
 		return nil, err
 	}
@@ -439,8 +455,7 @@ func (a *NativeLoop) nativeSummaryMessages(surface sessionformat.Surface, select
 		selectedSeqs[seq] = true
 	}
 	if len(surface.Nodes) > 0 {
-		events := a.session.Events()
-		if events[surface.Nodes[0]].Type == "system/message" {
+		if surface.NodeTypes[surface.Nodes[0]] == "system/message" {
 			selectedSeqs[surface.Nodes[0]] = true
 		}
 	}

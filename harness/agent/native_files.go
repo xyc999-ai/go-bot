@@ -27,6 +27,7 @@ func (a *NativeLoop) SetFilePathResolver(resolver NativeFilePathResolver) {
 	a.runMu.Lock()
 	defer a.runMu.Unlock()
 	a.filePath = resolver
+	a.modelProjection = nil
 }
 
 func nativeFileHandleText(ref NativeFileAttachmentRef, savedPath string) string {

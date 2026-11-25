@@ -36,68 +36,82 @@ type v4Usage struct {
 // ProjectUsage folds only durable Session events. The canonical v4 artifact
 // remains the fact source; no separate meter is persisted or consulted when
 // a worker resumes.
+func nextUsage(result UsageSnapshot, event Event) (UsageSnapshot, error) {
+	var data struct {
+		Usage  json.RawMessage `json:"usage"`
+		Error  json.RawMessage `json:"error"`
+		Stream []struct {
+			Type  string `json:"type"`
+			Chunk struct {
+				Type  string          `json:"type"`
+				Usage json.RawMessage `json:"usage"`
+			} `json:"chunk"`
+		} `json:"stream"`
+	}
+	switch event.Type {
+	case "step/start":
+		result.StepsStarted++
+		return result, nil
+	case "assistant/message":
+		if isInitialWelcomeMessage(event) {
+			return result, nil
+		}
+		result.AssistantMessages++
+	case "assistant/attempt":
+		result.AssistantAttempts++
+	case "compaction/summary":
+		result.SummarySucceeded++
+	case "compaction/end":
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			return UsageSnapshot{}, fmt.Errorf("decode v4 compaction end %d: %w", event.Seq, err)
+		}
+		if len(data.Error) > 0 && string(data.Error) != "null" {
+			result.SummaryFailed++
+		}
+		return result, nil
+	default:
+		return result, nil
+	}
+	if err := json.Unmarshal(event.Data, &data); err != nil {
+		return UsageSnapshot{}, fmt.Errorf("decode v4 usage event %d: %w", event.Seq, err)
+	}
+	usage := data.Usage
+	if event.Type == "assistant/attempt" {
+		for _, item := range data.Stream {
+			if item.Type == "chunk" && item.Chunk.Type == "usage" {
+				usage = item.Chunk.Usage
+			}
+		}
+	}
+	if len(usage) == 0 || string(usage) == "null" {
+		result.UnmeteredOutcomes++
+		return result, nil
+	}
+	var sample v4Usage
+	if err := json.Unmarshal(usage, &sample); err != nil {
+		return UsageSnapshot{}, fmt.Errorf("decode v4 usage sample %d: %w", event.Seq, err)
+	}
+	if err := result.addUsage(sample); err != nil {
+		return UsageSnapshot{}, fmt.Errorf("v4 usage sample %d: %w", event.Seq, err)
+	}
+	return result, nil
+}
 func ProjectUsage(events []Event) (UsageSnapshot, error) {
 	var result UsageSnapshot
 	for _, event := range events {
-		var data struct {
-			Usage  json.RawMessage `json:"usage"`
-			Error  json.RawMessage `json:"error"`
-			Stream []struct {
-				Type  string `json:"type"`
-				Chunk struct {
-					Type  string          `json:"type"`
-					Usage json.RawMessage `json:"usage"`
-				} `json:"chunk"`
-			} `json:"stream"`
-		}
-		switch event.Type {
-		case "step/start":
-			result.StepsStarted++
-			continue
-		case "assistant/message":
-			if isInitialWelcomeMessage(event) {
-				continue
-			}
-			result.AssistantMessages++
-		case "assistant/attempt":
-			result.AssistantAttempts++
-		case "compaction/summary":
-			result.SummarySucceeded++
-		case "compaction/end":
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return UsageSnapshot{}, fmt.Errorf("decode v4 compaction end %d: %w", event.Seq, err)
-			}
-			if len(data.Error) > 0 && string(data.Error) != "null" {
-				result.SummaryFailed++
-			}
-			continue
-		default:
-			continue
-		}
-		if err := json.Unmarshal(event.Data, &data); err != nil {
-			return UsageSnapshot{}, fmt.Errorf("decode v4 usage event %d: %w", event.Seq, err)
-		}
-		usage := data.Usage
-		if event.Type == "assistant/attempt" {
-			for _, item := range data.Stream {
-				if item.Type == "chunk" && item.Chunk.Type == "usage" {
-					usage = item.Chunk.Usage
-				}
-			}
-		}
-		if len(usage) == 0 || string(usage) == "null" {
-			result.UnmeteredOutcomes++
-			continue
-		}
-		var sample v4Usage
-		if err := json.Unmarshal(usage, &sample); err != nil {
-			return UsageSnapshot{}, fmt.Errorf("decode v4 usage sample %d: %w", event.Seq, err)
-		}
-		if err := result.addUsage(sample); err != nil {
-			return UsageSnapshot{}, fmt.Errorf("v4 usage sample %d: %w", event.Seq, err)
+		var err error
+		result, err = nextUsage(result, event)
+		if err != nil {
+			return UsageSnapshot{}, err
 		}
 	}
 	return result, nil
+}
+
+var usageDefinition = ProjectionDefinition[UsageSnapshot]{Key: "usage", Version: 1, Init: func(Header, uint64) UsageSnapshot { return UsageSnapshot{} }, Apply: nextUsage}
+
+func (s *LiveSession) Usage() (UsageSnapshot, error) {
+	return ReadProjection(ProjectionHandle[UsageSnapshot]{s, &usageDefinition}, DurableCut, func(v UsageSnapshot) UsageSnapshot { return v })
 }
 
 func (s *UsageSnapshot) addUsage(usage v4Usage) error {

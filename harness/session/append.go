@@ -31,7 +31,18 @@ func (s *LiveSession) appendInputsLocked(inputs []EventInput, timestamp int64) (
 			break
 		}
 	}
-	shadow := &LiveSession{header: s.header, events: s.events, surface: &surface, inbox: s.inbox.Clone()}
+	// Only the strict Goal transition is speculative. Other domain cells are
+	// driven after the entire batch is accepted, so a rejected suffix cannot
+	// mutate their maps or publish partial state.
+	projections := make(map[string]*projectionCell, len(s.projections))
+	for key, cell := range s.projections {
+		projections[key] = cell
+	}
+	if cell := projections[goalDefinition.Key]; cell != nil {
+		copied := *cell
+		projections[goalDefinition.Key] = &copied
+	}
+	shadow := &LiveSession{projections: projections, header: s.header, events: s.events, surface: &surface, inbox: s.inbox.Clone()}
 	events := make([]Event, 0, len(inputs))
 	for _, input := range inputs {
 		event, err := shadow.appendLocked(input, timestamp)
@@ -40,6 +51,7 @@ func (s *LiveSession) appendInputsLocked(inputs []EventInput, timestamp int64) (
 		}
 		events = append(events, event)
 	}
-	s.events, s.surface, s.inbox = shadow.events, shadow.surface, shadow.inbox
+	s.events, s.surface, s.inbox, s.projections = shadow.events, shadow.surface, shadow.inbox, shadow.projections
+	s.driveProjectionsLocked()
 	return cloneV4Events(events), nil
 }

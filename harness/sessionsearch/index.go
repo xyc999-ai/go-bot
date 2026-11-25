@@ -18,7 +18,8 @@ import (
 )
 
 // Source is bound to one account by the Host. Snapshot returns the committed
-// suffix starting at next, or a full snapshot if the previous cursor is stale.
+// suffix starting at next, or a reset prefix if the previous cursor is stale.
+// More requests another bounded page before sync/query is considered complete.
 type Source struct {
 	List     func(context.Context, string, int) (sessionformat.SessionListPage, error)
 	Snapshot func(context.Context, string, Cursor) (Snapshot, error)
@@ -26,12 +27,16 @@ type Source struct {
 }
 
 type Cursor struct {
+	// Partial is an in-process continuation; interrupted page sequences are
+	// persisted with Size=-1 and safely rebuilt on a later cold sync.
+	Partial bool
 	Next    int
 	Size    int64
 	ModTime int64
 }
 
 type Snapshot struct {
+	More bool
 	Cursor
 	Events []sessionformat.Event
 	Reset  bool
@@ -145,21 +150,32 @@ func (i *Index) sync(ctx context.Context) error {
 		for _, header := range page.Sessions {
 			cursor := cursors[header.ID]
 			delete(cursors, header.ID)
-			snapshot, err := i.source.Snapshot(ctx, header.ID, cursor)
-			if errors.Is(err, os.ErrNotExist) {
-				if err := i.dropSession(ctx, header.ID); err != nil {
-					return err
+			for {
+				snapshot, err := i.source.Snapshot(ctx, header.ID, cursor)
+				if errors.Is(err, os.ErrNotExist) {
+					if err := i.dropSession(ctx, header.ID); err != nil {
+						return err
+					}
+					break
 				}
-				continue
-			}
-			if err != nil {
-				return fmt.Errorf("read session %s for indexing: %w", header.ID, err)
-			}
-			if snapshot.Reset || snapshot.Cursor != cursor || len(snapshot.Events) != 0 || cursor == (Cursor{}) {
-				if err := i.save(ctx, header, snapshot); err != nil {
-					return err
+				if err != nil {
+					return fmt.Errorf("read session %s for indexing: %w", header.ID, err)
 				}
+				if snapshot.More && (len(snapshot.Events) == 0 || !snapshot.Reset && snapshot.Next <= cursor.Next) {
+					return errors.New("session history page made no progress")
+				}
+				if snapshot.Reset || snapshot.Cursor != cursor || len(snapshot.Events) != 0 || cursor == (Cursor{}) {
+					if err := i.save(ctx, header, snapshot); err != nil {
+						return err
+					}
+				}
+				if !snapshot.More {
+					break
+				}
+				cursor = snapshot.Cursor
+				cursor.Partial = true
 			}
+
 		}
 		if page.NextCursor == "" {
 			break
@@ -203,9 +219,13 @@ func (i *Index) save(ctx context.Context, header sessionformat.Header, snapshot 
 			return err
 		}
 	}
+	storedSize := snapshot.Size
+	if snapshot.More {
+		storedSize = -1
+	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO sessions VALUES (?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET next=excluded.next, size=excluded.size, mtime=excluded.mtime`,
-		header.ID, header.CreatedAt, snapshot.Next, snapshot.Size, snapshot.ModTime)
+		header.ID, header.CreatedAt, snapshot.Next, storedSize, snapshot.ModTime)
 	if err != nil {
 		return err
 	}

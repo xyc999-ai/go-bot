@@ -130,6 +130,44 @@ func streamHostEvents(w http.ResponseWriter, r *http.Request, host *hostruntime.
 		if _, ok := watching[id]; ok {
 			continue
 		}
+
+		if host.ReadHistory != nil {
+			opening, err := host.SessionHistoryWindow(ctx, id, sessionformat.HistoryRequest{Kind: sessionformat.HistoryState})
+			if err != nil || host.CheckScheduleTarget(ctx, id) != nil {
+				if send(hostStreamEvent{SessionID: id, Type: "session.unavailable", Data: struct{}{}}) != nil {
+					return
+				}
+				continue
+			}
+			if err := replayHistoryWindow(ctx, host, id, opening, after, func(event sessionformat.Event) error {
+				if projected, ok := publicChatEvent(event); ok {
+					return send(hostStreamEvent{SessionID: id, Type: "session", Data: projected})
+				}
+				return nil
+			}); err != nil {
+				return
+			}
+			questions, err := historyQuestions(opening, true)
+			if err != nil {
+				return
+			}
+			var through *uint64
+			if opening.Count > 0 {
+				seq := opening.Count - 1
+				through = &seq
+			}
+			for _, event := range []hostStreamEvent{
+				{SessionID: id, Type: "questions.state", Data: map[string]any{"questions": questions, "throughSeq": through}},
+				{SessionID: id, Type: "session.state", Data: map[string]any{"activeTurn": nil, "throughSeq": through}},
+				{SessionID: id, Type: "permissions.state", Data: historyPermission(opening)},
+				{SessionID: id, Type: "queue.state", Data: map[string]any{"queue": chatQueue(opening.Inbox), "throughSeq": through}},
+			} {
+				if send(event) != nil {
+					return
+				}
+			}
+			continue
+		}
 		if host.ReadSession == nil {
 			continue
 		}
@@ -246,57 +284,120 @@ func followHostSession(ctx context.Context, worker NativeWorkerHTTPRuntime, afte
 		return err
 	}
 	defer unsubscribe()
-	events, err := worker.DurableSessionEvents()
-	if err != nil {
-		return err
-	}
-	inbox, err := sessionformat.FoldInbox(events)
-	if err != nil {
-		return err
-	}
-	if after != nil && (len(events) == 0 || *after >= uint64(len(events))) {
-		return errors.New("Session cursor is ahead of journal")
-	}
-	// A Session can produce events between its creation/history response and
-	// discovery by this Host stream. With no supplied cursor, overlap the same
-	// bounded recent history page as the client; sequence deduplication makes
-	// this safe. Never silently skip the first message or tool call.
-	var recentStart uint64
-	if !replay && len(events) > 0 {
-		page, err := makeChatTranscript(events, nil, 20)
-		if err != nil {
+
+	var inbox sessionformat.InboxState
+	var activeTurn *uint64
+	if reader, ok := worker.(historyWindowRuntime); ok {
+		request := sessionformat.HistoryRequest{Kind: sessionformat.HistoryState}
+		if !replay {
+			request.Kind = sessionformat.HistoryTurns
+			request.Limit = 20
+		}
+		opening, readErr := reader.HistoryWindow(ctx, request)
+		if readErr != nil {
+			return readErr
+		}
+		if after != nil && (*after >= opening.Count) {
+			return errors.New("Session cursor is ahead of journal")
+		}
+		inbox = opening.Inbox
+		if opening.Boundary.Open {
+			turn := opening.Boundary.Turn
+			activeTurn = &turn
+		}
+		if err := send("assistant-stream-baseline", map[string]any{"baseline": publicNativeAssistantBaseline(baseline, true)}); err != nil {
 			return err
 		}
-		if len(page.Events) > 0 {
-			recentStart = page.Events[0].Seq
-		}
-	}
-	if err := send("assistant-stream-baseline", map[string]any{"baseline": publicNativeAssistantBaseline(baseline, true)}); err != nil {
-		return err
-	}
-	var activeTurn *uint64
-	for _, event := range events {
-		if event.Type == "turn/start" {
-			var row struct {
-				Turn uint64 `json:"turn"`
-			}
-			_ = json.Unmarshal(event.Data, &row)
-			activeTurn = &row.Turn
-		} else if event.Type == "turn/end" {
-			activeTurn = nil
-		}
-		if replay && (after == nil || event.Seq > *after) || !replay && event.Seq >= recentStart {
-			if projected, ok := publicChatEvent(event); ok {
-				if err := send("session", projected); err != nil {
+		if replay {
+			cursor := after
+			for opening.Count > 0 && (cursor == nil || *cursor < opening.Count-1) {
+				page, err := worker.DurableEventsAfter(cursor, 200)
+				if err != nil {
 					return err
+				}
+				if len(page) == 0 || page[0].Seq >= opening.Count {
+					return errors.New("Session history ended before opening cut")
+				}
+				for _, event := range page {
+					if event.Seq >= opening.Count {
+						break
+					}
+					if projected, ok := publicChatEvent(event); ok {
+						if err := send("session", projected); err != nil {
+							return err
+						}
+					}
+					seq := event.Seq
+					cursor = &seq
+				}
+			}
+		} else {
+			for _, event := range opening.Events {
+				if projected, ok := publicChatEvent(event); ok {
+					if err := send("session", projected); err != nil {
+						return err
+					}
 				}
 			}
 		}
+		after = nil
+		if opening.Count > 0 {
+			seq := opening.Count - 1
+			after = &seq
+		}
+	} else {
+		events, err := worker.DurableSessionEvents()
+		if err != nil {
+			return err
+		}
+		inbox, err = sessionformat.FoldInbox(events)
+		if err != nil {
+			return err
+		}
+		if after != nil && (len(events) == 0 || *after >= uint64(len(events))) {
+			return errors.New("Session cursor is ahead of journal")
+		}
+		// A Session can produce events between its creation/history response and
+		// discovery by this Host stream. With no supplied cursor, overlap the same
+		// bounded recent history page as the client; sequence deduplication makes
+		// this safe. Never silently skip the first message or tool call.
+		var recentStart uint64
+		if !replay && len(events) > 0 {
+			page, err := makeChatTranscript(events, nil, 20)
+			if err != nil {
+				return err
+			}
+			if len(page.Events) > 0 {
+				recentStart = page.Events[0].Seq
+			}
+		}
+		if err := send("assistant-stream-baseline", map[string]any{"baseline": publicNativeAssistantBaseline(baseline, true)}); err != nil {
+			return err
+		}
+		for _, event := range events {
+			if event.Type == "turn/start" {
+				var row struct {
+					Turn uint64 `json:"turn"`
+				}
+				_ = json.Unmarshal(event.Data, &row)
+				activeTurn = &row.Turn
+			} else if event.Type == "turn/end" {
+				activeTurn = nil
+			}
+			if replay && (after == nil || event.Seq > *after) || !replay && event.Seq >= recentStart {
+				if projected, ok := publicChatEvent(event); ok {
+					if err := send("session", projected); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		if len(events) > 0 {
+			seq := events[len(events)-1].Seq
+			after = &seq
+		}
 	}
-	if len(events) > 0 {
-		seq := events[len(events)-1].Seq
-		after = &seq
-	}
+
 	if err := send("session.state", map[string]any{"activeTurn": activeTurn, "throughSeq": after}); err != nil {
 		return err
 	}

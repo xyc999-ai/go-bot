@@ -46,7 +46,7 @@ func (a *NativeLoop) ensureRuntimeContext(ctx context.Context) error {
 		}
 		sections = append(sections, extra...)
 	}
-	surface, err := a.session.Surface()
+	surface, err := a.session.ModelSurface()
 	if err != nil {
 		return err
 	}

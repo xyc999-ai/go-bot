@@ -352,6 +352,41 @@ func NewNativeHostHTTP(host *hostruntime.NativeHost, options NativeWorkerHTTPOpt
 			defer host.AttachChatStream(id)()
 		}
 		runtime, ok := host.Session(id)
+
+		if r.Method == http.MethodGet && suffix == "transcript" && (ok || host.ReadHistory != nil) {
+			serveWindowTranscript(w, r, host, id, runtime)
+			return
+		}
+		if r.Method == http.MethodGet && !ok && host.ReadHistory != nil && (suffix == "permissions" || suffix == "questions") {
+			value, err := host.SessionHistoryWindow(r.Context(), id, sessionformat.HistoryRequest{Kind: sessionformat.HistoryState})
+			if errors.Is(err, os.ErrNotExist) {
+				http.NotFound(w, r)
+				return
+			}
+			if err != nil {
+				writeSessionJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "transcript_unavailable"})
+				return
+			}
+			if suffix == "permissions" {
+				writeSessionJSON(w, http.StatusOK, historyPermission(value))
+			} else {
+				questions, err := historyQuestions(value, true)
+				if err != nil {
+					writeSessionJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "agent_questions_unavailable"})
+					return
+				}
+				writeSessionJSON(w, http.StatusOK, map[string]any{"questions": questions})
+			}
+			return
+		}
+
+		if r.Method == http.MethodGet && !ok && host.ReadHistory != nil && suffix == "stream" && r.URL.Query().Get("view") == "chat" {
+			runtime, r = waitForIndexedChatRuntime(w, r, host, id)
+			if runtime == nil {
+				return
+			}
+			ok = true
+		}
 		coldChatRead := suffix == "questions" || suffix == "permissions" ||
 			(suffix == "stream" && r.URL.Query().Get("view") == "chat")
 		if r.Method == http.MethodGet && (suffix == "transcript" || !ok && coldChatRead) {

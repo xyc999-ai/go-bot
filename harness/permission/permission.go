@@ -59,11 +59,17 @@ func Read(events []session.Event) State {
 	return state
 }
 
+// ReadSession reads required incrementally maintained execution policy.
+func ReadSession(s *session.LiveSession) State {
+	value := s.Permission()
+	return State{Mode: Mode(value.Mode), Approval: value.Approval}
+}
+
 func Save(ctx context.Context, s *session.LiveSession, mode Mode, delegated bool, initialize bool) error {
 	if mode.Rank() == 0 {
 		return errors.New("invalid permission mode")
 	}
-	state := Read(s.Events())
+	state := ReadSession(s)
 	approval := "ask"
 	if mode == FullAccess || delegated {
 		approval = "never"

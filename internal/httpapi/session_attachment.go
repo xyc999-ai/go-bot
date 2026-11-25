@@ -71,6 +71,25 @@ func attachmentFromEvents(events []sessionformat.Event, id, name string) (sessio
 }
 
 func sessionAttachmentReference(ctx context.Context, host *hostruntime.NativeHost, sessionID, id, name string) (sessionAttachment, bool, error) {
+	if _, ok := host.Session(sessionID); ok || host.ReadHistory != nil {
+		value, err := host.SessionHistoryWindow(ctx, sessionID, sessionformat.HistoryRequest{Kind: sessionformat.HistoryAttachment, AttachmentID: id, AttachmentName: name})
+		if errors.Is(err, os.ErrNotExist) {
+			return sessionAttachment{}, false, nil
+		}
+		if err != nil {
+			return sessionAttachment{}, false, err
+		}
+		if value.Attachment == nil {
+			return sessionAttachment{}, false, nil
+		}
+		var ref sessionAttachment
+		raw, err := json.Marshal(value.Attachment)
+		if err == nil {
+			err = json.Unmarshal(raw, &ref)
+		}
+		return ref, err == nil, err
+	}
+
 	if active, ok := host.Session(sessionID); ok {
 		var after *uint64
 		for ctx.Err() == nil {

@@ -300,50 +300,94 @@ func applyGoalChange(state *GoalProjection, seen map[string]bool, change GoalCha
 // FoldGoal reconstructs only original v4 goal facts. A goal-sourced user
 // message advances rounds only when it was actually admitted to the surface;
 // queued inbox messages and process-local activation never change this fold.
-func FoldGoal(events []Event) (GoalProjection, error) {
-	var state GoalProjection
-	seen := make(map[string]bool)
-	for _, event := range events {
-		switch event.Type {
-		case "goal/change":
-			change, err := DecodeGoalChange(event.Data)
-			if err == nil {
-				err = applyGoalChange(&state, seen, change)
+type goalFoldState struct {
+	GoalProjection
+	seen map[string]bool
+}
+
+func nextGoal(state goalFoldState, event Event) (goalFoldState, error) {
+	switch event.Type {
+	case "goal/change":
+		change, err := DecodeGoalChange(event.Data)
+		if err == nil && change.Operation == "create" {
+			copied := make(map[string]bool, len(state.seen)+1)
+			for id, present := range state.seen {
+				copied[id] = present
 			}
-			if err != nil {
-				return GoalProjection{}, fmt.Errorf("goal/change at seq %d: %w", event.Seq, err)
-			}
-		case "user/message":
-			fields, err := objectValue(event.Data)
-			if err != nil {
-				return GoalProjection{}, fmt.Errorf("goal user/message at seq %d: %w", event.Seq, err)
-			}
-			source, err := objectValue(fields["source"])
-			if err != nil {
-				continue // message row validation owns malformed non-goal sources
-			}
-			if !bytes.Equal(source["kind"], []byte(`"goal"`)) {
-				continue
-			}
-			id, err := goalString(source["goalId"], "source.goalId", false)
-			if err != nil {
-				return GoalProjection{}, err
-			}
-			revision, err := goalCount(source["revision"], "source.revision", true)
-			if err != nil {
-				return GoalProjection{}, err
-			}
-			round, err := goalCount(source["round"], "source.round", true)
-			if err != nil {
-				return GoalProjection{}, err
-			}
-			if state.Goal == nil || state.Goal.Phase != "active" || id != state.Goal.ID || revision != state.Goal.Revision || round != state.RoundsStarted+1 || round > state.Goal.MaxGoalRounds {
-				return GoalProjection{}, fmt.Errorf("goal round at seq %d is not the next admitted round", event.Seq)
-			}
-			state.RoundsStarted = round
+			state.seen = copied
 		}
+		if err == nil {
+			err = applyGoalChange(&state.GoalProjection, state.seen, change)
+		}
+		if err != nil {
+			return goalFoldState{}, fmt.Errorf("goal/change at seq %d: %w", event.Seq, err)
+		}
+	case "user/message":
+		fields, err := objectValue(event.Data)
+		if err != nil {
+			return goalFoldState{}, fmt.Errorf("goal user/message at seq %d: %w", event.Seq, err)
+		}
+		source, err := objectValue(fields["source"])
+		if err != nil {
+			return state, nil // message row validation owns malformed non-goal sources
+		}
+		if !bytes.Equal(source["kind"], []byte(`"goal"`)) {
+			return state, nil
+		}
+		id, err := goalString(source["goalId"], "source.goalId", false)
+		if err != nil {
+			return goalFoldState{}, err
+		}
+		revision, err := goalCount(source["revision"], "source.revision", true)
+		if err != nil {
+			return goalFoldState{}, err
+		}
+		round, err := goalCount(source["round"], "source.round", true)
+		if err != nil {
+			return goalFoldState{}, err
+		}
+		if state.Goal == nil || state.Goal.Phase != "active" || id != state.Goal.ID || revision != state.Goal.Revision || round != state.RoundsStarted+1 || round > state.Goal.MaxGoalRounds {
+			return goalFoldState{}, fmt.Errorf("goal round at seq %d is not the next admitted round", event.Seq)
+		}
+		state.RoundsStarted = round
 	}
 	return state, nil
+}
+
+func FoldGoal(events []Event) (GoalProjection, error) {
+	state := goalFoldState{seen: make(map[string]bool)}
+	for _, event := range events {
+		var err error
+		state, err = nextGoal(state, event)
+		if err != nil {
+			return GoalProjection{}, err
+		}
+	}
+	return cloneGoalProjection(state.GoalProjection), nil
+}
+
+func cloneGoalProjection(state GoalProjection) GoalProjection {
+	if state.Goal != nil {
+		goal := *state.Goal
+		if goal.BlockedReason != nil {
+			reason := *goal.BlockedReason
+			goal.BlockedReason = &reason
+		}
+		state.Goal = &goal
+	}
+	if state.LastRef != nil {
+		ref := *state.LastRef
+		state.LastRef = &ref
+	}
+	return state
+}
+
+var goalDefinition = ProjectionDefinition[goalFoldState]{Key: "goal", Version: 1,
+	Init: func(Header, uint64) goalFoldState { return goalFoldState{seen: make(map[string]bool)} }, Apply: nextGoal,
+}
+
+func (s *LiveSession) Goal() (GoalProjection, error) {
+	return ReadProjection(ProjectionHandle[goalFoldState]{s, &goalDefinition}, LiveCut, func(state goalFoldState) GoalProjection { return cloneGoalProjection(state.GoalProjection) })
 }
 
 func isGoalSourcedMessage(event Event) bool {

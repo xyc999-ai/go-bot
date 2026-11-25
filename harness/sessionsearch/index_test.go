@@ -3,6 +3,8 @@ package sessionsearch
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -131,5 +133,77 @@ func TestFTS5CommittedHistory(t *testing.T) {
 	found, err = other.Query(ctx, "", Query{Text: "backup"})
 	if err != nil || len(found.Sessions) != 0 {
 		t.Fatalf("foreign account query = %+v, %v", found, err)
+	}
+}
+
+func TestPagedSourceDrainsAndRecoversInterruptedSync(t *testing.T) {
+	for _, interrupt := range []bool{false, true} {
+		t.Run(fmt.Sprint(interrupt), func(t *testing.T) {
+			events := make([]sessionformat.Event, 5)
+			for i := range events {
+				events[i] = historyEvent(uint64(i), "user/message", "user", fmt.Sprintf("needle %d", i))
+			}
+			calls := 0
+			fail := interrupt
+			resetAfterFailure := false
+			source := Source{List: func(context.Context, string, int) (sessionformat.SessionListPage, error) {
+				return sessionformat.SessionListPage{Sessions: []sessionformat.Header{{ID: older, CreatedAt: 1}}}, nil
+			}, Snapshot: func(_ context.Context, _ string, cursor Cursor) (Snapshot, error) {
+				calls++
+				if fail && calls == 2 {
+					return Snapshot{}, errors.New("interrupted page read")
+				}
+				start := cursor.Next
+				reset := cursor.Size < 0 && !cursor.Partial
+				if reset {
+					start = 0
+					resetAfterFailure = true
+				}
+				end := min(len(events), start+2)
+				return Snapshot{Cursor: Cursor{Next: end, Size: 99}, Events: events[start:end], More: end < len(events), Reset: reset}, nil
+			}}
+			path := filepath.Join(t.TempDir(), "paged.sqlite")
+			index, err := Open(t.Context(), path, "alice", source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = index.Sync(t.Context())
+			if interrupt {
+				if err == nil {
+					t.Fatal("partial sync reported success")
+				}
+				var size int64
+				if err := index.db.QueryRow("SELECT size FROM sessions WHERE id=?", older).Scan(&size); err != nil || size != -1 {
+					t.Fatal("partial index persisted a complete file version", err)
+				}
+				fail = false
+				if err := index.Sync(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+				if !resetAfterFailure {
+					t.Fatal("interrupted cold prefix was not rebuilt")
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			var count, next int
+			if err := index.db.QueryRow("SELECT count(*) FROM messages WHERE session_id=?", older).Scan(&count); err != nil || count != 5 {
+				t.Fatalf("incomplete paged corpus: %d %v", count, err)
+			}
+			if err := index.db.QueryRow("SELECT next FROM sessions WHERE id=?", older).Scan(&next); err != nil || next != 5 {
+				t.Fatal("wrong final source cursor")
+			}
+			if err := index.Close(); err != nil {
+				t.Fatal(err)
+			}
+			reopened, err := Open(t.Context(), path, "alice", source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reopened.Close()
+			if err := reopened.Sync(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
