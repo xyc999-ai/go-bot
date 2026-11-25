@@ -735,6 +735,35 @@ paths:
       summary: Remove all ended tasks and their delivery histories
       responses:
         '200': {description: Count of deleted tasks}
+  /v1/clients:
+    parameters:
+    - $ref: '#/components/parameters/AccountName'
+    get:
+      summary: List this account's reported application clients and connection status
+      description: Does not start Host. Normal closes remove the stream lease; silent loss expires within 90 seconds. Connection IDs are never exposed.
+      responses:
+        '200':
+          description: Clients ordered by connected status and last seen time
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clients]
+                properties:
+                  clients:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, type, status, lastSeenAt]
+                      properties:
+                        id: {type: string}
+                        type: {type: string, enum: [web, mobile, desktop]}
+                        platform: {type: string}
+                        model: {type: string}
+                        status: {type: string, enum: [connected, disconnected]}
+                        lastSeenAt: {type: integer, format: int64, description: Unix milliseconds}
+        '404': {description: Account not found}
+        '503': {description: Client state unavailable}
   /v1/host/stream:
     parameters:
     - $ref: "#/components/parameters/AccountName"
@@ -742,6 +771,10 @@ paths:
     get:
       summary: Stream all account session updates and task catalog changes over one SSE connection
       parameters:
+      - name: X-Go-Bot-Client
+        in: header
+        description: Optional encodeURIComponent(JSON.stringify({id,type,platform?,model?})); persistent anonymous installation identity, not an authentication token. Web platform and model are discarded.
+        schema: {type: string, maxLength: 2048}
       - name: cursors
         in: query
         description: URL-encoded JSON object mapping up to 20 cached session IDs to their last durable sequence or null
@@ -752,7 +785,7 @@ paths:
           content:
             text/event-stream:
               schema: {type: string}
-        '400': {description: Invalid session cursor map}
+        '400': {description: Invalid session cursor map or client identity}
         '503': {description: Host unavailable}
   /v1/host/schedules/stream:
     parameters:

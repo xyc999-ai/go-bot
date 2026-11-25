@@ -4,10 +4,11 @@ import { changeProtocolURL, modelProtocol, modelRequestURL, protocolNames, proto
 import { languages, useLocale } from './locale'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View, Animated, Easing } from 'react-native'
-import { ArrowLeft, Camera, ChevronRight, Clock3, Images, Image as Drawing, Languages, Layers2, LogOut, Pencil, Power, Puzzle, Search, Server, Settings2, Sparkles } from 'lucide-react-native'
+import { ArrowLeft, Camera, ChevronRight, Clock3, Images, Image as Drawing, Languages, Layers2, LogOut, MonitorSmartphone, Pencil, Power, Puzzle, Search, Server, Settings2, Sparkles } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { TranscriptCache } from '../../frontend/src/chat/transcriptCache'
 import { Tasks } from './Tasks'
+import { Devices } from './Devices'
 import { Plugins } from './extensions/Plugins'
 import { Proactive } from './Proactive'
 import { Controller, problem, type ModelSettings, type ProviderPage, type ProviderSettings } from './api'
@@ -18,12 +19,13 @@ import { accent, Button, danger, Field, Hint, IconButton, edge, glass, ink, logo
 const providerLabels = { 'web-search': '网页搜索', 'image-generation': '图片生成' }
 export type Section = 'models' | ProviderPage | 'proactive'
 
-export type MePage = 'tasks' | 'settings' | 'plugins'
+export type MePage = 'tasks' | 'settings' | 'plugins' | 'devices'
 export type LeaveGuard = (proceed: () => void) => void
 const pages = [
   { id: 'tasks', label: 'Scheduled tasks', Icon: Clock3 },
   { id: 'settings', label: '设置', Icon: Settings2 },
   { id: 'plugins', label: 'Plugin market', Icon: Puzzle },
+  { id: 'devices', label: '设备', Icon: MonitorSmartphone },
 ] as const
 
 export function Me({ api, cache, active, page, onPageChange, section, open, close, exitAccount, bottomInset, openChat, returnToChat, backToChat, leaveGuard }: {
@@ -63,6 +65,7 @@ export function Me({ api, cache, active, page, onPageChange, section, open, clos
     <View style={page === 'tasks' ? me.page : me.hidden}><Tasks api={api} cache={cache} active={active && page === 'tasks'} openChat={openChat} {...chrome} /></View>
     <View style={page === 'settings' ? me.page : me.hidden}><Settings api={api} section={section} open={open} close={close} exitAccount={exitAccount} chrome={chrome} /></View>
     <View style={page === 'plugins' ? me.page : me.hidden}><Plugins key={pluginKey} api={api} cache={cache} active={active && page === 'plugins'} embedded {...chrome} onDirtyChange={setDirty} onBusyChange={ignoreBusy} onExit={backToChat} /></View>
+    <View style={page === 'devices' ? me.page : me.hidden}><Devices api={api} active={active && page === 'devices'} {...chrome} /></View>
     {avatarMenu && <Sheet title={t('更换头像')} onClose={() => setAvatarMenu(false)}>{afterClose => <SheetScroll>
       <Button label={t('从图库选择')} onPress={() => afterClose(() => changeAvatar(false))}><Images size={20} color={ink} /></Button>
       <Button label={t('拍照')} onPress={() => afterClose(() => changeAvatar(true))}><Camera size={20} color={ink} /></Button>
@@ -75,7 +78,7 @@ function ProfileTabs({ page, choose }: { page: MePage; choose: (page: MePage) =>
   const { t } = useLocale(), reduced = useReducedMotion()
   const [width, setWidth] = useState(0), position = useRef(new Animated.Value(pages.findIndex(item => item.id === page))).current
   useEffect(() => { const animation = Animated.timing(position, { toValue: pages.findIndex(item => item.id === page), duration: reduced ? 0 : 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }); animation.start(); return () => animation.stop() }, [page, reduced, position])
-  const itemWidth = (width - 6) / 3
+  const itemWidth = (width - 6) / pages.length
   return <View style={me.navigation}><View accessibilityRole="tablist" style={me.track} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
     {width > 0 && <Animated.View pointerEvents="none" style={[me.selected, { width: itemWidth, transform: [{ translateX: Animated.multiply(position, itemWidth) }] }]} />}
     {pages.map(({ id, label, Icon }, index) => <Pressable key={id} accessibilityRole="tab" accessibilityState={{ selected: id === page }} accessibilityLabel={t(label)} onPress={() => choose(id)} style={({ pressed }) => [me.tab, pressed && s.pressed]}>

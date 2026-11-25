@@ -1,3 +1,5 @@
+import { mobileClientIdentity } from './clientIdentity'
+import { clientIdentityHeader, encodeClientIdentity, type ClientDevice } from '../../frontend/src/clients/identity'
 import type { PermissionMode, SessionPermission } from '../../frontend/src/chat/permissions'
 import { fetch } from 'expo/fetch'
 import { File } from 'expo-file-system'
@@ -128,6 +130,8 @@ export class Controller {
     const result = await this.response('/v1/host/plugins/prepare', { method: 'POST' }, 900000)
     return result.json()
   }
+  clientIdentity() { return mobileClientIdentity() }
+  clients(signal?: AbortSignal) { return this.request<{clients: ClientDevice[]}>('/v1/clients', { signal }) }
   stopHost() { return this.response('/v1/host/stop', { method: 'POST' }, 320000) }
   sessions(cursor = '') {
     return this.request<{ sessions: SessionRow[]; nextCursor?: string }>('/v1/sessions?limit=30' + (cursor ? '&cursor=' + part(cursor) : ''))
@@ -156,7 +160,7 @@ export class Controller {
   }
   async hostStream(cursors: Record<string, number | null>, signal: AbortSignal, onOpen: () => void, onEvent: (type: string, data: unknown) => void) {
     const response = await this.response('/v1/host/stream?cursors=' + part(JSON.stringify(cursors)),
-      { headers: { Accept: 'text/event-stream' }, signal })
+      { headers: { Accept: 'text/event-stream', [clientIdentityHeader]: encodeClientIdentity(await mobileClientIdentity()) }, signal })
     if (!response.body) throw new Error('服务器没有返回事件流。')
     const reader = response.body.getReader()
     const decoder = new TextDecoder()

@@ -9,7 +9,7 @@ Go 核心能力、Cordis 生命周期、插件 SDK、凭证、授权与 MCP 的�
 ## 仓库边界
 
 两个本地 Git 仓库并列放置，不嵌套、不使用 submodule。用户已创建远端
-`https://github.com/xyc999-ai/got-bot-plugins`，远端拼写与本地目录名分别处理：
+`https://github.com/xyc999-ai/go-bot-plugins`，远端与本地目录统一命名：
 
 ```text
 project/
@@ -39,7 +39,7 @@ gemini-api 业务包移到新仓库 `plugins/`，连同安装脚本、Skill、�
 
 ## Controller 远程市场
 
-- 默认读取 `xyc999-ai/got-bot-plugins` 的公开市场清单。地址由部署端入口指定，
+- 默认读取 `xyc999-ai/go-bot-plugins` 的公开市场清单。地址由部署端入口指定，
   客户端仍只提交 pluginId，不提交任意包地址。不新增普通用户必填配置。
 - 获取采用短超时、ETag、短期内存缓存及显式刷新，不新增后台轮询。
   缓存只是派生数据，不把公共市场写进用户 Redis，也不增加 Controller 状态文件。
@@ -86,7 +86,7 @@ Web 与移动端检查市场刷新、图标、教程和更新状态；不构建 
 
 ## 本次落地与验收（2026-11-26）
 
-- 独立仓库已推送，首批五个插件的 GitHub Releases 和 catalog.json 已公开发布。后续按用户要求移除了打包 Dockerfile；[直接在 Actions 运行器执行的新发布工作流](https://github.com/xyc999-ai/got-bot-plugins/actions/runs/45695476827) 的原始 Skills 准备、npm pack、既有发布核对和目录步骤均成功，没有覆盖既有版本。
+- 独立仓库已推送，首批五个插件的 GitHub Releases 和 catalog.json 已公开发布。后续按用户要求移除了打包 Dockerfile；[直接在 Actions 运行器执行的新发布工作流](https://github.com/xyc999-ai/go-bot-plugins/actions/runs/45695476827) 的原始 Skills 准备、npm pack、既有发布核对和目录步骤均成功，没有覆盖既有版本。
 - Go 全量测试、vet、依赖边界检查通过；catalog、Controller、plugins 的相关 race 测试通过。Cordis 13 项、SDK 类型与测试、Web 构建及 43 项测试、移动端类型检查及 9 项测试通过；独立插件仓库 19 项测试及发布检查通过。
 - Host 镜像完成一次完整构建与基础环境检查。Docker Web 聊天、Redis 插件选择保存、真实网络安装默认插件及会话/文件恢复回归通过，验证了原始 OfficeCLI Skills 和真实 DOCX 创建。
 - 真实 HTTP 验收：公开市场返回五个插件，新账号选择两个默认插件；五个图标返回正确 PNG 类型，X、Google Workspace 教程支持 MP4 Range 和 HEAD。媒体类型按声明文件扩展名规范化，兼容 GitHub Release 的 application/octet-stream 响应。

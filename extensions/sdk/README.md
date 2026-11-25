@@ -105,7 +105,7 @@ wait for credential prompts; service authorization happens after activation.
 Cordis apply only checks local prerequisites and registers capabilities. Disposal
 withdraws registrations without uninstalling software. Uninstall withdraws the
 Cordis entry and removes the wrapper with pnpm; credentials, workspaces and
-shared/global CLI dependencies are retained. See the first-party packages in the [plugin repository](https://github.com/xyc999-ai/got-bot-plugins).
+shared/global CLI dependencies are retained. See the first-party packages in the [plugin repository](https://github.com/xyc999-ai/go-bot-plugins).
 
 ## Authorization interactions
 

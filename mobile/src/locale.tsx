@@ -7,6 +7,10 @@ import { proactiveChinese } from '../../frontend/src/settings/proactiveState'
 const extensionEnglish = Object.fromEntries(Object.entries(extensionChinese).map(([en, zh]) => [zh, en]))
 
 const english: Record<string, string> = {
+ 'Device connected': 'Connected', '设备': 'Devices', '此设备': 'This device', '其他设备': 'Other devices', '在线': 'Connected', '断开': 'Disconnected',
+ '最近在线 {time}': 'Last seen {time}', '正在读取设备…': 'Loading devices…', '无法读取设备，请重试。': 'Could not load devices. Try again.',
+ '还没有其他设备': 'No other devices yet', '在其他客户端连接这个账号后，会显示在这里。': 'Connect this account on another client to see it here.',
+ '暂无设备记录': 'No devices yet', '建立事件连接后，设备会显示在这里。': 'Devices appear here after their event connection opens.',
   '重命名会话': 'Rename chat', '会话标题': 'Chat title', '会话操作': 'Chat actions', '无法重命名会话，请重试。': 'Could not rename chat. Try again.',
   '复制表格': 'Copy table', '复制代码': 'Copy code', '已复制': 'Copied', '复制失败，重试': 'Copy failed. Retry', '代码': 'Code', '表格': 'Table', '表格，可左右滚动': 'Table — scroll horizontally', '代码，可左右滚动': 'Code — scroll horizontally',
   '主会话': 'Main chat', '配置模型': 'Configure model', '查看插件': 'View plugins',
@@ -146,6 +150,7 @@ const english: Record<string, string> = {
   '助手未能完成回复。': 'The agent could not finish its reply.',
 }
 const notices: Record<string, string> = {
+ 'Device connected': '连接', 'Android Emulator': 'Android 模拟器',
   ...proactiveChinese,
   'Working': '处理中',
   'Approve this plan and leave plan mode?': '确认方案后开始执行，或提出修改意见继续规划。',

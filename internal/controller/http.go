@@ -91,7 +91,7 @@ func (m *Manager) HandlerWithWeb(web WebOptions) http.Handler {
 		isSession := r.URL.Path == "/v1/capabilities" || r.URL.Path == "/v1/sessions" || strings.HasPrefix(r.URL.Path, "/v1/sessions/")
 		isPlugins := r.URL.Path == plugin.SettingsPath || strings.HasPrefix(r.URL.Path, plugin.SettingsPath+"/")
 		isSettings := isPlugins || r.URL.Path == settingsPath || strings.HasPrefix(r.URL.Path, settingsPath+"/") || r.URL.Path == webSearchSettingsPath || r.URL.Path == imageSettingsPath || r.URL.Path == proactive.SettingsPath
-		if !isHost && !isSession && !isSettings {
+		if !isHost && !isSession && !isSettings && r.URL.Path != "/v1/clients" {
 			http.NotFound(w, r)
 			return
 		}
@@ -106,6 +106,8 @@ func (m *Manager) HandlerWithWeb(web WebOptions) http.Handler {
 		redirect, _ := mcpOAuthRedirect(r, r.Header.Get(mcpconfig.ControllerOriginHeader), id)
 		r = r.WithContext(withOAuthCallback(r.Context(), redirect))
 		switch {
+		case r.URL.Path == "/v1/clients":
+			m.clientsHTTP(w, r, id)
 		case r.URL.Path == plugin.AuthorizationPath || strings.HasPrefix(r.URL.Path, plugin.AuthorizationPath+"/"):
 			m.authorizationHTTP(w, r, id)
 		case r.URL.Path == mcpconfig.RuntimePath || strings.HasPrefix(r.URL.Path, mcpconfig.RuntimePath+"/"):
@@ -244,6 +246,21 @@ func (m *Manager) hostHTTP(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (m *Manager) forward(w http.ResponseWriter, r *http.Request, id string) {
+	var identity *ClientIdentity
+	if r.Method == http.MethodGet && r.URL.Path == "/v1/host/stream" {
+		var err error
+		identity, err = clientIdentity(r)
+		if err != nil {
+			httpError(w, 400, err.Error())
+			return
+		}
+	}
+	var stopPresence func()
+	defer func() {
+		if stopPresence != nil {
+			stopPresence()
+		}
+	}()
 	lock := m.accountLock(id)
 	lock.Lock()
 	record, err := m.Store.Get(r.Context(), id)
@@ -328,6 +345,7 @@ func (m *Manager) forward(w http.ResponseWriter, r *http.Request, id string) {
 		Rewrite: func(req *httputil.ProxyRequest) {
 			req.SetURL(target)
 			req.Out.Header.Del(UserHeader)
+			req.Out.Header.Del(ClientHeader)
 			req.Out.Header.Del(mcpconfig.ControllerOriginHeader)
 			req.Out.Header.Del(mcpconfig.OAuthCallbackHeader)
 			if redirect := oauthCallbackFromContext(req.In.Context()); redirect != "" {
@@ -336,6 +354,9 @@ func (m *Manager) forward(w http.ResponseWriter, r *http.Request, id string) {
 			req.Out.Header.Set("Authorization", "Bearer "+record.HostToken)
 		},
 		ModifyResponse: func(response *http.Response) error {
+			if identity != nil && response.StatusCode == http.StatusOK && strings.HasPrefix(response.Header.Get("Content-Type"), "text/event-stream") {
+				stopPresence = m.trackClient(r.Context(), id, *identity)
+			}
 			if r.URL.Path == hostFilesPath && response.StatusCode == http.StatusOK {
 				kind, source := m.hostFileStorage(id, record)
 				response.Header.Set(hostStorageHeader, kind)
