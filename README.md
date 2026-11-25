@@ -38,25 +38,24 @@ build your own mobile, desktop, or messaging interface. [HTTP API](docs/api.md) 
 
 ### Mobile demos
 
-The mobile client uses English prompts and connects to a local Controller and
-Docker Host. The Word and PowerPoint clips show the delivered files in WPS Office.
+English conversations in the latest mobile app, with finished Word and PowerPoint files shown in WPS Office.
 
 <table align="center" width="100%">
   <tr>
     <td width="33%" valign="top" align="center">
-      <h4>Browser research</h4>
-      <a href="docs/showcase/en/mobile-research.gif"><img src="docs/showcase/en/mobile-research.gif" width="260" alt="English mobile chat verifies an AI adoption figure and links to the Stanford AI Index"></a>
-      <p>Verify an AI adoption figure in Chromium and get the original source in chat.</p>
+      <h4>Word documents</h4>
+      <a href="docs/showcase/mobile/word.gif"><img src="docs/showcase/mobile/word.gif" width="260" alt="English mobile conversation creating and revising a Word brief, followed by the finished document in WPS Office"></a>
+      <p>Create an AI pilot brief, then refine its owner, success metric, and decision point.</p>
     </td>
     <td width="33%" valign="top" align="center">
-      <h4>Word report</h4>
-      <a href="docs/showcase/en/mobile-word.gif"><img src="docs/showcase/en/mobile-word.gif" width="260" alt="English mobile chat creates an AI pilot brief and shows the Word file in WPS Office"></a>
-      <p>Ask for a Word brief with two candidate workflows and a four-week pilot.</p>
+      <h4>PowerPoint presentations</h4>
+      <a href="docs/showcase/mobile/slides.gif"><img src="docs/showcase/mobile/slides.gif" width="260" alt="English mobile conversation creating and revising a PowerPoint deck, followed by the finished slides in WPS Office"></a>
+      <p>Create a three-slide deck, then revise its rollout checkpoints.</p>
     </td>
     <td width="33%" valign="top" align="center">
-      <h4>PowerPoint briefing</h4>
-      <a href="docs/showcase/en/mobile-slides.gif"><img src="docs/showcase/en/mobile-slides.gif" width="260" alt="English mobile chat creates a three-slide deck and shows the slides in WPS Office"></a>
-      <p>Create a three-slide briefing on an AI pilot for a support team.</p>
+      <h4>Image generation and editing</h4>
+      <a href="docs/showcase/mobile/image.gif"><img src="docs/showcase/mobile/image.gif" width="260" alt="English mobile chat with two reference images, image tool previews, and the generated coral whale"></a>
+      <p>Use a whale and a color swatch as references, then preview the generated coral version.</p>
     </td>
   </tr>
 </table>
@@ -64,14 +63,14 @@ Docker Host. The Word and PowerPoint clips show the delivered files in WPS Offic
 <table align="center" width="67%">
   <tr>
     <td width="50%" valign="top" align="center">
-      <h4>Image editing with two references</h4>
-      <a href="docs/showcase/en/mobile-image.gif"><img src="docs/showcase/en/mobile-image.gif" width="260" alt="English mobile chat sends a blue whale and coral swatch and shows the generated image"></a>
-      <p>Attach a whale and a color swatch, then see the coral version in the conversation.</p>
+      <h4>Scheduled tasks</h4>
+      <a href="docs/showcase/mobile/schedule.gif"><img src="docs/showcase/mobile/schedule.gif" width="260" alt="English mobile conversation showing a reminder request, confirmation, and delivered checklist"></a>
+      <p>Schedule a reminder and receive its checklist in the same chat.</p>
     </td>
     <td width="50%" valign="top" align="center">
-      <h4>Scheduled reminder</h4>
-      <a href="docs/showcase/en/mobile-schedule.gif"><img src="docs/showcase/en/mobile-schedule.gif" width="260" alt="English mobile chat showing the request, scheduled task confirmation, and delivered reminder"></a>
-      <p>Create a one-time reminder and receive the checklist in the same chat when it runs.</p>
+      <h4>Plugins and connectors</h4>
+      <a href="docs/showcase/mobile/plugins.png"><img src="docs/showcase/mobile/plugins.png" width="260" alt="The mobile Me page with the plugin market selected and five available plugins"></a>
+      <p>A rich ecosystem spanning browser automation, Office, Google Workspace, X, and more.</p>
     </td>
   </tr>
 </table>
