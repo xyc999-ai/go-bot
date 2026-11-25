@@ -28,6 +28,9 @@ func TestDockerHostConversationRecoveryAndFiles(t *testing.T) {
 	}
 	var modelCalls atomic.Int32
 	model := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fixtureTitleResponse(w, r) {
+			return
+		}
 
 		b, _ := io.ReadAll(r.Body)
 		if r.URL.Path != "/responses" {

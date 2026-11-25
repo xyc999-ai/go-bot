@@ -44,6 +44,9 @@ func TestDockerBrowserSkillAndSessionIsolation(t *testing.T) {
 	}
 	origin := fmt.Sprintf("http://host.docker.internal:%d", listener.Addr().(*net.TCPAddr).Port)
 	mux.HandleFunc("/responses", func(w http.ResponseWriter, r *http.Request) {
+		if fixtureTitleResponse(w, r) {
+			return
+		}
 		var body struct {
 			Input []struct {
 				Role, Type string

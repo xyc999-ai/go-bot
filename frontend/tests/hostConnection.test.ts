@@ -85,3 +85,17 @@ test('one connection survives session changes and reconnects using all cached cu
   assert.equal(calls, 2)
   controller.stop()
 })
+
+test('title events refresh lists for unopened chats without creating chat messages', () => {
+  const cache = new TranscriptCache()
+  cache.keep('a', cacheTranscript(page()))
+  let changes = 0
+  cache.subscribe('@sessions', () => changes++)
+  const data = { seq: 4, type: 'session/title', data: { title: 'Updated title', messageSeqs: [1], source: { kind: 'provider' } } }
+  cache.receive({ sessionId: 'b', type: 'session', data })
+  assert.equal(changes, 1)
+  assert.equal(cache.get('b'), undefined)
+  cache.receive({ sessionId: 'a', type: 'session', data })
+  assert.equal(changes, 2)
+  assert.equal(cache.get('a')?.transcript.messages.length, 0)
+})

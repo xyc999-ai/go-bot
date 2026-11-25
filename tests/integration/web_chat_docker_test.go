@@ -30,6 +30,9 @@ func TestDockerWebChatPreview(t *testing.T) {
 	var modelCalls atomic.Int32
 	release := make(chan struct{})
 	model := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fixtureTitleResponse(w, r) {
+			return
+		}
 		var request struct{ Tools []struct{ Name string } }
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Error(err)
@@ -148,6 +151,16 @@ func TestDockerWebChatPreview(t *testing.T) {
 		t.Fatal("missing terminal SSE event")
 	}
 
+	// Naming is independent of the reply turn; wait for its durable result
+	// before testing Host replacement, rather than relying on request timing.
+	titleDeadline := time.Now().Add(3 * time.Second)
+	for !strings.Contains(read("GET", "/v1/sessions", "", 200), `"title":"Test conversation"`) {
+		if time.Now().After(titleDeadline) {
+			t.Fatal("generated title did not become visible")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
 	if err := manager.Stop(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -171,8 +184,13 @@ func TestDockerWebChatPreview(t *testing.T) {
 	}
 	cursor := strconv.FormatUint(*page.NextCursor, 10)
 	read("GET", url+"/events?after="+cursor, "", 200)
-	if list := read("GET", "/v1/sessions", "", 200); !strings.Contains(list, `"title":"Preview title and history"`) {
+	if list := read("GET", "/v1/sessions", "", 200); !strings.Contains(list, `"title":"Test conversation"`) {
 		t.Fatalf("missing durable title: %s", list)
+	}
+
+	read("PUT", url+"/title", `{"title":"My report"}`, 200)
+	if list := read("GET", "/v1/sessions", "", 200); !strings.Contains(list, `"title":"My report"`) || modelCalls.Load() != 1 {
+		t.Fatalf("renaming a cold chat failed or started a model turn: %s", list)
 	}
 
 	read("DELETE", url, "", 204)

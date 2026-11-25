@@ -73,6 +73,7 @@ svg { flex: none; }
 .chat-link > svg { margin-top: 2px; color: var(--muted); }
 .chat-label { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .chat-label small { display: block; font-size: 10px; color: var(--muted); margin-top: 4px; }
+.main-chat-mark { margin-left: auto; align-self: center; display: inline-flex; align-items: center; justify-content: center; width: 20px; flex-shrink: 0; color: var(--muted); }
 .row-actions { opacity: 0; margin-right: 2px; width: 26px !important; height: 28px !important; }
 .chat-row:hover .row-actions, .chat-row:focus-within .row-actions { opacity: 1; }
 .session-attention { color: var(--danger) !important; display: flex !important; align-items: center; gap: 5px; }
@@ -152,3 +153,9 @@ dialog::backdrop { background: #15151d45; backdrop-filter: blur(3px); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+.context-menu button.rename-chat-action { color: var(--ink); }
+.context-menu button.rename-chat-action:hover { background: var(--surface-hover); }
+.rename-dialog label { display: block; color: var(--muted); font-size: 12px; margin: 18px 0 8px; }
+.rename-dialog input { box-sizing: border-box; width: 100%; padding: 11px 12px; color: var(--ink); background: var(--canvas); border: 1px solid var(--line); border-radius: 9px; }
+.rename-dialog .dialog-actions { margin-top: 22px; }

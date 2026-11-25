@@ -71,6 +71,9 @@ func testMemoryAndHistoryRebuild(t *testing.T, profile, account, fixtureURL stri
 	var excludedArchived atomic.Bool
 	var isolatedAccount atomic.Bool
 	provider := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fixtureTitleResponse(w, r) {
+			return
+		}
 		var body struct {
 			Tools []struct{ Name string }
 			Input []struct {

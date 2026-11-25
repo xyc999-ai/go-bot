@@ -253,3 +253,7 @@ export async function readHostStream(
     reader.releaseLock()
   }
 }
+
+export function renameSession(userId: string, id: string, title: string) {
+  return request<{ title: string }>(`/v1/sessions/${encodeURIComponent(id)}/title`, write('PUT', { title }), userId)
+}

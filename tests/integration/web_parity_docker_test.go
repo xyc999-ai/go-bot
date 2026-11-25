@@ -82,6 +82,9 @@ func TestDockerWebToolParity(t *testing.T) {
 		fmt.Fprint(w, `<h2>Fixture</h2><p>Read <a href="../notes">notes</a>.</p><p hidden>hidden</p>`)
 	})
 	mux.HandleFunc("/responses", func(w http.ResponseWriter, r *http.Request) {
+		if fixtureTitleResponse(w, r) {
+			return
+		}
 		var body struct {
 			Tools []struct{ Name string }
 			Input []struct {

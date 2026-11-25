@@ -19,6 +19,7 @@ import (
 	"go-bot/harness/permission"
 	"go-bot/harness/plan"
 	"go-bot/harness/session"
+	"go-bot/harness/sessiontitle"
 	"go-bot/harness/tools"
 	"go-bot/harness/workflow"
 	"go-bot/internal/modelsettings"
@@ -45,6 +46,8 @@ type NativeRuntime struct {
 	// execution middleware. They cannot change turn/step or tool decisions.
 	UserMessageAccepted func()
 	TurnCommitted       func([]sessionformat.Event)
+	TitleGenerator      sessiontitle.Generate
+	titles              *sessiontitle.Service
 
 	approvalAudience      func() bool
 	mu                    sync.Mutex
@@ -95,7 +98,7 @@ func (r *NativeRuntime) start(ctx context.Context, resume bool, sessionReady fun
 	defer func() {
 		cancel()
 		if err != nil && prepared != nil {
-			cleanup := prepared.Close()
+			cleanup := r.closeLive(prepared)
 			if cleanup != nil && !errors.Is(err, cleanup) {
 				err = errors.Join(err, cleanup)
 			}
@@ -124,6 +127,38 @@ func (r *NativeRuntime) start(ctx context.Context, resume bool, sessionReady fun
 		r.Factory.Children = r
 	}
 	factory := r.Factory
+	wrap := func(model agent.Model) agent.Model {
+		if model == nil {
+			return nil
+		}
+		return sessiontitle.Observe(model, agent.ModelRoute{Provider: factory.Provider, Model: factory.ModelID}, func(route agent.ModelRoute) {
+			r.mu.Lock()
+			titles := r.titles
+			r.mu.Unlock()
+			if titles != nil {
+				titles.Start(route)
+			}
+		})
+	}
+	factory.Model = wrap(factory.Model)
+	if resolve := factory.ResolveTurnModel; resolve != nil {
+		factory.ResolveTurnModel = func(ctx context.Context) (agent.TurnModel, error) {
+			model, err := resolve(ctx)
+			if err == nil {
+				model.Model = wrap(model.Model)
+			}
+			return model, err
+		}
+	}
+	if resolve := factory.ResolveSelectedModel; resolve != nil {
+		factory.ResolveSelectedModel = func(ctx context.Context, route agent.ModelRoute) (agent.Model, error) {
+			model, err := resolve(ctx, route)
+			if err != nil {
+				return nil, err
+			}
+			return wrap(model), nil
+		}
+	}
 	ready := factory.SessionReady
 	factory.SessionReady = func(s *sessionformat.LiveSession) {
 		if sessionReady != nil {
@@ -136,6 +171,13 @@ func (r *NativeRuntime) start(ctx context.Context, resume bool, sessionReady fun
 	beforePublish := factory.BeforePublish
 	factory.BeforePublish = func(ctx context.Context, live *assembly.NativeLive) error {
 		prepared = live
+		titles, err := sessiontitle.New(live.Session, r.TitleGenerator)
+		if err != nil {
+			return err
+		}
+		r.mu.Lock()
+		r.titles = titles
+		r.mu.Unlock()
 		if readable != nil {
 			readable(live)
 		}
@@ -986,7 +1028,7 @@ func (r *NativeRuntime) Stop(ctx context.Context) error {
 		live := r.live
 		r.stopping = true
 		r.mu.Unlock()
-		r.closeOnce.Do(func() { r.closeError = live.Close() })
+		r.closeOnce.Do(func() { r.closeError = r.closeLive(live) })
 		return r.closeError
 	}
 	if !r.stopping {
@@ -1014,7 +1056,7 @@ func (r *NativeRuntime) Stop(ctx context.Context) error {
 			return err
 		}
 	}
-	r.closeOnce.Do(func() { r.closeError = live.Close() })
+	r.closeOnce.Do(func() { r.closeError = r.closeLive(live) })
 	return r.closeError
 }
 
@@ -1148,4 +1190,28 @@ func (r *NativeRuntime) HistoryWindow(ctx context.Context, request sessionformat
 	s := r.live.Session
 	r.mu.Unlock()
 	return s.HistoryWindow(ctx, request)
+}
+
+func (r *NativeRuntime) RenameTitle(ctx context.Context, title string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.live == nil || r.stopping || r.titles == nil {
+		return "", ErrHostSessionAbsent
+	}
+	return r.titles.Rename(ctx, title)
+}
+func (r *NativeRuntime) SetInitialTitle(ctx context.Context, title string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.live == nil || r.stopping || r.titles == nil {
+		return ErrHostSessionAbsent
+	}
+	_, err := r.titles.NameIfEmpty(ctx, title)
+	return err
+}
+func (r *NativeRuntime) closeLive(live *assembly.NativeLive) error {
+	if r.titles != nil {
+		r.titles.Close()
+	}
+	return live.Close()
 }

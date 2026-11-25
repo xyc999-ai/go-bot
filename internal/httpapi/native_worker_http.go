@@ -755,7 +755,7 @@ func publicNativeAssistantBaseline(baseline agent.NativeAssistantStreamBaseline,
 // closed until their public projection is designed.
 func publicNativeEvent(event sessionformat.Event) (sessionformat.Event, bool) {
 	switch event.Type {
-	case "turn/start", "turn/end", "tool/call", "tool/result", "todo/write", "goal/change", "plan/mode", "subagent/descriptor":
+	case "session/title", "turn/start", "turn/end", "tool/call", "tool/result", "todo/write", "goal/change", "plan/mode", "subagent/descriptor":
 		return event, true
 	case "user/message":
 		var data struct {
