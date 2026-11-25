@@ -33,7 +33,6 @@ Go Bot 会记住与你交流的背景，持续关注你关心的事，并主动�
 
 ### 移动端演示
 
-移动端演示采用英文会话，Word 和 PPT 动图也展示了在 WPS Office 中打开的成品。
 
 <table align="center" width="100%">
   <tr>

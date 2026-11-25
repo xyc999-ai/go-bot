@@ -38,7 +38,6 @@ build your own mobile, desktop, or messaging interface. [HTTP API](docs/api.md) 
 
 ### Mobile demos
 
-English conversations in the latest mobile app, with finished Word and PowerPoint files shown in WPS Office.
 
 <table align="center" width="100%">
   <tr>
