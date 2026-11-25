@@ -2,7 +2,7 @@
 
 日期：2026-11-22。状态：已实现，完成本地 Go、Docker、真实模型及 Web / Android Release 验收。本文已按本轮讨论整体更新，取代上一版中的首次交流门槛、固定检查区间、主会话二次价值判断和子 Agent 自动回报设计。
 
-本文确定运行主体、触发、结果、投递，并细化其他会话资料的采集和上下文归属。完整实施契约见第 13 节；现有 Go 装配及执行边界见[架构说明](architecture.md)，完整可扩展 Preset 的后续设计见 [Go Agent Preset 方案](agent-preset-go-plan.zh-CN.md)。
+本文确定运行主体、触发、结果、投递，并细化其他会话资料的采集和上下文归属。完整实施契约见第 13 节；现有 Go 装配及执行边界见[架构说明](architecture.md)，统一 Go Preset 的设计与实施记录见 [Go Agent Preset 方案](agent-preset-go-plan.zh-CN.md)。
 
 ## 1. 主体与职责
 
@@ -389,7 +389,7 @@ System、运行时资料、原会话消息、Skill catalog 和工具定义各有
 
 它需要控制 timer、持久 Agent 运行、结果确认、Session 恢复和主会话 Inbox 投递。这些都属于我们已经选择由 Go 管理的核心能力。让它成为普通 Cordis 业务插件，会把这些核心责任再次跨进程搬到 Node。
 
-插件继续提供第三方信息、工具、Skill 和可选事件提示；它们通过内置服务交互，不控制 AgentLoop 或接管后台 Agent 的生存期。Agent 组合能力也在 Go 装配层实现。Go 装配与插件边界见[架构说明](architecture.md)，初始组合与运行契约见第 13 节；通用 Preset 子系统仍属于[后续设计](agent-preset-go-plan.zh-CN.md)。
+插件继续提供第三方信息、工具、Skill 和可选事件提示；它们通过内置服务交互，不控制 AgentLoop 或接管后台 Agent 的生存期。Agent 组合能力也在 Go 装配层实现。Go 装配与插件边界见[架构说明](architecture.md)，初始组合与运行契约见第 13 节；通用 Preset 子系统已通过同一 Go Registry 实施，见[设计与实施记录](agent-preset-go-plan.zh-CN.md)。
 
 ## 12. 数据、启停与边界
 
@@ -409,12 +409,12 @@ System、运行时资料、原会话消息、Skill catalog 和工具定义各有
 
 ## 13. 实施收口与验收契约
 
-1. **Agent 组合**：普通组合维持原有能力。后台组合拥有独立身份提示、现有读取/浏览/检索/记忆与已启用插件能力及 Skill；移除需要即时用户交互的问答、计划审批、Goal 管理、子 Agent 管理和直接发消息工具。Schedule 只提供 list/view，使后台了解当前工作安排；下次自主检查只由结构化结果安排。所有实际工具调用仍经过 Go 的原执行管线、权限和沙箱。Skill 目录、加载与显式调用使用同一组合范围。
+1. **Agent 组合**：普通组合维持原有能力。Go 内置后台 Preset 使用 `go-bot-proactive` 组合，仅排除问答（askuserquestion）、退出 Plan 模式、Goal 管理、子 Agent/工作流及其配套控制工具（含给其他 Agent 的 send_message），以及 Schedule 创建/修改、文件交付工具 present。其余当前可用工具和已启用插件能力、Skill 全部保留，包括文件读写、Shell、记忆、历史检索、网页搜索、浏览器和 readimage；未启用或未配置的能力不会因 Preset 自动启用。Schedule 保留 list/view，下次自主检查只由后台专用 structured_output 安排。初始装配和动态加载的工具使用同一筛选规则，不新增后台专属外部操作分类或拦截策略；实际调用仍经过原 Go 工具执行管线、权限和沙箱。Skill 不增加后台专属排除范围，目录、加载与显式调用沿用现有机制。后台可保存研究文件，但不使用 present 直接交付文件；是否触达主会话仍通过 structured_output 的 notify 决定。
 2. **上下文**：后台拥有自己的持久历史；实时来源使用已有 RuntimeContextSource 的整体有界 snapshot，不冒充增量。新 turn 开始采集；有真实变化时在自然后续 step 刷新。固定窗口和预算采用第 10 节默认值，不增加用户 env 参数。
 3. **时间**：外部运行器在本轮首个模型请求前补一次标准 time-context，抽取并复用现有构造逻辑；后续仍使用原 10 分钟刷新规则。不得修改 AgentLoop 的运行顺序、结束条件或 Inbox 语义。
 4. **结果**：每轮准备独立捕获状态，通过标准工具注册机制提供 structured_output。三个字段均必填；nextCheck 必为未来时间和理由的对象，notify 可为空。校验失败不结束 turn。工具结果成功提交且 RunNext 正常返回后，Go 结算本轮，保存时间并按决定投递；不增加另一次解析 LLM。
 5. **投递**：只向本账号主会话 Inbox 的 next-turn 提交 agent-message，公开 UI 仍只展示主会话生成的助手回复。记录投递 messageId 用于中断恢复，不引入业务去重。安静结果不投递任何消息或结束通知。
-6. **状态与设置**：Redis 用户 Hash 中增加一个主动服务开关，默认为开启；Host 持久化独立 Session 定位与恢复所需状态，不保存另一份对话正文。Web 显示开关、下一次检查及运行异常；移动端 Release 保留简洁开关和需要处理的配置/异常提示，Debug 才显示下一次时间、理由、最近完成和诊断状态。不提供“立即运行”。没有模型时等待配置，不阻塞登录与主会话。
+6. **状态与设置**：Redis 用户 Hash 中的主动服务开关默认为关闭；用户开启时，Controller 先校验主会话已选模型，未选择时校验账号默认模型。缺少或失效时返回 409，不保存启用状态，Web/移动端弹窗提示并提供模型设置入口。校验只检查配置，不调用模型。关闭不依赖模型。关闭期间不准备后台 Agent、不运行检查；Host 持久化独立 Session 定位与恢复所需状态，不保存另一份对话正文。Web 显示开关、下一次检查及运行异常；移动端 Release 保留简洁开关和需要处理的配置/异常提示，Debug 才显示下一次时间、理由、最近完成和诊断状态。不提供“立即运行”。开启后若模型配置失效则暂停等待修复，不阻塞登录与主会话。保存模型配置不会自动打开已关闭的开关。
 7. **异常**：既有模型重试仍由原执行机制处理。turn 最终失败或没有结构化结果时显示错误，保留最后成功决定，不能把失败当作取消检查，也不能因一个已过期 timer 进入空转循环。后续有效变化、模型恢复、重新开启或 Host 恢复可提供新的执行机会；不得伪造一个成功决定或业务检查周期。
 8. **验收**：测试四类触发互不错误限流、跨触发消费旧变化/保留新变化、每轮结果与非空未来时间校验、隐藏内部 Session、近期可见消息采集、标准时间上下文、仅 notify 投递、恢复和关闭。用本地真实模型与 Web/Android 验证；检查 AgentLoop/工具管线主体未被修改，ECI 暂不验收。
 
@@ -423,7 +423,7 @@ System、运行时资料、原会话消息、Skill catalog 和工具定义各有
 已接通的实现：
 
 - `internal/proactive`：非空未来 nextCheck 契约、复用原 structured_output 的逐轮输出包装、既有日志成功结果恢复、10/30 分钟变化路径与独立 AI timer、变化标记采集边界、私有状态持久化及投递恢复引用。
-- `harness/assembly`：Go 组合选择器覆盖真实静态/动态工具表和统一 Skill 目录/加载/显式查找；未改变 Host 全局插件生命周期。
+- `harness/assembly`：统一 AgentPreset Registry/Binding 覆盖真实静态/动态工具表和统一 Skill 目录/加载/显式查找；未改变 Host 全局插件生命周期。
 - `harness/sessionsearch`：复用消息索引的有界近期对话资料查询。
 - `harness/agent/native_time_context.go`：共享标准时间消息构造及只读采样入口；原周期判断和 AgentLoop 主体保留。
 - `internal/host/proactive.go`：独立后台 Session 的实际创建/恢复、标准时间采样、近期活动和 Schedule 概览、逐轮输出、模型选择、主会话 next-turn 投递和变化来源接入。

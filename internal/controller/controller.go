@@ -94,7 +94,7 @@ func (m *Manager) CreateAccount(ctx context.Context, id string) error {
 			defaults.Packages[release.Package] = plugin.PackageSelection{CatalogID: release.ID, Version: release.Version, Enabled: true}
 		}
 	}
-	return m.Store.Create(ctx, id, Account{DesiredState: stopped, MainSessionID: uuid.NewString(), Plugins: &defaults, Proactive: &proactive.Settings{Enabled: true}})
+	return m.Store.Create(ctx, id, Account{DesiredState: stopped, MainSessionID: uuid.NewString(), Plugins: &defaults, Proactive: &proactive.Settings{Enabled: false}})
 }
 
 func (m *Manager) spec(id string, record Account) runtime.Spec {

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"go-bot/internal/modelsettings"
 	proactive "go-bot/internal/proactivesettings"
 )
 
@@ -17,7 +18,7 @@ func TestProactiveSettingsDoNotStartHostAndSurviveHostRecordWrites(t *testing.T)
 		t.Fatal(err)
 	}
 	response := controllerCall(manager, "GET", proactive.SettingsPath, "alice", "")
-	if response.Code != 200 || !strings.Contains(response.Body.String(), `"enabled":true`) || !strings.Contains(response.Body.String(), `"phase":"host-stopped"`) || len(driver.specs) != 0 {
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `"enabled":false`) || !strings.Contains(response.Body.String(), `"phase":"host-stopped"`) || len(driver.specs) != 0 {
 		t.Fatalf("read=%d %s", response.Code, response.Body.String())
 	}
 	for _, body := range []string{`{}`, `{"enabled":null}`, `{"enabled":"true"}`, `{"enabled":false,"runNow":true}`, `{"enabled":true} {}`} {
@@ -82,7 +83,7 @@ func TestControllerSynchronizesAccountPreferenceAndReturnsHostStatus(t *testing.
 	mu.Lock()
 	initial := received
 	mu.Unlock()
-	if !initial.Enabled || initial.MainSessionID != account.MainSessionID {
+	if initial.Enabled || initial.MainSessionID != account.MainSessionID {
 		t.Fatalf("sync=%+v", initial)
 	}
 	response := controllerCall(manager, "PUT", proactive.SettingsPath, "alice", `{"enabled":false}`)
@@ -97,6 +98,9 @@ func TestControllerSynchronizesAccountPreferenceAndReturnsHostStatus(t *testing.
 	mu.Lock()
 	failApply = true
 	mu.Unlock()
+	if _, err := manager.Store.SaveModelCatalog(t.Context(), "alice", modelsettings.Catalog{DefaultEndpointID: "test", Endpoints: map[string]modelsettings.Endpoint{"test": {Protocol: "responses", BaseURL: "https://models.example/v1", APIKey: "fixture", Models: []string{"model"}}}}); err != nil {
+		t.Fatal(err)
+	}
 	response = controllerCall(manager, "PUT", proactive.SettingsPath, "alice", `{"enabled":true}`)
 	if response.Code != 503 || !strings.Contains(response.Body.String(), settingsSavedHostApplyFailed) {
 		t.Fatalf("apply failure=%d %s", response.Code, response.Body.String())
@@ -104,5 +108,72 @@ func TestControllerSynchronizesAccountPreferenceAndReturnsHostStatus(t *testing.
 	account, _ = manager.Store.Get(t.Context(), "alice")
 	if account.Proactive == nil || !account.Proactive.Enabled {
 		t.Fatal("explicit saved-setting error hid the Redis commit")
+	}
+}
+
+func TestProactiveEnableValidatesEffectiveModelBeforeSavingOrStartingHost(t *testing.T) {
+	for _, name := range []string{"missing", "incomplete-default", "default", "explicit", "invalid-explicit"} {
+		t.Run(name, func(t *testing.T) {
+			driver := &fakeDriver{}
+			manager := newTestManager(t, "docker", driver, func(w http.ResponseWriter, r *http.Request) { controlReply(w, r) })
+			if err := manager.CreateAccount(t.Context(), "alice"); err != nil {
+				t.Fatal(err)
+			}
+			account, err := manager.Store.Get(t.Context(), "alice")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if accountProactive(Account{}).Enabled || accountProactive(account).Enabled {
+				t.Fatal("proactive assistance defaults on")
+			}
+			catalog := modelsettings.Catalog{DefaultEndpointID: "test", Endpoints: map[string]modelsettings.Endpoint{"test": {Protocol: "responses", BaseURL: "https://models.example/v1", APIKey: "fixture", Models: []string{"model"}}}}
+			if name != "missing" {
+				if name == "incomplete-default" {
+					endpoint := catalog.Endpoints["test"]
+					endpoint.APIKey = ""
+					catalog.Endpoints["test"] = endpoint
+				}
+				if name == "explicit" {
+					catalog.DefaultEndpointID = ""
+				}
+				if _, err := manager.Store.SaveModelCatalog(t.Context(), "alice", catalog); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if name == "explicit" || name == "invalid-explicit" {
+				model := "model"
+				if name == "invalid-explicit" {
+					model = "removed"
+				}
+				if _, err := manager.Store.SaveSessionModel(t.Context(), "alice", account.MainSessionID, modelsettings.Selection{EndpointID: "test", ModelID: model}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			response := controllerCall(manager, "PUT", proactive.SettingsPath, "alice", `{"enabled":true}`)
+			wantStatus, wantCode := 200, ""
+			switch name {
+			case "missing":
+				wantStatus, wantCode = 409, "model_not_configured"
+			case "incomplete-default", "invalid-explicit":
+				wantStatus, wantCode = 409, "model_selection_unavailable"
+			}
+			if response.Code != wantStatus || (wantCode != "" && !strings.Contains(response.Body.String(), wantCode)) {
+				t.Fatalf("enable=%d %s", response.Code, response.Body.String())
+			}
+			saved, err := manager.Store.Get(t.Context(), "alice")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if accountProactive(saved).Enabled != (wantStatus == 200) {
+				t.Fatal("rejected activation changed saved preference")
+			}
+			if len(driver.specs) != 0 {
+				t.Fatal("validation started a Host")
+			}
+			// Disabling is always possible, including with no usable model.
+			if response := controllerCall(manager, "PUT", proactive.SettingsPath, "alice", `{"enabled":false}`); response.Code != 200 {
+				t.Fatal(response.Body.String())
+			}
+		})
 	}
 }

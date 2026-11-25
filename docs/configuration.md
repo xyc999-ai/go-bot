@@ -99,9 +99,12 @@ See the [provider guide](providers.md) for account and key requirements.
 
 ### Proactive assistance
 
-New accounts enable proactive assistance by default. **Settings → Proactive
-assistance** on the Web, or **Me → Proactive assistance** on mobile, controls the
-account preference. The Web also displays the next check and current status;
+Proactive assistance is off by default for new accounts and accounts without a
+saved preference. Enable it in **Settings → Proactive assistance** on the Web,
+or **Me → Proactive assistance** on mobile. Enabling requires a usable model
+configuration; otherwise the switch stays off and the client offers to open
+model settings. This configuration check does not call the model service.
+The Web also displays the next check and current status;
 mobile shows those diagnostic details only in Debug builds. Release builds keep
 the switch and actionable configuration/error messages. No new
 deployment environment variable or extra model profile is needed. This feature

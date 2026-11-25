@@ -7,12 +7,13 @@ import (
 	"io"
 	"net/http"
 
+	"go-bot/internal/modelsettings"
 	proactive "go-bot/internal/proactivesettings"
 )
 
 func accountProactive(account Account) proactive.Settings {
 	if account.Proactive == nil {
-		return proactive.Settings{Enabled: true}
+		return proactive.Settings{Enabled: false}
 	}
 	return *account.Proactive
 }
@@ -57,6 +58,27 @@ func (m *Manager) proactiveSettingsHTTP(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		settings := proactive.Settings{Enabled: *input.Enabled}
+		if settings.Enabled {
+			state, err := m.Store.LoadModels(r.Context(), id)
+			if err != nil {
+				httpError(w, 503, "model_settings_unavailable")
+				return
+			}
+			// Match the background Agent: an explicit main-chat selection wins.
+			// Only an absent selection may use the account default.
+			choice, exists := state.Sessions[account.MainSessionID]
+			if !exists {
+				choice = state.Catalog.Default()
+			}
+			if _, err := state.Catalog.Resolve(choice); err != nil {
+				code := "model_selection_unavailable"
+				if errors.Is(err, modelsettings.ErrUnconfigured) {
+					code = "model_not_configured"
+				}
+				httpError(w, http.StatusConflict, code)
+				return
+			}
+		}
 		if err := m.Store.SaveProactiveSettings(r.Context(), id, settings); err != nil {
 			httpError(w, 503, "proactive_settings_unavailable")
 			return

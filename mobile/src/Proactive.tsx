@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppState, Switch, Text, View } from 'react-native'
+import { Alert, AppState, Switch, Text, View } from 'react-native'
 import { Clock3, RefreshCw, Sparkles } from 'lucide-react-native'
-import { proactivePhase, proactiveProblem, type ProactiveStatus } from '../../frontend/src/settings/proactiveState'
+import { proactiveEnableProblem, proactivePhase, proactiveProblem, type ProactiveStatus } from '../../frontend/src/settings/proactiveState'
 import { ApiError, Controller } from './api'
 import { useLocale } from './locale'
 import { accent, Button, Hint, muted, Panel, s, SheetScroll } from './ui'
@@ -38,7 +38,13 @@ export function Proactive({ api, onModels }: { api: Controller; onModels: () => 
     setBusy(true); setError(''); setRetry(false)
     try { setStatus(await api.saveProactiveSettings(enabled)) }
     catch (issue) {
-      if (issue instanceof ApiError && issue.code === 'settings_saved_host_apply_failed') {
+      const modelProblem = issue instanceof ApiError && enabled ? proactiveEnableProblem(issue.code) : ''
+      if (modelProblem) {
+        Alert.alert(t('配置模型'), t(modelProblem), [
+          { text: t('取消'), style: 'cancel' },
+          { text: t('Open model settings'), onPress: onModels },
+        ])
+      } else if (issue instanceof ApiError && issue.code === 'settings_saved_host_apply_failed') {
         setStatus(await api.proactiveSettings().catch(() => undefined))
         setError('Settings were saved, but the Host could not apply them. Retry or reopen the account.')
         setRetry(true)

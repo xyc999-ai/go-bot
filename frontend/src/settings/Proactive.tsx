@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Clock3, RefreshCw, Sparkles } from 'lucide-react'
-import { getProactiveSettings, saveProactiveSettings, settingsApplyFailed } from '../api/controller'
+import { APIError, getProactiveSettings, saveProactiveSettings, settingsApplyFailed } from '../api/controller'
+import { ModelRequiredDialog } from '../chat/ModelRequiredDialog'
 import { useLocale } from '../locale'
-import { proactivePhase, proactiveProblem, type ProactiveStatus } from './proactiveState'
+import { proactiveEnableProblem, proactivePhase, proactiveProblem, type ProactiveStatus } from './proactiveState'
 
 export function Proactive({ userId, onModels }: { userId: string; onModels: () => void }) {
   const { t, language } = useLocale()
@@ -10,6 +11,7 @@ export function Proactive({ userId, onModels }: { userId: string; onModels: () =
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [retry, setRetry] = useState(false)
+  const [modelIssue, setModelIssue] = useState('')
   const generation = useRef(0)
   const saving = useRef(false)
   const date = (at: number) => new Date(at).toLocaleString(language === 'zh-CN' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -35,7 +37,10 @@ export function Proactive({ userId, onModels }: { userId: string; onModels: () =
     setBusy(true); setError(''); setRetry(false)
     try { setStatus(await saveProactiveSettings(userId, enabled)) }
     catch (issue) {
-      if (settingsApplyFailed(issue)) {
+      const modelProblem = issue instanceof APIError && enabled ? proactiveEnableProblem(issue.message) : ''
+      if (modelProblem) {
+        setModelIssue(modelProblem)
+      } else if (settingsApplyFailed(issue)) {
         setStatus(await getProactiveSettings(userId).catch(() => undefined))
         setError('Settings were saved, but the Host could not apply them. Retry or reopen the account.')
         setRetry(true)
@@ -67,5 +72,6 @@ export function Proactive({ userId, onModels }: { userId: string; onModels: () =
       </div>
     </>}
     <div className="proactive-footer"><p className="model-muted">{t('Uses the main chat’s model and connected services while your Host is running. Model and service usage may incur charges.')}</p><button type="button" className="text-button" disabled={busy} onClick={() => { setError(''); void (retry && status ? save(status.enabled) : refresh()) }}><RefreshCw size={14} />{t(retry ? 'Retry applying' : 'Refresh status')}</button></div>
+    {modelIssue && <ModelRequiredDialog message={modelIssue} keepDraft={false} onClose={() => setModelIssue('')} onSettings={() => { setModelIssue(''); onModels() }} />}
   </section>
 }

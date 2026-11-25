@@ -53,6 +53,44 @@ func testHooks() Hooks {
 	}
 }
 
+func TestDisabledServiceDoesNotPrepareOrExecuteOnStartupOrChanges(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		hooks := testHooks()
+		calls := 0
+		hooks.Prepare = func(context.Context, State) error { calls++; return nil }
+		hooks.Execute = func(context.Context, State, WakeReason) (Completed, error) {
+			calls++
+			return Completed{}, errors.New("disabled Agent must not run")
+		}
+		service, err := NewService(&memoryStorage{}, hooks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error, 1)
+		go func() { done <- service.Run(ctx) }()
+		if err := service.Configure(false, mainID); err != nil {
+			t.Fatal(err)
+		}
+		if err := service.Changed(); err != nil {
+			t.Fatal(err)
+		}
+		if err := service.ModelChanged(); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(24 * time.Hour)
+		synctest.Wait()
+		status := service.Status()
+		if calls != 0 || status.Enabled || status.LastRunStartedAt != 0 {
+			t.Fatalf("disabled service ran: calls=%d status=%+v", calls, status)
+		}
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
 func TestAnyRunConsumesExistingChangesButKeepsLaterChanges(t *testing.T) {
 	for _, trigger := range []WakeReason{InitialWake, TimedWake, ChangeWake, RecoverWake, EnabledWake} {
 		for _, newChange := range []string{"none", "during-collection", "after-collection"} {

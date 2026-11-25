@@ -36,6 +36,14 @@ export const proactiveChinese: Record<string, string> = {
   'Choose an available model for the main chat to resume proactive assistance.': '请为主会话选择可用模型，以继续主动服务。',
   'The last check could not finish. It can resume after configuration or information changes.': '上次检查未能完成。配置恢复或有新信息后，可以继续运行。',
   'Open model settings': '打开模型设置',
+  'Set up a model before enabling proactive assistance.': '请先配置模型，再开启主动服务。',
+  'The main chat’s selected model is unavailable. Choose an available model before enabling proactive assistance.': '主会话选择的模型已不可用，请先选择可用模型，再开启主动服务。',
+}
+
+export function proactiveEnableProblem(code: string) {
+  if (code === 'model_not_configured') return 'Set up a model before enabling proactive assistance.'
+  if (code === 'model_selection_unavailable') return 'The main chat’s selected model is unavailable. Choose an available model before enabling proactive assistance.'
+  return ''
 }
 
 export function proactivePhase(status: ProactiveStatus) {
