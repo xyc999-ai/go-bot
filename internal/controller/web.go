@@ -51,7 +51,7 @@ func controllerBrowserOrigin(w http.ResponseWriter, r *http.Request, devOrigin s
 	}
 	if devOrigin != "" && origin == devOrigin && config.IsLoopbackHost((&url.URL{Host: r.Host}).Hostname()) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Last-Event-ID, X-Client-Time-Zone, X-User-ID, "+mcpconfig.ControllerOriginHeader)
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Last-Event-ID, X-Client-Time-Zone, X-User-ID, "+ClientHeader+", "+mcpconfig.ControllerOriginHeader)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if r.URL.Path == hostFilesPath {
 			w.Header().Set("Access-Control-Expose-Headers", hostStorageHeader+", "+hostStorageSourceHeader)

@@ -16,6 +16,7 @@ Serve a custom browser UI from the same origin as the Controller API, or use the
 |---|---|
 | GET /healthz | Process liveness |
 | GET /readyz | Application readiness |
+| GET /v1/clients | Clients reported by this account, with connection status and lastSeenAt |
 | GET /v1/capabilities | Current model protocol/search capabilities |
 | POST /v1/sessions | Create, returning sessionId |
 | GET /v1/sessions?limit=&cursor= | Page through unarchived top-level sessions with an optional derived title |
@@ -355,6 +356,29 @@ workspace, independently of the selected chat or tab. Each SSE record uses
 own `sessionId`; `sessions.changed`, `schedule/changed` and `extensions.changed`
 invalidate their Host-level lists or settings. Session switches do not reconnect.
 No separate task or plugin stream is needed.
+
+Clients may attach `X-Go-Bot-Client` to the existing Host-stream request. Its
+value is `encodeURIComponent(JSON.stringify({id, type, platform?, model?}))`.
+Use a persistent anonymous installation ID (8–80 ASCII letters, digits, `_` or
+`-`); `type` is `web`, `mobile` or `desktop`. Platform/model are optional, limited
+to 32/120 bytes; Web metadata is discarded so its name remains Web. Missing
+metadata leaves the stream unchanged. Malformed metadata returns HTTP 400.
+The header is consumed by Controller and never forwarded to Host or the model.
+
+Controller registers a client only after a successful SSE handshake. Multiple
+tabs share the installation ID but maintain independent connection leases.
+Leases renew every 30 seconds and expire after 90 seconds; a normal disconnect
+ends only that stream's lease. Status describes the application's event
+connection, rather than the device's power or network state.
+
+`GET /v1/clients` uses `X-User-ID`, does not start Host, and returns
+`{"clients":[{"id":"client-example","type":"web","status":"connected","lastSeenAt":1795640000000}]}`.
+Native records may also include `platform` and `model`. Status is `connected` or
+`disconnected`; `lastSeenAt` is a Unix millisecond timestamp. Internal connection
+IDs and leases are not exposed. At most 50 installation records are retained,
+evicting the oldest disconnected record when necessary. Unreported clients do
+not appear. The mobile Devices tab refreshes every five seconds while visible
+and in the foreground, with a manual refresh action.
 
 The first transcript page includes `events`, `throughSeq`, `before`, `queue`,
 `questions`, optional live `baseline`, and `permission`. Pass `before` for older

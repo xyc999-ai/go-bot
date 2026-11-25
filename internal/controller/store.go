@@ -29,6 +29,8 @@ type Account struct {
 }
 
 type AccountStore interface {
+	UpdateClientPresence(context.Context, string, ClientUpdate) error
+	ClientDevices(context.Context, string, int64) ([]ClientDevice, error)
 	Create(context.Context, string, Account) error
 	Get(context.Context, string) (Account, error)
 	Save(context.Context, string, Account) error // Save only Host lifecycle fields.

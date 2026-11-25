@@ -166,6 +166,7 @@ Each account has one Redis Hash at `user:<userId>` with no expiration.
 | `webSearch` | JSON | Active `provider` and per-provider `entries` with API keys |
 | `imageGeneration` | JSON | Active `provider` and per-provider `entries` with API keys and model names |
 | `plugins` | JSON | Per-package user selections: catalogId, fixed version and enabled. No instance configs, sources or secrets; credentials remain in the Host |
+| `clients` | JSON | Anonymous client metadata, lastSeenAt and per-SSE connection leases; Controller computes status from unexpired leases |
 | `sessionModels` | JSON | Map from session ID to `{endpointId, modelId}` |
 | `modelRevision` | Integer | Version of the model catalog and session selections synchronized with the Host |
 

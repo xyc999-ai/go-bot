@@ -20,6 +20,7 @@ import (
 )
 
 type memoryStore struct {
+	clients map[string]map[string]clientRecord
 	mu      sync.Mutex
 	records map[string]Account
 	models  map[string]modelsettings.Snapshot
