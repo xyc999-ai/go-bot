@@ -39,6 +39,7 @@ type NativeHost struct {
 	List                 func(context.Context, string, int) (sessionformat.SessionListPage, error)
 	LatestSession        func(context.Context) (sessionformat.SessionListPage, error)
 	ReadSession          func(context.Context, string) (sessionformat.PhysicalArtifact, error)
+	ReadHistory          func(context.Context, string, sessionformat.HistoryRequest) (sessionformat.HistoryWindow, error)
 	ReadSessionHeader    func(context.Context, string) (sessionformat.Header, error)
 	SessionLogInfo       func(string) (os.FileInfo, error)
 	WorkspaceForSession  func(string) string

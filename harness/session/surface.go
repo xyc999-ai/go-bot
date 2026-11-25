@@ -12,10 +12,14 @@ import (
 // Nodes are log sequences, not message indexes: an empty system or assistant
 // message retains its node even though it contributes no model input.
 type Surface struct {
-	Nodes        []uint64
-	Messages     []json.RawMessage
-	MessageSeqs  []uint64
-	Replacements []SurfaceReplacement
+	// Metadata covers current nodes only, including nodes with empty content.
+	ToolResultData map[uint64]json.RawMessage `json:"-"`
+	NodeTypes      map[uint64]string          `json:"-"`
+	NodeMessages   map[uint64]json.RawMessage `json:"-"`
+	Nodes          []uint64
+	Messages       []json.RawMessage
+	MessageSeqs    []uint64
+	Replacements   []SurfaceReplacement
 }
 
 type SurfaceReplacement struct {
@@ -108,14 +112,21 @@ func (s *SurfaceState) Append(event Event) error {
 	return nil
 }
 
-func (s *SurfaceState) Snapshot() (Surface, error) {
+func (s *SurfaceState) Snapshot() (Surface, error) { return s.snapshot(true) }
+
+// ModelSnapshot contains the current surface, without the growing replacement
+// audit trail. Inspection and replay still expose that trail through Snapshot.
+func (s *SurfaceState) ModelSnapshot() (Surface, error) { return s.snapshot(false) }
+func (s *SurfaceState) snapshot(includeReplacements bool) (Surface, error) {
 	if s == nil {
 		return Surface{}, errors.New("nil Session surface")
 	}
-	result := Surface{Nodes: append([]uint64(nil), s.nodes...)}
-	for _, replacement := range s.replacements {
-		replacement.ShadowedSeqs = append([]uint64(nil), replacement.ShadowedSeqs...)
-		result.Replacements = append(result.Replacements, replacement)
+	result := Surface{ToolResultData: make(map[uint64]json.RawMessage), Nodes: append([]uint64(nil), s.nodes...), NodeTypes: make(map[uint64]string, len(s.nodes)), NodeMessages: make(map[uint64]json.RawMessage, len(s.nodes))}
+	if includeReplacements {
+		for _, replacement := range s.replacements {
+			replacement.ShadowedSeqs = append([]uint64(nil), replacement.ShadowedSeqs...)
+			result.Replacements = append(result.Replacements, replacement)
+		}
 	}
 	for _, seq := range s.nodes {
 		message, include, err := eventMessage(s.events[seq])
@@ -123,10 +134,15 @@ func (s *SurfaceState) Snapshot() (Surface, error) {
 			return Surface{}, err
 		}
 		if replacement, found := s.projected[seq]; found {
-			message = replacement
+			message = append(json.RawMessage(nil), replacement...)
 		}
+		if s.events[seq].Type == "tool/result" {
+			result.ToolResultData[seq] = append(json.RawMessage(nil), s.events[seq].Data...)
+		}
+		result.NodeTypes[seq] = s.events[seq].Type
+		result.NodeMessages[seq] = message
 		if include {
-			result.Messages = append(result.Messages, append(json.RawMessage(nil), message...))
+			result.Messages = append(result.Messages, message)
 			result.MessageSeqs = append(result.MessageSeqs, seq)
 		}
 	}

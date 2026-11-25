@@ -186,7 +186,7 @@ func (a *NativeLoop) completeNativeStep(ctx context.Context, turn uint64, step i
 				if flushErr := a.session.Flush(ctx); flushErr != nil {
 					return modeldata.AssistantMessage{}, errors.Join(err, flushErr)
 				}
-				messages, selectErr = nativeModelMessages(a.session, a.filePath)
+				messages, selectErr = a.modelMessages()
 				if selectErr != nil {
 					return modeldata.AssistantMessage{}, errors.Join(err, selectErr)
 				}
@@ -199,7 +199,7 @@ func (a *NativeLoop) completeNativeStep(ctx context.Context, turn uint64, step i
 				return modeldata.AssistantMessage{}, errors.Join(err, pruneErr)
 			}
 			if pruned > 0 {
-				messages, pruneErr = nativeModelMessages(a.session, a.filePath)
+				messages, pruneErr = a.modelMessages()
 				if pruneErr != nil {
 					return modeldata.AssistantMessage{}, errors.Join(err, pruneErr)
 				}
@@ -212,7 +212,7 @@ func (a *NativeLoop) completeNativeStep(ctx context.Context, turn uint64, step i
 				}
 				if compacted {
 					overflowCompactions++
-					messages, compactErr = nativeModelMessages(a.session, a.filePath)
+					messages, compactErr = a.modelMessages()
 					if compactErr != nil {
 						return modeldata.AssistantMessage{}, errors.Join(err, compactErr)
 					}

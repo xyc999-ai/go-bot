@@ -505,7 +505,7 @@ func (m *nativeChildManager) SendChildMessage(ctx context.Context, senderID, tar
 		}
 		target, targetProcess = m.liveLocked(targetID)
 		if senderProcess == nil || senderProcess.parentID != targetID {
-			children, err := sessionformat.FoldSubagentCatalog(sender.Session.DurableEvents(), sender.Session.InheritedEventCount())
+			children, err := sender.Session.Children(sessionformat.DurableCut)
 			if err != nil {
 				m.mu.Unlock()
 				return "", err
@@ -529,7 +529,7 @@ func (m *nativeChildManager) SendChildMessage(ctx context.Context, senderID, tar
 				m.creating++
 				m.mu.Unlock()
 				identity := m.identity
-				identity.PermissionCeiling = func() permission.Mode { return permission.Read(m.root.Session.Events()).Mode }
+				identity.PermissionCeiling = func() permission.Mode { return permission.ReadSession(m.root.Session).Mode }
 				resumed, err := m.factory.ResumeChild(ctx, identity, senderID, targetID)
 				m.mu.Lock()
 				m.creating--
@@ -656,7 +656,7 @@ func (m *nativeChildManager) InterruptChild(_ context.Context, parentID, childID
 	if parent == nil {
 		return "", errors.New("parent Agent is not live")
 	}
-	children, err := sessionformat.FoldSubagentCatalog(parent.Session.DurableEvents(), parent.Session.InheritedEventCount())
+	children, err := parent.Session.Children(sessionformat.DurableCut)
 	if err != nil {
 		return "", err
 	}
@@ -683,7 +683,7 @@ func (m *nativeChildManager) ListChildren(ctx context.Context, parentID string) 
 	if parent == nil {
 		return nil, errors.New("parent Agent is not live")
 	}
-	children, err := sessionformat.FoldSubagentCatalog(parent.Session.DurableEvents(), parent.Session.InheritedEventCount())
+	children, err := parent.Session.Children(sessionformat.DurableCut)
 	if err != nil {
 		return nil, err
 	}

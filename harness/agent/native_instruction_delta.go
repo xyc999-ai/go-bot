@@ -20,7 +20,7 @@ type nativeVisibleInstructions struct {
 // Model-visible messages, not obsolete physical rows, are authoritative after
 // compaction. A baseline resets the scope map; later deltas update it in order.
 func (a *NativeLoop) visibleInstructions() (nativeVisibleInstructions, error) {
-	surface, err := a.session.Surface()
+	surface, err := a.session.ModelSurface()
 	if err != nil {
 		return nativeVisibleInstructions{}, err
 	}

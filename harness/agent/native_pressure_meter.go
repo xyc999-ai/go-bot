@@ -67,7 +67,7 @@ func (a *NativeLoop) latestNativePressureAnchor() (*nativePressureAnchor, error)
 			// A later assistant without usage supersedes the previous sample.
 			meter.anchor = nil
 			if call.Usage != nil {
-				before, err := meter.surface.Snapshot()
+				before, err := meter.surface.ModelSnapshot()
 				if err != nil {
 					a.pressureMeter = nil
 					return nil, err

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go-bot/harness/session"
 	"unicode/utf16"
 )
 
@@ -43,33 +44,24 @@ func (a *NativeLoop) pruneNativeToolResults(ctx context.Context, config nativePr
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	surface, err := a.session.Surface()
+	surface, err := a.session.ModelSurface()
 	if err != nil {
 		return 0, err
 	}
 	if len(surface.MessageSeqs) != len(surface.Messages) {
 		return 0, errors.New("native surface lost message sequence mapping")
 	}
-	events := a.session.Events()
-	openTurn := false
-	for _, event := range events {
-		switch event.Type {
-		case "turn/start":
-			openTurn = true
-		case "turn/end":
-			openTurn = false
-		}
-	}
+	openTurn := a.session.TurnBoundary(sessionformat.LiveCut).Open
 	pruned := 0
 	for index, original := range surface.Messages {
 		if err := ctx.Err(); err != nil {
 			return pruned, err
 		}
 		seq := surface.MessageSeqs[index]
-		if seq >= uint64(len(events)) {
+		if _, ok := surface.NodeTypes[seq]; !ok {
 			return pruned, errors.New("native surface names a missing event")
 		}
-		if events[seq].Type != "tool/result" {
+		if surface.NodeTypes[seq] != "tool/result" {
 			continue
 		}
 		var message map[string]json.RawMessage
@@ -104,7 +96,7 @@ func (a *NativeLoop) pruneNativeToolResults(ctx context.Context, config nativePr
 			return pruned, err
 		}
 		var data map[string]json.RawMessage
-		if err := json.Unmarshal(events[seq].Data, &data); err != nil || data == nil {
+		if err := json.Unmarshal(surface.ToolResultData[seq], &data); err != nil || data == nil {
 			return pruned, fmt.Errorf("invalid native tool result at %d: %w", seq, err)
 		}
 		data["message"] = encodedMessage

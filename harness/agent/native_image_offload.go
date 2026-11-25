@@ -9,7 +9,7 @@ import (
 // event log. Image indexes include already-offloaded occurrences, matching the
 // DeepSeek v4 image/offload event contract.
 func (a *NativeLoop) offloadOldestNativeImages(count int) (bool, error) {
-	surface, err := a.session.Surface()
+	surface, err := a.session.ModelSurface()
 	if err != nil {
 		return false, err
 	}
@@ -23,7 +23,7 @@ func (a *NativeLoop) offloadNativeImagesFromSources(count int, sourceSeqs []uint
 	if count <= 0 {
 		return false, nil
 	}
-	surface, err := a.session.Surface()
+	surface, err := a.session.ModelSurface()
 	if err != nil {
 		return false, err
 	}
@@ -34,20 +34,19 @@ func (a *NativeLoop) offloadNativeImagesFromSources(count int, sourceSeqs []uint
 	for index, seq := range surface.MessageSeqs {
 		messageBySeq[seq] = surface.Messages[index]
 	}
-	events := a.session.Events()
 	targets := make([]imageOffloadTarget, 0)
 	for _, seq := range sourceSeqs {
 		if count == 0 {
 			break
 		}
-		if seq >= uint64(len(events)) {
+		if _, ok := surface.NodeTypes[seq]; !ok {
 			return false, errors.New("native surface names a missing event")
 		}
 		raw, found := messageBySeq[seq]
 		if !found {
 			continue // a selected zero-content node contributes no model image
 		}
-		if events[seq].Type != "user/message" && events[seq].Type != "tool/result" {
+		if surface.NodeTypes[seq] != "user/message" && surface.NodeTypes[seq] != "tool/result" {
 			continue
 		}
 		var message struct {

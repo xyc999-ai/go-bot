@@ -477,24 +477,36 @@ func nativeWorkerStream(c *gin.Context, worker NativeWorkerHTTPRuntime) {
 	if runtime, ok := worker.(permissionRuntime); chat && ok {
 		defer runtime.AttachApprovalClient()()
 	}
+
 	var inbox sessionformat.InboxState
 	var queueDirty bool
-	if chat {
-		if after != nil {
-			events, err := worker.DurableSessionEvents()
-			if err == nil {
-				if *after < uint64(len(events)) {
-					events = events[:*after+1]
-				}
-				inbox, err = sessionformat.FoldInbox(events)
-			}
-			if err != nil {
-				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "chat_state_unavailable"})
-				return
-			}
+	var queueCut uint64
+	if reader, ok := worker.(historyWindowRuntime); chat && ok {
+		opening, err := reader.HistoryWindow(c.Request.Context(), sessionformat.HistoryRequest{Kind: sessionformat.HistoryState})
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "chat_state_unavailable"})
+			return
 		}
-		queueDirty = true
+		inbox, queueCut, queueDirty = opening.Inbox, opening.Count, true
+	} else {
+		if chat {
+			if after != nil {
+				events, err := worker.DurableSessionEvents()
+				if err == nil {
+					if *after < uint64(len(events)) {
+						events = events[:*after+1]
+					}
+					inbox, err = sessionformat.FoldInbox(events)
+				}
+				if err != nil {
+					c.JSON(http.StatusServiceUnavailable, gin.H{"error": "chat_state_unavailable"})
+					return
+				}
+			}
+			queueDirty = true
+		}
 	}
+
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "event_stream_unavailable"})
@@ -545,7 +557,7 @@ func nativeWorkerStream(c *gin.Context, worker NativeWorkerHTTPRuntime) {
 		for _, event := range page {
 			seq := event.Seq
 			after = &seq
-			if chat && event.Type == "agent/inbox/spliced" {
+			if chat && event.Type == "agent/inbox/spliced" && event.Seq >= queueCut {
 				inbox, err = inbox.Next(event)
 				if err != nil {
 					return

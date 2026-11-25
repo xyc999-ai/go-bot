@@ -38,6 +38,7 @@ type LiveSession struct {
 	events               []Event
 	surface              *SurfaceState
 	inbox                InboxState
+	projections          map[string]*projectionCell
 	modelSelection       ModelSelectionState
 	modelSelectionCursor int
 	durable              int
@@ -61,7 +62,26 @@ func NewLiveSession(header Header, journal EventJournal) (*LiveSession, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &LiveSession{header: header, journal: journal, surface: surface}, nil
+	s := &LiveSession{header: header, journal: journal, surface: surface}
+	if _, err := RegisterProjection(s, &goalDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &runtimeDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &planDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &usageDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &childCatalogDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &inboxHistoryDefinition); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 // RestoreLiveSession adopts the already decoded, detached artifact only after
@@ -131,6 +151,24 @@ func replaySession(artifact PhysicalArtifact, journal EventJournal, durable int)
 	}
 	s.durable = durable
 	s.inheritedCount = artifact.InheritedEventCount
+	if _, err := RegisterProjection(s, &goalDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &runtimeDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &planDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &usageDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &childCatalogDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &inboxHistoryDefinition); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -256,6 +294,13 @@ func (s *LiveSession) Surface() (Surface, error) {
 	return s.surface.Snapshot()
 }
 
+// ModelSurface reads only current context nodes and their metadata.
+func (s *LiveSession) ModelSurface() (Surface, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.surface.ModelSnapshot()
+}
+
 func (s *LiveSession) Inbox() InboxState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -306,9 +351,15 @@ func (s *LiveSession) appendLocked(input EventInput, timestamp int64) (Event, er
 	// independent rows. Reject an invalid transition before it can enter the
 	// live log; otherwise a later restore would reject our own artifact.
 	if event.Type == "goal/change" || isGoalSourcedMessage(event) {
-		if _, err := FoldGoal(append(s.events, event)); err != nil {
+		cell := s.projections[goalDefinition.Key]
+		if cell == nil {
+			return Event{}, errors.New("goal projection is not registered")
+		}
+		next, err := nextGoal(cell.live.state.(goalFoldState), event)
+		if err != nil {
 			return Event{}, err
 		}
+		cell.live = projectionValue{state: next, next: len(s.events) + 1}
 	}
 	nextInbox, err := s.inbox.Next(event)
 	if err != nil {

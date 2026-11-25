@@ -48,10 +48,8 @@ func (r *NativeRuntime) acceptProactiveOnce(ctx context.Context, id string, raw 
 			return nil
 		}
 	}
-	for _, event := range r.live.Session.DurableEvents() {
-		if event.Type == "user/message" && seen(event.Data) {
-			return nil
-		}
+	if r.live.Session.HasRelayedMessage(id) {
+		return nil
 	}
 	if _, err := r.live.Agent.AcceptMessage(ctx, raw); err != nil {
 		return err

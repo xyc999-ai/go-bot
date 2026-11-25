@@ -124,6 +124,30 @@ without hiding stored history. Live bindings retain their definitions across
 registry replacements, and forks inherit the parent's current binding.
 See the [Go design and implementation record](agent-preset-go-plan.zh-CN.md).
 
+## Session projections
+
+The native Session owns typed, versioned projection registrations. Accepted
+event batches drive live state only after the whole batch succeeds; durable
+readers advance independently to the confirmed journal watermark. Goal
+transition validation uses the same reducer against speculative state before
+acceptance, preserving batch rollback and revision checks.
+
+Goal, Plan, policy, working directory, execution boundaries, usage, questions,
+child catalogs and background decisions read incremental state rather than
+replaying a full event snapshot. Process-local Goal activation remains disarmed
+after recovery. Model preparation caches current surface messages and refreshes
+changed content after replacement, pruning or image offload. Its current-context
+view omits the growing replacement audit trail; diagnostic snapshots retain it.
+
+These projections do not add persistence files. The canonical v4 journal remains
+the recovery source. History readers capture a durable event cut with queue and
+policy state, select bounded event or turn windows, and index attachment
+membership. A cold file version is fully validated once; an in-memory offset
+index then serves range reads without retaining all event bodies. File changes
+or cache eviction require another full observation. Search drains bounded pages
+into SQLite before reporting synchronization complete. See the
+[upstream comparison and implementation record](session-projection-parity-plan.zh-CN.md).
+
 ## Storage
 
 The same native file I/O serves Docker volumes, ECI container storage and ECI

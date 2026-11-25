@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"go-bot/harness/session"
 	"go-bot/harness/sessionsearch"
 	"go-bot/internal/hostruntime"
 )
@@ -26,17 +27,44 @@ func readHistorySnapshot(ctx context.Context, host *hostruntime.NativeHost, id s
 	if archived {
 		return sessionsearch.Snapshot{}, os.ErrNotExist
 	}
-	if events, reset, found, err := host.DurableSessionSuffix(id, cursor.Next); found {
-		if err == nil {
-			next := cursor.Next + len(events)
-			if reset {
-				next = len(events)
-			}
-			// A live snapshot is based on the fsync watermark rather than stat.
-			return sessionsearch.Snapshot{Cursor: sessionsearch.Cursor{Next: next, Size: -1}, Events: events, Reset: reset}, nil
+	if host.ReadHistory != nil {
+		var after *uint64
+		if cursor.Next > 0 {
+			v := uint64(cursor.Next - 1)
+			after = &v
 		}
-		// Session shutdown may have detached its live journal during lookup.
+		value, found, err := host.DurableSessionPage(ctx, id, sessionformat.HistoryRequest{Kind: sessionformat.HistoryEvents, After: after, Limit: 500})
+		if found && err == nil {
+			reset := uint64(cursor.Next) > value.Count
+			if reset {
+				value, _, err = host.DurableSessionPage(ctx, id, sessionformat.HistoryRequest{Kind: sessionformat.HistoryEvents, Limit: 500})
+				if err != nil {
+					return sessionsearch.Snapshot{}, err
+				}
+			}
+			next := cursor.Next + len(value.Events)
+			if reset {
+				next = len(value.Events)
+			}
+			more := uint64(next) < value.Count
+			return sessionsearch.Snapshot{Cursor: sessionsearch.Cursor{Next: next, Size: -1, Partial: more}, More: more, Reset: reset, Events: value.Events}, nil
+		}
 	}
+
+	if host.ReadHistory == nil {
+		if events, reset, found, err := host.DurableSessionSuffix(id, cursor.Next); found {
+			if err == nil {
+				next := cursor.Next + len(events)
+				if reset {
+					next = len(events)
+				}
+				// A live snapshot is based on the fsync watermark rather than stat.
+				return sessionsearch.Snapshot{Cursor: sessionsearch.Cursor{Next: next, Size: -1}, Events: events, Reset: reset}, nil
+			}
+			// Session shutdown may have detached its live journal during lookup.
+		}
+	}
+
 	info, err := host.SessionLogInfo(id)
 	if err != nil {
 		return sessionsearch.Snapshot{}, err
@@ -45,6 +73,37 @@ func readHistorySnapshot(ctx context.Context, host *hostruntime.NativeHost, id s
 	if snapshot.Cursor == cursor {
 		return snapshot, nil
 	}
+	if host.ReadHistory != nil {
+		next := cursor.Next
+		sameVersion := info.Size() == cursor.Size && info.ModTime().UnixNano() == cursor.ModTime
+		if cursor.Size < 0 || !sameVersion && info.Size() <= cursor.Size {
+			next = 0
+			snapshot.Reset = true
+		}
+		var after *uint64
+		if next > 0 {
+			v := uint64(next - 1)
+			after = &v
+		}
+		value, err := host.ReadHistory(ctx, id, sessionformat.HistoryRequest{Kind: sessionformat.HistoryEvents, After: after, Limit: 500})
+		if err != nil {
+			return snapshot, err
+		}
+		if uint64(next) > value.Count {
+			next = 0
+			snapshot.Reset = true
+			value, err = host.ReadHistory(ctx, id, sessionformat.HistoryRequest{Kind: sessionformat.HistoryEvents, Limit: 500})
+			if err != nil {
+				return snapshot, err
+			}
+		}
+		snapshot.Events = value.Events
+		snapshot.Next = next + len(value.Events)
+		snapshot.More = uint64(snapshot.Next) < value.Count
+		snapshot.Partial = snapshot.More
+		return snapshot, nil
+	}
+
 	artifact, err := host.ReadSession(ctx, id)
 	if err != nil {
 		return sessionsearch.Snapshot{}, err

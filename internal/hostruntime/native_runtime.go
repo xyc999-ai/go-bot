@@ -485,7 +485,7 @@ func (r *NativeRuntime) Usage() (sessionformat.UsageSnapshot, error) {
 	if r.live == nil {
 		return sessionformat.UsageSnapshot{}, errors.New("native worker is not ready")
 	}
-	return sessionformat.ProjectUsage(r.live.Session.DurableEvents())
+	return r.live.Session.Usage()
 }
 
 func (r *NativeRuntime) ResumeGoal(ctx context.Context, ref sessionformat.GoalRef) (goal.NativeView, error) {
@@ -528,7 +528,7 @@ func (r *NativeRuntime) GetPermission() (permission.State, error) {
 	if r.live == nil {
 		return permission.State{}, errors.New("session is unavailable")
 	}
-	return permission.Read(r.live.Session.Events()), nil
+	return permission.ReadSession(r.live.Session), nil
 }
 
 func (r *NativeRuntime) SetPermission(ctx context.Context, mode permission.Mode) (permission.State, error) {
@@ -537,7 +537,7 @@ func (r *NativeRuntime) SetPermission(ctx context.Context, mode permission.Mode)
 	if r.live == nil || r.stopping || r.fatalErr != nil {
 		return permission.State{}, errors.New("session is unavailable")
 	}
-	current := permission.Read(r.live.Session.Events())
+	current := permission.ReadSession(r.live.Session)
 	if mode == current.Mode {
 		return current, nil
 	}
@@ -568,7 +568,7 @@ func (r *NativeRuntime) SetPermission(ctx context.Context, mode permission.Mode)
 	if err := permission.Save(ctx, r.live.Session, mode, false, false); err != nil {
 		return current, err
 	}
-	return permission.Read(r.live.Session.Events()), nil
+	return permission.ReadSession(r.live.Session), nil
 }
 
 func (r *NativeRuntime) AttachApprovalClient() func() {
@@ -592,7 +592,11 @@ func (r *NativeRuntime) PendingQuestions() ([]interaction.Pending, error) {
 func (r *NativeRuntime) pendingQuestionsLocked() []interaction.Pending {
 	cursor := r.live.Session.DurableCursor()
 	if r.timedQuestions == nil || cursor != r.timedQuestionsThrough {
-		r.timedQuestions = append([]interaction.Pending{}, interaction.FoldTimedQuestions(r.live.Session.DurableEvents())...)
+		questions, err := interaction.SessionQuestions(r.live.Session)
+		if err != nil {
+			panic(err)
+		}
+		r.timedQuestions = append([]interaction.Pending{}, questions...)
 		r.timedQuestionsThrough = cursor
 	}
 	live := r.live.Questions.Pending()
@@ -846,23 +850,7 @@ func (r *NativeRuntime) CancelTurn(ctx context.Context, turnID string) (string, 
 	if r.live == nil {
 		return "", errors.New("native worker is not ready")
 	}
-	started, ended := false, false
-	for _, event := range r.live.Session.DurableEvents() {
-		if event.Type != "turn/start" && event.Type != "turn/end" {
-			continue
-		}
-		var data struct {
-			Turn uint64 `json:"turn"`
-		}
-		if json.Unmarshal(event.Data, &data) != nil || data.Turn != turn {
-			continue
-		}
-		if event.Type == "turn/start" {
-			started = true
-		} else {
-			ended = true
-		}
-	}
+	started, ended := r.live.Session.TurnStatus(turn, sessionformat.DurableCut)
 	if !started {
 		return "", ErrNativeTurnNotFound
 	}
@@ -1149,4 +1137,15 @@ func (r *NativeRuntime) ListChildren(ctx context.Context, parentID string) ([]to
 
 func (r *NativeRuntime) Close() error {
 	return r.Stop(context.Background())
+}
+
+func (r *NativeRuntime) HistoryWindow(ctx context.Context, request sessionformat.HistoryRequest) (sessionformat.HistoryWindow, error) {
+	r.mu.Lock()
+	if r.live == nil {
+		r.mu.Unlock()
+		return sessionformat.HistoryWindow{}, errors.New("native worker is not ready")
+	}
+	s := r.live.Session
+	r.mu.Unlock()
+	return s.HistoryWindow(ctx, request)
 }

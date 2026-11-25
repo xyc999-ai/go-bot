@@ -30,6 +30,7 @@ commands, use the guides above.
 | [Main chat and first run](main-chat-and-first-run-plan.zh-CN.md) | Main Session, greeting, model checks and default plugins |
 | [Agent Presets](agent-preset-go-plan.zh-CN.md) | Implemented Go registry, immutable bindings and per-Agent capability composition |
 | [Models and sessions](model-settings-and-session-routing-plan.zh-CN.md) | Endpoint settings and per-session model selection |
+| [Session projections](session-projection-parity-plan.zh-CN.md) | Upstream projection design, full-history scan audit and staged restoration plan |
 | [Model protocols](anthropic-model-protocol-plan.zh-CN.md) | OpenAI/Anthropic adapters and protocol selection |
 | [Long-term memory](hermes-agent-memory-design.zh-CN.md) | Memory files, prompt integration and SQLite FTS5 recall |
 | [Schedules and workspaces](schedule-parity-plan.zh-CN.md) | Delivery, working directories and archival |

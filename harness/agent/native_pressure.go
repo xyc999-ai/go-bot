@@ -281,7 +281,7 @@ func (a *NativeLoop) maybeCompactNativePressure(ctx context.Context, turn uint64
 		return nil
 	}
 	measure := func() (int, error) {
-		surface, err := a.session.Surface()
+		surface, err := a.session.ModelSurface()
 		if err != nil {
 			return 0, err
 		}

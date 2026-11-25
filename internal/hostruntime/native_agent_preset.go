@@ -17,7 +17,7 @@ func (r *NativeRuntime) SelectAgentPreset(ctx context.Context, id string) error 
 	if r.live == nil || r.stopping || r.fatalErr != nil {
 		return errors.New("native Agent is not ready")
 	}
-	if sessionformat.AgentPresetLocked(r.live.Session.Events()) {
+	if r.live.Session.IsAgentPresetLocked() {
 		return agentpreset.ErrLocked
 	}
 	if r.activeCancel != nil || r.compactDone != nil {
@@ -39,10 +39,7 @@ func (r *NativeRuntime) SelectAgentPreset(ctx context.Context, id string) error 
 	if err != nil {
 		return err
 	}
-	current, err := sessionformat.EffectiveAgentPreset(r.live.Session.Header(), r.live.Session.DurableEvents())
-	if err != nil {
-		return err
-	}
+	current := r.live.Session.AgentPreset(sessionformat.DurableCut)
 	if current == binding.ID() && r.live.Preset.Same(binding) {
 		return nil
 	}
@@ -100,6 +97,9 @@ func (h *NativeHost) SelectAgentPreset(ctx context.Context, sessionID, id string
 // PresetForSession reads durable identity without restoring an Agent or
 // resolving a definition which may since have been removed.
 func (h *NativeHost) PresetForSession(ctx context.Context, sessionID string) (string, error) {
+	if live := h.sessionHistory(sessionID); live != nil {
+		return live.AgentPreset(sessionformat.DurableCut), nil
+	}
 	artifact, err := h.SessionArtifact(ctx, sessionID)
 	if err != nil {
 		return "", err

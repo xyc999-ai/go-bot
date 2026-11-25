@@ -23,7 +23,7 @@ func RecordNativeChild(ctx context.Context, parent *sessionformat.LiveSession, c
 		child.DelegationDepth != root.DelegationDepth+1 {
 		return sessionformat.SubagentCatalogEntry{}, errors.New("native child lineage differs from its direct parent")
 	}
-	children, err := sessionformat.FoldSubagentCatalog(parent.Events(), parent.InheritedEventCount())
+	children, err := parent.Children(sessionformat.LiveCut)
 	if err != nil {
 		return sessionformat.SubagentCatalogEntry{}, err
 	}

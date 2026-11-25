@@ -434,6 +434,9 @@ func waitForChatRuntime(w http.ResponseWriter, r *http.Request, host *hostruntim
 		r = r.Clone(r.Context())
 		r.Header.Set("Last-Event-ID", strconv.FormatUint(events[len(events)-1].Seq, 10))
 	}
+	return awaitChatRuntime(w, r, host, id, flusher)
+}
+func awaitChatRuntime(w http.ResponseWriter, r *http.Request, host *hostruntime.NativeHost, id string, flusher http.Flusher) (*hostruntime.NativeRuntime, *http.Request) {
 	check := time.NewTicker(500 * time.Millisecond)
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer check.Stop()

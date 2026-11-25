@@ -112,6 +112,23 @@ func serveColdSessionHistory(w http.ResponseWriter, r *http.Request, host *hostr
 		writeSessionJSON(w, http.StatusBadRequest, map[string]string{"error": code})
 		return
 	}
+
+	if host.ReadHistory != nil {
+		value, err := host.SessionHistoryWindow(r.Context(), id, sessionformat.HistoryRequest{Kind: sessionformat.HistoryEvents, After: after, Limit: limit})
+		if errors.Is(err, os.ErrNotExist) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			writeSessionJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "agent_events_unavailable"})
+			return
+		}
+		if after == nil && host.SaveTitle != nil && value.TitleHint != "" && (host.ReadTitle == nil || host.ReadTitle(id) == "") {
+			_ = host.SaveTitle(id, compactSessionTitle(value.TitleHint))
+		}
+		writeSessionJSON(w, http.StatusOK, publicEventPageFrom(value.Events))
+		return
+	}
 	if host.ReadSession == nil {
 		http.NotFound(w, r)
 		return

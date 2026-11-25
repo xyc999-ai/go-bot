@@ -18,6 +18,7 @@ import (
 	"go-bot/harness/agent"
 	"go-bot/harness/assembly"
 	"go-bot/harness/attachments"
+	"go-bot/harness/interaction"
 	"go-bot/harness/memory"
 	"go-bot/harness/schedule"
 	"go-bot/harness/session"
@@ -233,6 +234,18 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 		}
 		return store.ReadArtifact(ctx, sid)
 	}
+	indexedHistory := &sessionformat.FileHistoryReader{Configure: func(s *sessionformat.LiveSession) error {
+		_, err := interaction.RegisterQuestionProjection(s)
+		return err
+	}}
+	native.ReadHistory = func(ctx context.Context, sid string, request sessionformat.HistoryRequest) (sessionformat.HistoryWindow, error) {
+		store, err := resolveStore(ctx, sid)
+		if err != nil {
+			return sessionformat.HistoryWindow{}, err
+		}
+		return indexedHistory.Read(ctx, store, sid, request)
+	}
+
 	native.List = func(ctx context.Context, cursor string, limit int) (sessionformat.SessionListPage, error) {
 		return listHostSessions(ctx, root, cursor, limit)
 	}

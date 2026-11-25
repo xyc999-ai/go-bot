@@ -45,7 +45,7 @@ func (s ApprovalService) Request(ctx context.Context, request Request) error {
 		return err
 	}
 	outcome := "rejected"
-	if Read(s.Session.Events()).Approval == "ask" {
+	if ReadSession(s.Session).Approval == "ask" {
 		answer, err := s.Questions.AskApproval(ctx, turn, step, id,
 			interaction.Approval{Tool: request.Tool, Reason: request.Reason, Detail: request.Detail, Target: string(request.Target), ToolCallID: callID},
 			[]interaction.Question{{ID: "approval", Question: "Allow this operation?", Options: []interaction.Option{{Label: Approve}, {Label: Reject}}}})

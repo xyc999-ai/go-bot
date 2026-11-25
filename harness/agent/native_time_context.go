@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go-bot/harness/session"
 )
 
 // nativeTimeContext mirrors DeepSeek's opt-in, pre-step clock snapshot. Keep
@@ -46,52 +47,12 @@ func (a *NativeLoop) ensureTimeContext(ctx context.Context, turn uint64, step in
 		return err
 	}
 	now := time.Now()
-	var lastMessage, lastInjection, lastTurnInjection int64
-	var hasMessage, hasInjection, hasTurnInjection, currentStepStarted, inTurn bool
-	browserZones := make(map[string]struct{})
-	for _, event := range a.session.Events() {
-		switch event.Type {
-		case "step/start":
-			var data struct {
-				Turn uint64 `json:"turn"`
-				Step int    `json:"step"`
-			}
-			if json.Unmarshal(event.Data, &data) == nil && data.Turn == turn && data.Step == step {
-				currentStepStarted = true
-			}
-		case "turn/start", "turn/end":
-			hasTurnInjection = false
-			var data struct {
-				Turn uint64 `json:"turn"`
-			}
-			if json.Unmarshal(event.Data, &data) == nil && data.Turn == turn {
-				inTurn = event.Type == "turn/start"
-			}
-		case "user/message":
-			if !currentStepStarted {
-				hasMessage, lastMessage = true, event.Time
-			}
-			var data struct {
-				Source struct {
-					Kind           string `json:"kind"`
-					RPCID          string `json:"rpcId"`
-					ClientTimeZone string `json:"clientTimeZone"`
-				} `json:"source"`
-			}
-			if json.Unmarshal(event.Data, &data) == nil {
-				if data.Source.Kind == "time-context" {
-					hasInjection, lastInjection = true, event.Time
-					hasTurnInjection, lastTurnInjection = true, event.Time
-				}
-				if inTurn && data.Source.Kind == "user" && data.Source.RPCID != "" && data.Source.ClientTimeZone != "" {
-					browserZones[data.Source.ClientTimeZone] = struct{}{}
-				}
-			}
-		case "assistant/message", "tool/result":
-			if !currentStepStarted {
-				hasMessage, lastMessage = true, event.Time
-			}
-		}
+	state := a.session.TimeContext()
+	lastMessage, lastInjection, lastTurnInjection := state.BeforeStepMessage, state.LastInjection, state.LastTurnInjection
+	hasMessage, hasInjection, hasTurnInjection := state.HasBeforeStepMessage, state.HasInjection, state.HasTurnInjection
+	browserZones := make(map[string]struct{}, len(state.BrowserTimeZones))
+	for _, zone := range state.BrowserTimeZones {
+		browserZones[zone] = struct{}{}
 	}
 	if clock.refresh > 0 && hasInjection && now.UnixMilli() >= lastInjection &&
 		now.Sub(time.UnixMilli(lastInjection)) < clock.refresh {
@@ -130,22 +91,9 @@ func (a *NativeLoop) SampleTimeContext() (json.RawMessage, error) {
 		return nil, errors.New("time-context is not enabled for this Agent")
 	}
 	now := time.Now()
-	var turn uint64 = 1
-	var previous int64
-	var available bool
-	for _, event := range a.session.Events() {
-		switch event.Type {
-		case "turn/start":
-			var data struct {
-				Turn uint64 `json:"turn"`
-			}
-			if json.Unmarshal(event.Data, &data) == nil && data.Turn >= turn {
-				turn = data.Turn + 1
-			}
-		case "user/message", "assistant/message", "tool/result":
-			previous, available = event.Time, true
-		}
-	}
+	turn := a.session.TurnBoundary(sessionformat.LiveCut).LastTurn + 1
+	state := a.session.TimeContext()
+	previous, available := state.LastMessage, state.HasMessage
 	elapsed := "unavailable"
 	if available {
 		elapsed = nativeTimeDuration(now.Sub(time.UnixMilli(previous)))

@@ -260,8 +260,8 @@ func (f NativeFactory) activateChild(ctx context.Context, root NativeRuntimeIden
 	identity := root
 	identity.SessionID = childID
 	identity.AgentPreset = childFactory.Preset.ID()
-	identity.PermissionCeiling = func() permission.Mode { return permission.Read(parent.Session.Events()).Mode }
-	parentCWD := nativeSessionCWD(parent.Session.Header().CWD, parent.Session.Events())
+	identity.PermissionCeiling = func() permission.Mode { return permission.ReadSession(parent.Session).Mode }
+	parentCWD := parent.Session.WorkingDirectory()
 	if cwd == "" {
 		cwd = parentCWD
 	} else if !filepath.IsAbs(cwd) {
@@ -304,7 +304,7 @@ func (f NativeFactory) activateChild(ctx context.Context, root NativeRuntimeIden
 		return nil, err
 	}
 	initialize := func() error {
-		if err := permission.Save(ctx, s, permission.Read(parent.Session.Events()).Mode, true, true); err != nil {
+		if err := permission.Save(ctx, s, permission.ReadSession(parent.Session).Mode, true, true); err != nil {
 			return err
 		}
 		if identity.CWD != header.CWD {
@@ -456,7 +456,7 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 		return nil, err
 	}
 	skillLookup := func() skills.Lookup {
-		return skills.Lookup{CWD: nativeSessionCWD(s.Header().CWD, s.Events()), Workspace: identity.Workspace, SessionID: s.Header().ID}
+		return skills.Lookup{CWD: s.WorkingDirectory(), Workspace: identity.Workspace, SessionID: s.Header().ID}
 	}
 	skillTool := &tools.Skill{Registry: resource.Skills, Lookup: skillLookup}
 	toolset = append(toolset, skillTool, tools.Present{
@@ -475,10 +475,15 @@ func (f NativeFactory) publish(ctx context.Context, identity NativeRuntimeIdenti
 		_ = resource.close()
 		return nil, err
 	}
+	if _, err := interaction.RegisterQuestionProjection(s); err != nil {
+		_ = s.Close()
+		_ = resource.close()
+		return nil, err
+	}
 	questions := interaction.NewNativeQuestions()
 	approval := permission.ApprovalService{Session: s, Questions: questions}
 	permissionState := func() permission.State {
-		state := permission.Read(s.Events())
+		state := permission.ReadSession(s)
 		if identity.PermissionCeiling != nil {
 			ceiling := identity.PermissionCeiling()
 			if ceiling.Rank() < state.Mode.Rank() {

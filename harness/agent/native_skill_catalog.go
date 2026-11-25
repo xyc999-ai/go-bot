@@ -63,7 +63,7 @@ func (a *NativeLoop) ensureSkillCatalog(ctx context.Context) error {
 		entry.Description = skillCatalogDescription(entry.Description)
 		source.Entries = append(source.Entries, entry)
 	}
-	surface, err := a.session.Surface()
+	surface, err := a.session.ModelSurface()
 	if err != nil {
 		return err
 	}
@@ -79,14 +79,7 @@ func (a *NativeLoop) ensureSkillCatalog(ctx context.Context) error {
 		break
 	}
 	if !source.Update {
-		for _, event := range slices.Backward(a.session.Events()) {
-			if event.Type == "user/message" {
-				if _, ok := readSkillCatalog(event.Data); ok {
-					source.Update = true
-					break
-				}
-			}
-		}
+		source.Update = a.session.SkillCatalogPublished()
 	}
 	if !source.Update && !source.Incomplete && len(source.Entries) == 0 {
 		return nil

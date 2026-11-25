@@ -14,20 +14,12 @@ type ActivitySnapshot struct {
 func (s *LiveSession) DurableActivity() ActivitySnapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	snapshot := ActivitySnapshot{Since: time.UnixMilli(s.header.CreatedAt).UTC(), Idle: true}
-	openTurn := false
-	for _, event := range s.events[:s.durable] {
-		at := time.UnixMilli(event.Time).UTC()
-		if at.After(snapshot.Since) {
-			snapshot.Since = at
-		}
-		switch event.Type {
-		case "turn/start":
-			openTurn = true
-		case "turn/end":
-			openTurn = false
-		}
+	cell := s.projections[runtimeDefinition.Key]
+	s.advanceProjectionLocked(cell, &cell.durable, s.durable)
+	if cell.durable.err != nil {
+		panic(cell.durable.err)
 	}
-	snapshot.Idle = !openTurn && len(s.inbox.NextTurn) == 0 && len(s.inbox.NextStep) == 0
+	state := cell.durable.state.(runtimeProjection)
+	snapshot := ActivitySnapshot{Since: time.UnixMilli(state.Since).UTC(), Idle: !state.Boundary.Open && len(s.inbox.NextTurn) == 0 && len(s.inbox.NextStep) == 0}
 	return snapshot
 }
