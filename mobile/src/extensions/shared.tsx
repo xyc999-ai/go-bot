@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { ActivityIndicator, AppState, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ArrowLeft, ChevronDown, RefreshCw } from 'lucide-react-native'
 import { extensionOperations } from '../../../frontend/src/extensions/operations'
@@ -8,17 +8,20 @@ import { useLocale } from '../locale'
 import { accent, Button, danger, edge, Field, glass, Hint, IconButton, ink, muted, Panel, s, success } from '../ui'
 
 export type ScreenProps = { api: Controller; cache: TranscriptCache; onDirtyChange: (value: boolean) => void; onBusyChange: (value: boolean) => void }
-export function useManagement<T>({ api, cache }: ScreenProps, load: (api: Controller, signal?: AbortSignal) => Promise<T>) {
+export function useManagement<T>({ api, cache }: ScreenProps, load: (api: Controller, signal?: AbortSignal, refresh?: boolean) => Promise<T>) {
   const [view, setView] = useState<T>(), [loading, setLoading] = useState(true), [version, setVersion] = useState(0)
   const operations = extensionOperations(cache)
   const { busy, error, notice, revision } = useSyncExternalStore(operations.subscribe, operations.snapshot)
+  const force = useRef(false)
   const reload = useCallback(() => setVersion(value => value + 1), [])
+  const refresh = useCallback(() => { force.current = true; reload() }, [reload])
   useEffect(() => cache.subscribe('@extensions', reload), [cache, reload])
   useEffect(() => { const listener = AppState.addEventListener('change', state => { if (state === 'active') reload() }); return () => listener.remove() }, [reload])
   useEffect(() => {
     const request = new AbortController()
     setLoading(true)
-    void load(api, request.signal).then(next => { if (!request.signal.aborted) { setView(next); if (operations.snapshot().error === 'Could not load extensions. Try again.') operations.setError('') } }, () => { if (!request.signal.aborted) operations.setError('Could not load extensions. Try again.') }).finally(() => { if (!request.signal.aborted) setLoading(false) })
+    const requestedRefresh = force.current; force.current = false
+    void load(api, request.signal, requestedRefresh).then(next => { if (!request.signal.aborted) { setView(next); if (operations.snapshot().error === 'Could not load extensions. Try again.') operations.setError('') } }, () => { if (!request.signal.aborted) operations.setError('Could not load extensions. Try again.') }).finally(() => { if (!request.signal.aborted) setLoading(false) })
     return () => request.abort()
   }, [api, load, version, revision, operations])
   const run = (label: string, work: () => Promise<unknown>, success = 'Configuration saved. Review the runtime state below.') =>
@@ -27,7 +30,7 @@ export function useManagement<T>({ api, cache }: ScreenProps, load: (api: Contro
       : error instanceof ApiError && error.code === 'oauth_requires_https_or_loopback_http' ? 'OAuth requires HTTPS or localhost HTTP. Open the Controller through one of these addresses.'
       : error instanceof ApiError && [400, 422].includes(error.status) && /\s/.test(error.code) ? error.code.slice(0, 1024)
       : 'Could not complete this operation. Refresh the actual state before trying again.', success)
-  return { view, error, notice, busy, loading, reload, run }
+  return { view, error, notice, busy, loading, reload, refresh, run }
 }
 export type Runner = ReturnType<typeof useManagement>['run']
 

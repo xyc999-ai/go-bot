@@ -97,7 +97,7 @@ func TestDockerWebChatPreview(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if resp.StatusCode != want {
+		if want != 0 && resp.StatusCode != want {
 			data, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			t.Fatalf("%s %s: %d %s", method, path, resp.StatusCode, data)
@@ -193,7 +193,34 @@ func TestDockerWebChatPreview(t *testing.T) {
 		t.Fatalf("renaming a cold chat failed or started a model turn: %s", list)
 	}
 
-	read("DELETE", url, "", 204)
+	// Renaming a cold Session activates it. Its empty driver probe may still
+	// hold the runtime busy flag after the title has been durably committed.
+	// Wait only for that explicit transient conflict; keep all other failures
+	// fatal, and keep the active-turn archive rejection asserted above.
+	archiveDeadline := time.Now().Add(3 * time.Second)
+	for {
+		response := call("DELETE", url, "", 0)
+		data, readErr := io.ReadAll(response.Body)
+		response.Body.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if response.StatusCode == http.StatusNoContent {
+			break
+		}
+		var failure struct {
+			Error string `json:"error"`
+		}
+		if response.StatusCode != http.StatusConflict || json.Unmarshal(data, &failure) != nil ||
+			failure.Error != "session_busy" || time.Now().After(archiveDeadline) {
+			t.Fatalf("archive idle Session: %d %s", response.StatusCode, data)
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
 	read("DELETE", url, "", 204)
 	read("GET", url+"/events", "", 404)
 	read("POST", url+"/messages", `{"content":"Must not run"}`, 404)

@@ -1,5 +1,7 @@
 # agent-browser 与 OfficeCLI 官方能力插件化方案
 
+> 分发更新：业务源码、资源与发布已迁至独立的 [got-bot-plugins](https://github.com/xyc999-ai/got-bot-plugins)；本文原镜像内 bundled 分发章节由 [远程市场方案](remote-plugin-market-plan.zh-CN.md) 替代，授权与业务行为保持不变。
+
 日期：2026-11-20。状态：已实现并完成本地验收；2026-11-20 按上游核对结果使用 pnpm 标准安装流程，依赖准备不放在 Cordis apply。已确定采用官方默认全局 CLI 安装；按最新决定保留当前 `$DSH_HOME/plugins/profile/node_modules` 的插件包目录。
 
 ## 1. 结论与范围

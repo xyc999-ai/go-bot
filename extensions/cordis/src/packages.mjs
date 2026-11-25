@@ -1,14 +1,16 @@
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, writeFile, rm, realpath, rename } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile, rm, realpath, rename, symlink, lstat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { isAbsolute, join, relative } from 'node:path'
+import { isAbsolute, join, relative, dirname } from 'node:path'
 import semver from 'semver'
+import { createRequire } from 'node:module'
 import { packageName, readManifest } from './manifest.mjs'
 import { RuntimeError } from './errors.mjs'
 
 
 const hostSDKName = '@go-bot/plugin-sdk'
+const sharedCordis = dirname(createRequire(import.meta.url).resolve('@deepseek-ai/cordis/package.json'))
 const hostSDKPath = fileURLToPath(new URL('../../sdk/', import.meta.url))
 const MAX_OUTPUT = 1 << 20
 const allowedEnv = ['PATH','HOME','LANG','LC_ALL','TMPDIR','HTTP_PROXY','HTTPS_PROXY','NO_PROXY','http_proxy','https_proxy','no_proxy','SSL_CERT_FILE','SSL_CERT_DIR','NODE_EXTRA_CA_CERTS']
@@ -53,14 +55,14 @@ export function validateSource(name,source,{fixed=false}={}) {
       if(source.spec!==name&&!source.spec.slice(name.length+1))throw new RuntimeError('INVALID_SOURCE','A version or tag is required after @')
       break
     }
-    case 'bundled':
-      if (!/^[a-z][a-z0-9-]{0,23}$/.test(source.spec)) throw new RuntimeError('INVALID_SOURCE', 'Invalid bundled plugin ID')
-      break
     case 'directory':
       if(!isAbsolute(source.spec))throw new RuntimeError('INVALID_SOURCE','A development directory must be an absolute Host path')
       break
     case 'tarball':
-      if(!isAbsolute(source.spec))safeURL(source.spec)
+      if(!isAbsolute(source.spec)){
+        const url=safeURL(source.spec,['https:','http:'])
+        if(url.protocol==='http:'&&!['localhost','127.0.0.1','[::1]','host.docker.internal'].includes(url.hostname))throw new RuntimeError('INVALID_SOURCE','Remote tarballs require HTTPS')
+      }
       break
     case 'git':{
       const split=source.spec.lastIndexOf('#')
@@ -75,7 +77,7 @@ export function validateSource(name,source,{fixed=false}={}) {
 }
 
 function packageDirectory(source) {
-  return source.type === 'bundled' ? fileURLToPath(new URL(`../../plugins/${source.spec}/`, import.meta.url)) : source.spec
+  return source.spec
 }
 
 async function atomic(path,value) {
@@ -164,7 +166,7 @@ export class Packages {
       if(metadata.name!==name)throw new RuntimeError('INVALID_PACKAGE','Package metadata name does not match')
       return information(name,resolved,metadata)
     }
-    if(resolved.type==='directory'||resolved.type==='bundled'){
+    if(resolved.type==='directory'){
       const metadata=JSON.parse(await readFile(join(packageDirectory(resolved),'package.json'),'utf8'))
       if(metadata.name!==name)throw new RuntimeError('INVALID_PACKAGE','Directory package name does not match')
       return information(name,resolved,metadata)
@@ -172,6 +174,19 @@ export class Packages {
     const directory=await mkdtemp(join(tmpdir(),'go-bot-inspect-'))
     try{return await new Packages({directory,pnpm:this.pnpm,credentials:this.credentials,signal:this.signal}).install(name,resolved,{scripts:false})}
     finally{await rm(directory,{recursive:true,force:true})}
+  }
+
+  async #framework() {
+    const link=join(this.directory,'node_modules','@deepseek-ai','cordis')
+    await mkdir(dirname(link),{recursive:true})
+    try {
+      const info=await lstat(link)
+      if (!info.isSymbolicLink()) throw new RuntimeError('FRAMEWORK_CONFLICT','Cordis is supplied by the Host; business packages must use a peer dependency')
+      const target=await realpath(link).catch(error=>{if(error.code==='ENOENT')return null;throw error})
+      if (target===await realpath(sharedCordis)) return
+      await rm(link,{force:true})
+    } catch(error) { if(error.code!=='ENOENT') throw error }
+    await symlink(await realpath(sharedCordis),link,'dir')
   }
 
   async install(name,source,{scripts=true,builds=[]}={}){
@@ -188,12 +203,12 @@ export class Packages {
 
     await atomic(join(this.directory,'package.json'),JSON.stringify(prior,null,2)+'\n')
     const previous=prior.goBotSources?.[name]
-    if(prior.dependencies?.[name] && (source.type==='directory'||source.type==='bundled'||previous?.type!==source.type||previous?.spec!==source.spec||previous?.registry!==source.registry)){
+    if(prior.dependencies?.[name] && (source.type==='directory'||previous?.type!==source.type||previous?.spec!==source.spec||previous?.registry!==source.registry)){
       // pnpm may retain the old file dependency resolution while updating its
       // specifier. Remove that importer's old edge before resolving a new one.
       await this.#run(['--config.ignore-scripts=true','--config.ignore-pnpmfile=true','remove','--reporter=silent','--',name],source)
     }
-    const local = source.type==='directory'||source.type==='bundled'
+    const local = source.type==='directory'
     const spec=source.type==='registry'?source.spec:local?name+'@file:'+packageDirectory(source):name+'@'+source.spec
     if (scripts) {
       // Use pnpm's native per-resolution script policy. The reviewed catalog
@@ -205,7 +220,8 @@ export class Packages {
         if (build === name) {
           if (local) allowBuilds[name+'@file:'+relative(await realpath(this.directory),packageDirectory(source))] = true
           else if (source.type === 'registry') allowBuilds[source.spec] = true
-          else throw new RuntimeError('BUILD_NOT_APPROVED', 'Archive/Git script approvals require a reviewed exact pnpm resolution')
+          else if (source.type === 'tarball') allowBuilds[name+'@'+source.spec] = true
+          else throw new RuntimeError('BUILD_NOT_APPROVED', 'Git script approvals require a reviewed exact pnpm resolution')
         } else {
           const split = build.lastIndexOf('@')
           if (split <= 0 || !packageName.test(build.slice(0,split)) || !semver.valid(build.slice(split+1))) throw new RuntimeError('BUILD_NOT_APPROVED','Dependency build permissions require exact package versions')
@@ -214,7 +230,9 @@ export class Packages {
       }
       await atomic(join(this.directory,'pnpm-workspace.yaml'), JSON.stringify({packages:['.'],autoInstallPeers:false,strictDepBuilds:true,sideEffectsCache:false,allowBuilds},null,2)+'\n')
     }
+    await this.#framework()
     await this.#run(['add','--save-exact','--ignore-pnpmfile',...scripts?[]:['--ignore-scripts'],'--reporter=append-only','--',spec],source)
+    await this.#framework()
     const {manifest:installed}=await readManifest(this.directory,name,{checkCompatibility:true})
     const updated=await manifest(this.directory)
     updated.goBotSources={...(updated.goBotSources??{}),[name]:source}

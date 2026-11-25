@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AlertCircle, LoaderCircle, RefreshCw } from 'lucide-react'
 import { APIError, settingsApplyFailed } from '../api/controller'
 import { useLocale } from '../locale'
@@ -22,18 +22,21 @@ export function extensionFailure(error: unknown) {
   return 'Could not complete this operation. Refresh the actual state before trying again.'
 }
 
-export function useManagedView<T>(user: string, load: (user: string, signal?: AbortSignal) => Promise<T>, cache: TranscriptCache) {
+export function useManagedView<T>(user: string, load: (user: string, signal?: AbortSignal, refresh?: boolean) => Promise<T>, cache: TranscriptCache) {
   const [view, setView] = useState<T>()
   const operations = extensionOperations(cache)
   const { busy, error, notice, revision } = useSyncExternalStore(operations.subscribe, operations.snapshot)
   const [loading, setLoading] = useState(true)
   const [version, setVersion] = useState(0)
+  const force = useRef(false)
   const reload = useCallback(() => setVersion(value => value + 1), [])
+  const refresh = useCallback(() => { force.current = true; reload() }, [reload])
   useEffect(() => cache.subscribe('@extensions', reload), [cache, reload])
   useEffect(() => {
     const request = new AbortController()
     setLoading(true)
-    void load(user, request.signal).then(value => { if (!request.signal.aborted) { setView(value); if (operations.snapshot().error === 'Could not load extensions. Try again.') operations.setError('') } }, () => {
+    const requestedRefresh = force.current; force.current = false
+    void load(user, request.signal, requestedRefresh).then(value => { if (!request.signal.aborted) { setView(value); if (operations.snapshot().error === 'Could not load extensions. Try again.') operations.setError('') } }, () => {
       if (!request.signal.aborted) operations.setError('Could not load extensions. Try again.')
     }).finally(() => { if (!request.signal.aborted) setLoading(false) })
     return () => request.abort()
@@ -41,7 +44,7 @@ export function useManagedView<T>(user: string, load: (user: string, signal?: Ab
   useEffect(() => { window.addEventListener('focus', reload); return () => window.removeEventListener('focus', reload) }, [reload])
   const run = (label: string, action: () => Promise<unknown>, success = 'Configuration saved. Review the runtime state below.') =>
     operations.run(label, action, extensionFailure, success)
-  return { view, error, notice, busy, loading, reload, run, setError: operations.setError, setNotice: operations.setNotice }
+  return { view, error, notice, busy, loading, reload, refresh, run, setError: operations.setError, setNotice: operations.setNotice }
 }
 
 export function useUnsavedChanges(dirty: boolean) {

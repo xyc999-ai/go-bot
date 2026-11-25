@@ -13,7 +13,7 @@ and `captions: {"en": [title, body], "zh-CN": [title, body]}`.
 ```sh
 python3 build/plugin-tutorials/render.py .cache/tutorial-recipe.json \
   --language en --font /path/to/a/unicode-font.ttf \
-  --output extensions/plugins/x/assets/account-setup.en.mp4
+  --output ../go-bot-plugins/plugins/x/assets/account-setup.en.mp4
 ```
 
 Requires Pillow and ffmpeg with libx264. Review extracted full-page and zoomed
@@ -26,3 +26,5 @@ test-user form and Desktop-client form without submitting Cloud configuration.
 The last scene shows the current console restriction on downloading old secrets;
 it reminds users to keep the JSON at creation time. It does not fabricate a
 post-creation download screen or generate another application for the recording.
+
+Business plugin sources and published tutorial assets live in the sibling [plugin repository](https://github.com/xyc999-ai/got-bot-plugins). Run the capture helper from the main repository and select that output path.

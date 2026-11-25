@@ -26,9 +26,11 @@ example project. The Host ships this package and its installer pins
 `@go-bot/plugin-sdk` to that local copy, including when a business package declares
 it as a peer dependency. No published npm SDK is required. Type-only imports are
 removed during compilation; runtime exports such as `HostError` also resolve to
-the Host-supplied SDK. The SDK itself is not a market plugin.
+the Host-supplied SDK. The SDK itself is not a market plugin. Declare Cordis as an optional peer (and a
+development dependency when compiling types), rather than a production dependency.
+The Host supplies the shared Cordis module; user profiles use `autoInstallPeers: false`.
 
-Normal users install reviewed releases from the project's built-in plugin
+Normal users install reviewed releases from the project's reviewed remote plugin
 market. See [catalog maintenance](../catalog/README.md) for publishing a real
 business plugin to that list. Development examples are not market products;
 arbitrary source inspection and full settings application are Host-private.
@@ -70,7 +72,7 @@ subscribe to third-party events automatically.
 
 Ship plugin.json with the package. It declares name (original product name),
 bilingual description (`en`, `zh-CN`), icon, version, maintainer and license.
-The first-party catalog embeds this file and checks version/license against
+The independent plugin release workflow reads this file and checks version/license against
 package.json. Clients render those fields rather than maintaining capability
 lists or product copy in components. Host package inspection supplies actual
 installed versions; Controller reports availableVersion only for a newer reviewed
@@ -103,8 +105,7 @@ wait for credential prompts; service authorization happens after activation.
 Cordis apply only checks local prerequisites and registers capabilities. Disposal
 withdraws registrations without uninstalling software. Uninstall withdraws the
 Cordis entry and removes the wrapper with pnpm; credentials, workspaces and
-shared/global CLI dependencies are retained. See the first-party packages in
-../plugins/agent-browser and ../plugins/officecli.
+shared/global CLI dependencies are retained. See the first-party packages in the [plugin repository](https://github.com/xyc999-ai/got-bot-plugins).
 
 ## Authorization interactions
 

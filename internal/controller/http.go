@@ -77,7 +77,7 @@ func (m *Manager) HandlerWithWeb(web WebOptions) http.Handler {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if servePluginAsset(w, r) {
+		if m.servePluginAsset(w, r) {
 			return
 		}
 		if serveWeb(w, r, web.Files) {

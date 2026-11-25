@@ -51,7 +51,7 @@ export function Plugins(props: ScreenProps & PageChrome & { embedded?: boolean; 
     {(connections.entries.length > 0 || connections.mcp.servers.length > 0) && <Button label={t('Accounts and authorization')} disabled={!!m.busy || view.status.runtime !== 'running'} onPress={() => setAuthorization(true)}><KeyRound size={18} color={accent} /></Button>}
     {(connections.entries.length > 0 || connections.mcp.servers.length > 0) && <Hint error>{t(connections.state.error || connections.mcp.error)}</Hint>}
    </> : <>
-    <View style={s.row}><Text style={[s.hint,{flex:1}]}>{t('Extend your agent with plugins reviewed for this project.')}</Text><IconButton label={t('Refresh extensions')} onPress={m.reload}><RefreshCw size={18} color={muted} /></IconButton></View>
+    <View style={s.row}><Text style={[s.hint,{flex:1}]}>{t('Extend your agent with plugins reviewed for this project.')}</Text><IconButton label={t('Refresh extensions')} onPress={m.refresh}><RefreshCw size={18} color={muted} /></IconButton></View>
     <View style={market.tabs}>{(['market','installed'] as const).map(value => <Pressable key={value} accessibilityRole="tab" accessibilityState={{selected:tab === value}} onPress={() => setTab(value)} style={[market.tab,tab === value && market.selected]}><Text style={[market.label,tab === value && market.selectedLabel]}>{t(value === 'market' ? 'Plugin market' : 'Installed')}{value === 'installed' ? ` · ${names.length}` : ''}</Text></Pressable>)}</View>
     <Feedback error={m.error} notice={m.notice} />
     {m.busy && <View style={s.row}><ActivityIndicator size="small" color={accent} /><Text style={[s.hint,{flex:1}]}>{busyName ? busyName + ' · ' : ''}{t('Plugin changes continue while you use other features.')}</Text></View>}

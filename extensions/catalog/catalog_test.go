@@ -9,7 +9,7 @@ import (
 
 func reviewed() Entry {
 	text := plugin.Localized{EN: "Mail", ZH: "邮件"}
-	return Entry{CatalogEntry: plugin.CatalogEntry{ID: "mail", Package: "@fixture/mail", Version: "1.0.0", Name: "Mail", Description: text, Icon: "/assets/plugins/mail/icon.png", Maintainer: "Fixture", License: "MIT"}, Source: plugin.Source{Type: "registry", Spec: "@fixture/mail@1.0.0"}}
+	return Entry{CatalogEntry: plugin.CatalogEntry{ID: "mail", Package: "@fixture/mail", Version: "1.0.0", Name: "Mail", Description: text, Icon: "/assets/plugins/mail/icon.png", Maintainer: "Fixture", License: "MIT"}, AssetBase: "https://example.com/mail-v1.0.0/", Source: plugin.Source{Type: "registry", Spec: "@fixture/mail@1.0.0"}}
 }
 
 func TestCatalogRequiresReviewedPinnedBilingualReleases(t *testing.T) {
@@ -42,7 +42,7 @@ func TestCatalogRequiresReviewedPinnedBilingualReleases(t *testing.T) {
 		t.Fatal("accepted duplicate identity")
 	}
 	// An empty real catalog is preferable to publishing demo placeholders.
-	if Entries() == nil {
+	if entries, err := Parse([]byte(`[]`)); err != nil || entries == nil {
 		t.Fatal("catalog must serialize as an array")
 	}
 }

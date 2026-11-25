@@ -7,7 +7,7 @@ async function change<T>(api: Controller, path: string, method: string, value?: 
   const response = await api.response(path, { method, ...(value === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) }) }, 15 * 60_000)
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
-export const loadPlugins = (api: Controller, signal?: AbortSignal) => api.request<PluginView>(pluginPath, { signal })
+export const loadPlugins = (api: Controller, signal?: AbortSignal, refresh = false) => api.request<PluginView>(pluginPath + (refresh ? "?refresh=true" : ""), { signal })
 export const installPackage = (api: Controller, pluginId: string) => change<PluginView>(api, pluginPath + '/packages', 'POST', { pluginId })
 export const updatePackage = (api: Controller, name: string, pluginId: string) => change<PluginView>(api, pluginPath + '/packages/' + part(name) + '/update', 'POST', { pluginId })
 export const removePackage = (api: Controller, name: string) => change<PluginView>(api, pluginPath + '/packages/' + part(name), 'DELETE')

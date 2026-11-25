@@ -1,13 +1,13 @@
-# Reviewed plugin catalog / 经审核的插件清单
+# Reviewed remote plugin market
 
-plugins.json is compiled into Controller. Clients choose pluginId, never a user-supplied package address. The first-party agent-browser and OfficeCLI wrappers ship as bundled sources in the Host image; users install and enable them through the same market.
+The Controller reads the public [plugin repository](https://github.com/xyc999-ai/got-bot-plugins)'s `catalog.json`. Business packages, original Skills, icons and tutorial videos are released there, independently from Host/Controller images. Clients choose a reviewed plugin ID; they cannot submit arbitrary package addresses.
 
-plugins.json 随 Controller 构建内置。用户选择 pluginId，不提交包地址。agent-browser 和 OfficeCLI 包装包随 Host 镜像分发，通过统一市场安装、启用。
+Each package owns its `plugin.json` display metadata. The release workflow prepares original upstream Skills, runs `npm pack`, publishes complete versioned GitHub Release assets, and only then appends the generated metadata to the catalog. Keep historical entries: an installed selection resolves its exact package and version, while the market shows the newest reviewed version as an explicit update.
 
-First-party plugin.json files supply original name, bilingual description, icon, version, maintainer and license. The catalog selects the package/release and installation policy; Controller assembles display metadata at build time. Sources are reviewed bundled packages, exact npm versions, full Git commits or fixed HTTPS release archives. No floating branches, latest tags, placeholder URLs, development directories or credential values.
+The Controller caches public metadata for five minutes with ETag revalidation. The market refresh button forces a recheck. A failed refresh retains the last valid snapshot; a first failed fetch is reported as an error. No public catalog is stored in Redis or a local state file. The deployment-only `controller --plugin-catalog URL` flag supports development catalogs.
 
-展示字段来自各包 plugin.json：原始名称、双语 description、icon、version、maintainer、license；清单只记录包身份、版本选择、来源和脚本放行策略。来源使用随 Host 分发的 bundled 包、固定 npm 版本、完整 Git commit 或固定 HTTPS 发布归档，不能使用占位地址、开发目录或凭证。
+Icons and tutorials are served through `/assets/plugins/{id}/{file}?v={version}`, with HEAD, Range and cache headers. Assets must be declared in the selected release. They are available before plugin installation.
 
-Redis stores only user catalogId/version/enabled selections. Maintain selected releases for the product versions that support them; updates require a user action. Package source resolution is Host-private. goBot.api must equal "1". Standard npm lifecycle scripts, approved through pnpm allowBuilds, prepare dependencies during installation, never during inspection or Cordis activation. See ../sdk/README.md.
+Reviewed exact npm versions, pinned Git sources and HTTPS tarballs remain supported. The public repository uses versioned tarballs, so users do not need GitHub npm registry credentials. Local HTTP tarballs are accepted only on loopback or `host.docker.internal` for development tests. The catalog's private `builds` policy approves native pnpm lifecycle scripts; the browser never grants these permissions.
 
-Redis 只存用户的 catalogId/version/enabled。维护受支持的已选版本，更新由用户主动执行。安装时由 pnpm 调用包声明并经审核放行的标准安装脚本；浏览、检查包与 Cordis apply 不安装软件。
+业务包在独立仓库维护和发布，主镜像只保留 Go 核心、Cordis 和 SDK。新增插件或版本后刷新市场即可发现，不需要重构主镜像。用户仍通过现有市场安装、启停、更新和授权；默认安装的 agent-browser、OfficeCLI 也遵循同一网络安装流程。

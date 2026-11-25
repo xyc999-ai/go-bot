@@ -1,5 +1,7 @@
 # X 与 Google Workspace 插件接入方案
 
+> 分发更新：业务源码、资源与发布已迁至独立的 [got-bot-plugins](https://github.com/xyc999-ai/got-bot-plugins)；本文原镜像内 bundled 分发章节由 [远程市场方案](remote-plugin-market-plan.zh-CN.md) 替代，授权与业务行为保持不变。
+
 日期：2026-11-21。状态：两个插件已实现；X 已完成真实账号授权、官方 MCP 发现及一次只读请求。Google Workspace 已完成真实浏览器授权与一次 Drive 账号信息只读请求。按最新决定，两者都使用用户自己的应用配置，不再分发 Google 公共应用；首次配置（Web 选择 JSON 文件，移动端保留受保护输入）、原生配置复用与中英文前置视频已交付。
 
 ## 1. 结论

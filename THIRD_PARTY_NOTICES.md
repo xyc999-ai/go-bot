@@ -71,6 +71,10 @@ retained for Codex compatibility; Go Bot does not consume that configuration.
 The Host supplies PyYAML 6.0.3 (MIT) for the bundled Python helpers. Its license
 is retained in the installed distribution's metadata.
 
+Business integrations below are distributed separately in
+https://github.com/xyc999-ai/got-bot-plugins; business packages and their display
+assets are not embedded in the Host image. Each package retains its own notices.
+
 ## OfficeCLI and image components
 
 Official OfficeCLI: https://github.com/iOfficeAI/OfficeCLI (Apache-2.0).
@@ -78,7 +82,7 @@ The OfficeCLI plugin uses the official `npm install -g @officecli/officecli`.
 It does not add a CLI version/checksum lock or disable upstream updates. Original
 Skills and resources are exported by the official installer in a disposable build
 stage and supplied unchanged with the wrapper. The upstream license ships at
-`/usr/share/go-bot/plugins/officecli/UPSTREAM_LICENSE`.
+`UPSTREAM_LICENSE` in the independently distributed OfficeCLI plugin package.
 
 Debian packages, Chromium, LibreOffice, fonts, Python/Node runtimes and installed
 language libraries retain their respective upstream licenses in the image's
@@ -99,9 +103,8 @@ browser notices. File-format icons reuse vscode-icons (MIT), with the original
 notice at `frontend/src/assets/file-icons/LICENSE`.
 
 The agent-browser plugin installs the official CLI and contributes original Skill files from
-https://github.com/vercel-labs/agent-browser (Apache-2.0). The image includes
-the upstream license at `/usr/share/go-bot/plugins/agent-browser/UPSTREAM_LICENSE`.
-The npm release and Skill source revision are recorded in `build/dependencies.lock.yaml`.
+https://github.com/vercel-labs/agent-browser (Apache-2.0). Its independent plugin
+package includes `UPSTREAM_LICENSE` and records the CLI and Skill source revision.
 
 The plugin market uses the full-color Chrome mark from gilbarbara/logos at
 commit d6960edc1b73 (CC0) for agent-browser, as configured in its plugin.json.
@@ -135,7 +138,7 @@ supported Google product.
 The Gemini API CLI plugin installs Google's official
 https://github.com/google-gemini/gemini-api-cli with its official install script.
 The upstream Apache-2.0 license is included at
-`/usr/share/go-bot/plugins/gemini-api/UPSTREAM_LICENSE`.
+`UPSTREAM_LICENSE` in the independently distributed Gemini API CLI plugin package.
 The wrapper uses `yaml` (ISC) for the upstream native configuration format.
 Its icon is the official Google AI Studio mark from
 https://www.gstatic.com/images/branding/productlogos/ai_studio/v1/web-512dp/logo_ai_studio_color_1x_web_512dp.png.

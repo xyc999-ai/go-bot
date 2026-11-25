@@ -18,13 +18,9 @@ docker run --rm --entrypoint /bin/sh "$image" -ec '
   ! command -v gws
   ! command -v gemini-api
   test ! -e /usr/share/go-bot/skill-seed
-  for plugin in agent-browser officecli x google-workspace gemini-api; do
-    test -s "/usr/share/go-bot/plugins/$plugin/package.json"
-    test -s "/usr/share/go-bot/plugins/$plugin/scripts/install.mjs"
-    test -s "/usr/share/go-bot/plugins/$plugin/UPSTREAM_LICENSE"
-    test -s "/usr/share/go-bot/plugins/$plugin/assets/icon.png"
-  done
-  test -s /usr/share/go-bot/plugins/google-workspace/skills/gws-shared/SKILL.md
+  test ! -e /usr/share/go-bot/plugins
+  test -s /usr/share/go-bot/cordis/package.json
+  test -s /usr/share/go-bot/sdk/index.mjs
   chromium --headless --no-sandbox --disable-dev-shm-usage --no-zygote --screenshot=/tmp/browser.png "data:text/html,<h1>Go Bot</h1>" >/dev/null 2>&1
   test -s /tmp/browser.png
   echo "Base environment and packaged plugin smoke: OK"

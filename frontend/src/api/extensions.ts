@@ -10,7 +10,7 @@ export type PluginView = { catalog: CatalogEntry[]; settings: PluginSettings; st
 export const preparePlugins = (user: string) => request<PluginView>('/v1/host/plugins/prepare', { method: 'POST' }, user)
 const plugins = '/v1/settings/plugins'
 function body(method: string, value?: unknown): RequestInit { return { method, ...(value === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) }) } }
-export const getPlugins = (user: string, signal?: AbortSignal) => request<PluginView>(plugins, { signal }, user)
+export const getPlugins = (user: string, signal?: AbortSignal, refresh = false) => request<PluginView>(plugins + (refresh ? "?refresh=true" : ""), { signal }, user)
 export const installPackage = (user: string, pluginId: string) => request<PluginView>(plugins + '/packages', body('POST', { pluginId }), user)
 export const updatePackage = (user: string, name: string, pluginId: string) => request<PluginView>(plugins + '/packages/' + encodeURIComponent(name) + '/update', body('POST', { pluginId }), user)
 export const removePackage = (user: string, name: string) => request<PluginView>(plugins + '/packages/' + encodeURIComponent(name), body('DELETE'), user)

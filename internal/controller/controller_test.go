@@ -181,7 +181,9 @@ func newTestManager(t *testing.T, provider string, driver *fakeDriver, handler h
 	cfg.Runtime.Provider = provider
 	cfg.Runtime.StartTimeout = 3 * time.Second
 	cfg.Web.Provider, cfg.Web.APIKey = "deepseek", "search-key"
-	return New(cfg, driver, &memoryStore{records: make(map[string]Account)})
+	manager := New(cfg, driver, &memoryStore{records: make(map[string]Account)})
+	manager.SetPluginCatalog(testPluginCatalog())
+	return manager
 }
 
 func controlReply(w http.ResponseWriter, r *http.Request) bool {

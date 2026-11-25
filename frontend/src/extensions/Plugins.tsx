@@ -73,7 +73,7 @@ export function Plugins({ userId, cache, selected, onSelect }: { userId: string;
    </>}
    {selection?.enabled && actual && <Authorizations user={userId} cache={cache} instanceIds={[actual.id]} />}
   </> : <>
-   <div className="plugin-market-intro"><p>{t('Extend your agent with plugins reviewed for this project.')}</p><button type="button" className="plugin-icon-button" aria-label={t('Refresh extensions')} onClick={managed.reload}><RefreshCw size={17} /></button></div>
+   <div className="plugin-market-intro"><p>{t('Extend your agent with plugins reviewed for this project.')}</p><button type="button" className="plugin-icon-button" aria-label={t('Refresh extensions')} onClick={managed.refresh}><RefreshCw size={17} /></button></div>
    <div className="extension-tabs" role="tablist" aria-label={t('Plugins')}>{(['market', 'installed'] as const).map(value => <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => { setMenu(undefined); setTab(value) }}>{t(value === 'market' ? 'Plugin market' : 'Installed')}{value === 'installed' && <span>{names.length}</span>}</button>)}</div>
    <ExtensionFeedback error={managed.error} notice={managed.notice} />
    {busy && <p className="plugin-progress" role="status"><LoaderCircle size={15} />{busyName ? busyName + ' · ' : ''}{t('Plugin changes continue while you use other features.')}</p>}

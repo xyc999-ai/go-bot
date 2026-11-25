@@ -44,6 +44,7 @@ type Manager struct {
 	pluginLocks   [64]sync.Mutex
 	containerized bool
 	pluginCatalog []catalog.Entry
+	Catalog       *catalog.Remote
 }
 
 func InContainer() bool { return os.Getenv("CONTROLLER_CONTAINER") == "1" }
@@ -70,7 +71,7 @@ func New(c config.Config, driver runtime.Driver, store AccountStore) *Manager {
 	return &Manager{
 		Config: c, Driver: driver, Store: store,
 		containerized: InContainer(),
-		pluginCatalog: catalog.Entries(),
+		Catalog:       catalog.NewRemote(catalog.DefaultURL),
 		Client:        &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 	}
 }
@@ -89,7 +90,11 @@ func (m *Manager) CreateAccount(ctx context.Context, id string) error {
 		return errInvalidAccount
 	}
 	defaults := plugin.Settings{}.Clone()
-	for _, release := range m.pluginCatalog {
+	entries, err := m.marketEntries(ctx, false)
+	if err != nil {
+		return err
+	}
+	for _, release := range catalog.Latest(entries) {
 		if release.DefaultEnabled {
 			defaults.Packages[release.Package] = plugin.PackageSelection{CatalogID: release.ID, Version: release.Version, Enabled: true}
 		}
@@ -241,4 +246,21 @@ func (m *Manager) control(ctx context.Context, endpoint, token, path string, exp
 
 func (m *Manager) probe(ctx context.Context, endpoint, token string) error {
 	return m.control(ctx, endpoint, token, "/readyz", http.StatusOK)
+}
+
+func (m *Manager) marketEntries(ctx context.Context, force bool) ([]catalog.Entry, error) {
+	// Explicit in-process catalogs are for tests and embedded integrations.
+	if m.pluginCatalog != nil {
+		return append([]catalog.Entry{}, m.pluginCatalog...), nil
+	}
+	if m.Catalog == nil {
+		return nil, errors.New("plugin_catalog_unavailable")
+	}
+	return m.Catalog.Entries(ctx, force)
+}
+
+// SetPluginCatalog supplies a reviewed snapshot for embedded applications and
+// deterministic tests. Ordinary deployments use the default remote catalog.
+func (m *Manager) SetPluginCatalog(entries []catalog.Entry) {
+	m.pluginCatalog = append([]catalog.Entry{}, entries...)
 }

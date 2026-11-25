@@ -36,8 +36,6 @@ jobs:
           npm install --global --ignore-scripts --no-audit --no-fund pnpm@11.25.0
           pnpm --dir extensions/cordis install --frozen-lockfile --ignore-scripts
           pnpm --dir extensions/sdk install --frozen-lockfile --ignore-scripts
-          npm --prefix extensions/plugins/x ci --ignore-scripts --no-audit --no-fund
-          npm --prefix extensions/plugins/gemini-api ci --ignore-scripts --no-audit --no-fund
       - name: Test the Cordis runtime and plugin SDK
         run: |
           pnpm --dir extensions/cordis test
