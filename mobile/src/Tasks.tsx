@@ -5,11 +5,11 @@ import { Controller, problem, type Schedule, type ScheduleState } from './api'
 import { useLocale, type Language } from './locale'
 import type { TranscriptCache } from '../../frontend/src/chat/transcriptCache'
 import { ScheduleEditor, WeekdayLabels, scheduleError, targetLabels, timingLabels } from './ScheduleEditor'
-import { accent, Button, Hint, IconButton, ink, muted, Panel, s, SectionTitle, Sheet, SheetScroll, TintIcon } from './ui'
+import { accent, Button, Hint, IconButton, ink, muted, Panel, s, success, Sheet, SheetScroll, TintIcon, type PageChrome } from './ui'
 
 const labels = { active: '启用中', paused: '已暂停', ended: '已结束' }
-const colors = { active: '#e7edff', paused: '#faebdf', ended: '#e6eee8' }
-const detailSurfaceColors = ['#f0edf3', '#eee9f4', '#eae3f3'] as const
+const colors = { active: '#f0f1f2', paused: '#f0f1f2', ended: '#edf3ef' }
+const detailSurfaceColors = ['#f4f4f5', '#f4f4f5', '#f4f4f5'] as const
 const time = (language: Language, value?: string) => {
   const date = value ? new Date(value) : null
   return date && Number.isFinite(date.getTime()) && date.getFullYear() > 1
@@ -37,18 +37,15 @@ const taskTabs = [{ id: 'upcoming', label: '待执行' }, { id: 'completed', lab
 type TaskTab = typeof taskTabs[number]['id']
 type Screen = { mode: 'create' } | { mode: 'detail'; id: string } | { mode: 'edit'; task: Schedule }
 
-function groupTasks(tasks: Schedule[], tab: TaskTab, clock: number, language: Language, t: (label: string) => string) {
+function groupTasks(tasks: Schedule[], tab: TaskTab, clock: number, language: Language) {
   const dateKey = (date: Date) => [date.getFullYear(), date.getMonth(), date.getDate()].join('/')
   const today = new Date(clock)
-  const tomorrow = new Date(today)
-  tomorrow.setDate(today.getDate() + 1)
   const groups = new Map<string, { title: string; items: Schedule[] }>()
   for (const task of tasks) {
     const date = new Date(tab === 'completed' ? task.lastDelivery?.deliveredAt ?? task.record.scheduledAt : task.record.scheduledAt)
     const key = task.status !== 'paused' && date.getFullYear() > 1 ? dateKey(date) : 'undated'
     if (!groups.has(key)) {
-      const title = key === 'undated' ? '' : key === dateKey(today) ? t('今天') : key === dateKey(tomorrow) ? t('明天')
-        : date.toLocaleDateString(language, { month: 'short', day: 'numeric', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' })
+      const title = key === 'undated' ? '' : date.toLocaleDateString(language, { month: 'short', day: 'numeric', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' })
       groups.set(key, { title, items: [] })
     }
     groups.get(key)!.items.push(task)
@@ -58,14 +55,15 @@ function groupTasks(tasks: Schedule[], tab: TaskTab, clock: number, language: La
 
 function taskIcon(kind: Schedule['record']['kind']) {
   switch (kind) {
-    case 'every': return { Icon: ChartNoAxesColumnIncreasing, background: '#def4eb', color: '#267b62' }
-    case 'daily': case 'weekly': case 'cron': return { Icon: CalendarDays, background: '#faebde', color: '#a96338' }
-    default: return { Icon: FileText, background: '#eee3f8', color: '#7052a4' }
+    case 'every': return { Icon: ChartNoAxesColumnIncreasing, background: '#f1f2f3', color: '#666a70' }
+    case 'daily': case 'weekly': case 'cron': return { Icon: CalendarDays, background: '#f1f2f3', color: '#666a70' }
+    default: return { Icon: FileText, background: '#f1f2f3', color: '#666a70' }
   }
 }
 
-export function Tasks({ api, cache, active, openChat }: { api: Controller; cache: TranscriptCache; active: boolean; openChat: (id: string) => void }) {
+export function Tasks({ api, cache, active, openChat, header, navigation, bottomInset = 0 }: PageChrome & { api: Controller; cache: TranscriptCache; active: boolean; openChat: (id: string) => void }) {
   const { t, language } = useLocale()
+
   const [tasks, setTasks] = useState<Schedule[]>([])
   const [tab, setTab] = useState<TaskTab>('upcoming')
   const [screen, setScreen] = useState<Screen>()
@@ -115,7 +113,7 @@ export function Tasks({ api, cache, active, openChat }: { api: Controller; cache
     .sort((a, b) => tab === 'completed'
       ? (b.lastDelivery?.deliveredAt ?? b.record.scheduledAt).localeCompare(a.lastDelivery?.deliveredAt ?? a.record.scheduledAt)
       : Number(a.status === 'paused') - Number(b.status === 'paused') || a.record.scheduledAt.localeCompare(b.record.scheduledAt))
-  const groups = groupTasks(shown, tab, clock, language, t)
+  const groups = groupTasks(shown, tab, clock, language)
 
   function show(value?: Screen) {
     setActionError('')
@@ -141,9 +139,13 @@ export function Tasks({ api, cache, active, openChat }: { api: Controller; cache
   }
 
   return <>
-    <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh(true)} />}>
+    <ScrollView stickyHeaderIndices={navigation ? [1] : undefined} contentContainerStyle={{ paddingBottom: bottomInset + 24 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh(true)} />}>
+      <View>{header}</View>
+      {navigation && <View style={{ backgroundColor: '#fff' }}>{navigation}</View>}
+      <View style={styles.page}>
+      <View>
       <View style={styles.heading}>
-        <SectionTitle>{t('任务')}</SectionTitle>
+        <Text accessibilityRole="header" style={styles.sectionTitle}>{t('Scheduled tasks')}</Text>
         <IconButton label={t('新建任务')} style={styles.add} disabled={busy} onPress={() => show({ mode: 'create' })}>
           <Plus size={22} color={ink} strokeWidth={1.75} />
         </IconButton>
@@ -153,6 +155,7 @@ export function Tasks({ api, cache, active, openChat }: { api: Controller; cache
           onPress={() => setTab(id)} style={[styles.tab, id === tab && styles.selectedTab]}>
           <Text style={[styles.tabLabel, id === tab && styles.selectedLabel]}>{t(label)}</Text>
         </Pressable>)}</View>
+      </View>
       <Hint error>{t(error || (!screen ? actionError : ''))}</Hint>
       {!screen && <Hint>{t(feedback)}</Hint>}
       {!shown.length && loaded && !error && <Panel style={styles.empty}>
@@ -169,6 +172,7 @@ export function Tasks({ api, cache, active, openChat }: { api: Controller; cache
           { text: t('取消'), style: 'cancel' },
           { text: t('删除'), style: 'destructive', onPress: () => void mutate(() => api.deleteEndedSchedules()) },
         ])} />}
+      </View>
     </ScrollView>
     {active && screen && <Sheet title={t(screen.mode === 'create' ? '新建任务' : screen.mode === 'edit' ? '编辑任务' : '任务详情')}
       hideTitle={screen.mode === 'detail' && !!task} surfaceColors={screen.mode === 'detail' ? detailSurfaceColors : undefined}
@@ -257,36 +261,37 @@ function TaskRow({ task, onPress }: { task: Schedule; onPress: () => void }) {
 
 function TaskBadge({ status, list }: { status: ScheduleState; list?: boolean }) {
   const { t } = useLocale()
-  return <Text style={[styles.badge, list && styles.listBadge, { backgroundColor: colors[status] }]}>{t(list && status === 'ended' ? '已完成' : labels[status])}</Text>
+  return <Text style={[styles.badge, list && styles.listBadge, { backgroundColor: colors[status], color: status === 'ended' ? success : muted }]}>{t(list && status === 'ended' ? '已完成' : labels[status])}</Text>
 }
 
 const styles = StyleSheet.create({
-  page: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 30, gap: 18, maxWidth: 620, width: '100%', alignSelf: 'center' },
-  heading: { position: 'relative' },
-  add: { position: 'absolute', top: 25, right: 0, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.78)', borderColor: 'rgba(255,255,255,0.9)', borderWidth: 1, boxShadow: '0 3px 10px rgba(59,45,81,0.06)' },
-  tabs: { flexDirection: 'row', borderRadius: 24, padding: 2, backgroundColor: 'rgba(103,83,126,0.055)' },
-  tab: { flex: 1, minHeight: 40, borderRadius: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
-  selectedTab: { backgroundColor: 'rgba(255,255,255,0.86)', borderWidth: 1, borderColor: '#fff', boxShadow: '0 2px 6px rgba(59,45,81,0.05)' },
+  page: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8, gap: 14, maxWidth: 620, width: '100%', alignSelf: 'center' },
+  heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionTitle: { fontSize: 18, fontWeight: '500', color: ink, letterSpacing: -.3 },
+  add: { borderRadius: 22 },
+  tabs: { flexDirection: 'row', gap: 26, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#eceef0' },
+  tab: { minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, borderBottomWidth: 2, borderColor: 'transparent' },
+  selectedTab: { borderBottomColor: ink },
   tabLabel: { color: muted, fontSize: 15, fontWeight: '500', textAlign: 'center' },
   selectedLabel: { color: ink, fontWeight: '600' },
   group: { gap: 10 },
-  groupTitle: { fontSize: 21, fontWeight: '700', letterSpacing: -0.4, color: ink, marginHorizontal: 3, marginBottom: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 13, minHeight: 70, borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.65)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.82)' },
+  groupTitle: { fontSize: 13, fontWeight: '500', letterSpacing: 0, color: ink, marginHorizontal: 3, marginBottom: 1 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 13, minHeight: 70, borderRadius: 15,
+    backgroundColor: '#f6f6f7', borderWidth: StyleSheet.hairlineWidth, borderColor: '#f0f1f2' },
   rowCopy: { flex: 1, gap: 3 },
-  rowCaption: { color: muted, fontSize: 13, lineHeight: 17 },
+  rowCaption: { color: muted, fontSize: 14, lineHeight: 20 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   empty: { alignItems: 'center', paddingVertical: 27 },
-  taskTitle: { fontSize: 16, fontWeight: '600', color: ink },
+  taskTitle: { fontSize: 16, fontWeight: '500', color: ink },
   badge: { alignSelf: 'flex-start', color: accent, fontSize: 11, fontWeight: '600', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10, overflow: 'hidden' },
   listBadge: { alignSelf: 'center', paddingVertical: 4 },
   detailHeading: { flexDirection: 'row', alignItems: 'center', gap: 13, marginBottom: 10, paddingHorizontal: 4 },
-  detailGlyph: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.82)' },
+  detailGlyph: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.82)' },
   detailTitleWrap: { flex: 1, gap: 6 },
-  detailTitle: { fontSize: 23, fontWeight: '700', letterSpacing: -0.5, color: ink },
+  detailTitle: { fontSize: 21, fontWeight: '600', letterSpacing: -0.5, color: ink },
   detailCard: {
-    flexDirection: 'row', paddingVertical: 14, paddingHorizontal: 16, gap: 14, borderRadius: 20,
-    backgroundColor: '#faf9fc', borderColor: '#ddd6e7',
+    flexDirection: 'row', paddingVertical: 14, paddingHorizontal: 16, gap: 14, borderRadius: 16,
+    backgroundColor: '#fff', borderColor: '#e2e3e6', borderWidth: StyleSheet.hairlineWidth,
   },
   detailCardIcon: { marginTop: 2 },
   detailCardCopy: { flex: 1, gap: 4 },

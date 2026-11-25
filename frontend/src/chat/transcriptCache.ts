@@ -91,7 +91,7 @@ export class TranscriptCache {
     if (type === 'session') {
       const event = data as SessionEvent
       if (event.type === 'turn/start' || event.type === 'turn/end') next = { ...next, generating: event.type === 'turn/start' }
-      if (event.type === 'user/message') this.notify('@sessions')
+      if (event.type === 'user/message' || event.type === 'session/title') this.notify('@sessions')
     }
     if (type === 'questions.state') {
       const questions = (data as { questions?: Transcript['questions'] }).questions ?? []

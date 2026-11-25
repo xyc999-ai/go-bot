@@ -99,8 +99,8 @@ export function LibrarySheet({ kind, close, add, remove }: {
           const active = selected.includes(item.id)
           return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={item.name} accessibilityState={{ selected: active }} disabled={busy}
             onPress={() => setSelected(previous => active ? previous.filter(id => id !== item.id) : [...previous, item.id])}
-            style={kind === 'image' ? { width: '31.6%', aspectRatio: 1, overflow: 'hidden', borderRadius: 12, borderWidth: 2, borderColor: active ? '#8663c7' : '#fff' }
-              : [s.row, { minHeight: 66, borderRadius: 15, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: glass, borderWidth: 1, borderColor: active ? '#daceec' : edge }]}>
+            style={kind === 'image' ? { width: '31.6%', aspectRatio: 1, overflow: 'hidden', borderRadius: 12, borderWidth: 2, borderColor: active ? '#33363a' : '#fff' }
+              : [s.row, { minHeight: 66, borderRadius: 15, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: glass, borderWidth: 1, borderColor: active ? '#33363a' : edge }]}>
             {kind === 'image'
               ? <Image source={{ uri: item.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
               : <><FileIcon name={item.name} /><View style={{ flex: 1, gap: 2 }}>
@@ -108,7 +108,7 @@ export function LibrarySheet({ kind, close, add, remove }: {
                 <Text style={s.meta}>{formatSize(item.size)}{item.savedAt > 0 && ' · ' + new Date(item.savedAt).toLocaleString(language)}</Text>
               </View></>}
             {(kind === 'file' || active) && <View style={[{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1,
-              borderColor: active ? '#8a6cc6' : '#b9b5ca', backgroundColor: active ? '#8a6cc6' : 'transparent', borderRadius: 5 },
+              borderColor: active ? '#33363a' : '#c8cbd0', backgroundColor: active ? '#33363a' : 'transparent', borderRadius: 5 },
               kind === 'image' && { position: 'absolute', right: 4, top: 4, borderRadius: 10, borderColor: '#fff' }]}>
               {active && <Check size={13} color="#fff" strokeWidth={2.5} />}
             </View>}
@@ -160,7 +160,7 @@ export function QuestionSheet({ pending, close, submit, cancel }: {
               setAnswers(previous => ({ ...previous, [question.id]: { ...a, selected, ...(!question.multiSelect && { custom: '' }) } }))
             }}>
             <View style={{ width: 19, height: 19, borderRadius: question.multiSelect ? 5 : 10, borderWidth: 1.5,
-              borderColor: active ? accent : '#77768a', alignItems: 'center', justifyContent: 'center' }}>
+              borderColor: active ? accent : '#92969d', alignItems: 'center', justifyContent: 'center' }}>
               {active && (question.multiSelect ? <Check size={12} color={accent} strokeWidth={2.4} />
                 : <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: accent }} />)}
             </View>

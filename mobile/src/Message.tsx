@@ -7,7 +7,7 @@ import { groupDisplayBlocks, messageBlocksForDisplay, type Message as Item, type
 import { Controller } from './api'
 import { FileTile, Images, ImageTools, type Preview } from './MessageMedia'
 export type { Preview } from './MessageMedia'
-import { accent, edge, glass, Hint, ink, logo, muted, s } from './ui'
+import { accent, edge, glass, Hint, ink, logo, muted, s, userBubble } from './messageTheme'
 
 export function MessageView({ api, id, message, results, openImage, generating = false }: { api: Controller; id: string; message: Item; results: Transcript['toolResults']; openImage: (image: Preview) => void; generating?: boolean }) {
   const { t } = useLocale()
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   message: { gap: 4 },
   avatar: { width: 36, height: 36 },
   content: { flexShrink: 1, minWidth: 0, gap: 8 },
-  bubble: { maxWidth: '83%', borderRadius: 20, backgroundColor: '#fff', borderColor: edge, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 6, boxShadow: '0 3px 12px rgba(45,35,70,0.055)' },
+  bubble: { maxWidth: '83%', borderRadius: 20, backgroundColor: userBubble, paddingHorizontal: 14, paddingVertical: 6 },
   tools: { alignSelf: 'stretch', backgroundColor: glass, borderRadius: 14, borderColor: edge, borderWidth: 1, overflow: 'hidden' },
   toolHeader: { minHeight: 46, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
   toolRow: { minHeight: 38, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8, borderTopColor: edge, borderTopWidth: StyleSheet.hairlineWidth },

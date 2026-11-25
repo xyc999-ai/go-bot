@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { LanguagePicker, useLocale } from './locale'
 import { ArrowLeft, FolderOpen, Globe, Image, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { Proactive } from './settings/Proactive'
-import { APIError, archiveSession, createSession, listSessions, openAccount, readHostStream, stopHost, type ProviderPage, type SessionRow } from './api/controller'
+import { APIError, archiveSession, renameSession, createSession, listSessions, openAccount, readHostStream, stopHost, type ProviderPage, type SessionRow } from './api/controller'
 import { AccountEntry } from './AccountEntry'
 import { Chat } from './chat/Chat'
 import { TranscriptCache } from './chat/transcriptCache'
@@ -406,7 +406,10 @@ function AccountChat({ userId, onExit }: { userId: string; onExit: () => void })
       <Sidebar cache={transcriptCache} rows={[...(mainSessionId ? [{ sessionId: mainSessionId, title: 'Go Bot', createdAt: '', isMain: true }] : []), ...rows.filter(row => row.sessionId !== mainSessionId)]} selected={selected} hasMore={Boolean(cursor)} isLoading={loading} creating={creating || !hostReady}
         filesOverlay={filesOverlay}
         error={error} needsModel={needsModel} drawerOpen={drawerOpen} onSettings={showSettings} onCreate={() => { void start().catch(() => {}) }} onChoose={id => choose(id)}
-        onDelete={remove} onMore={() => { void refresh(cursor) }} onClose={closeDrawer}
+        onDelete={remove} onRename={async (row, title) => {
+          const updated = await renameSession(userId, row.sessionId, title)
+          setRows(current => current.map(item => item.sessionId === row.sessionId ? { ...item, title: updated.title } : item))
+        }} onMore={() => { void refresh(cursor) }} onClose={closeDrawer}
         onRetry={() => { setError(''); if (hostReady) void refresh(); else setHostAttempt(attempt => attempt + 1) }} />
       </div>
       {settingsPage && <main className={'model-settings' + (settingsPage === 'tasks' ? ' tasks-workspace' : '')} inert={(drawerOpen && small) || filesOverlay}>

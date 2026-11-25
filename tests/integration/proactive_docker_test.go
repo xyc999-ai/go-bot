@@ -29,6 +29,9 @@ func TestDockerProactiveQuietTimedNotifyAndRecovery(t *testing.T) {
 	var calls atomic.Int64
 	release := make(chan struct{})
 	model := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fixtureTitleResponse(w, r) {
+			return
+		}
 		var input struct{ Tools []struct{ Name string } }
 		if json.NewDecoder(r.Body).Decode(&input) != nil {
 			w.WriteHeader(400)

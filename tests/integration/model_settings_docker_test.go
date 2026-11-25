@@ -27,6 +27,9 @@ func TestDockerModelSettingsSwitchBetweenTurns(t *testing.T) {
 	calls := make(chan modelCall, 8)
 	release := make(chan struct{})
 	model := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fixtureTitleResponse(w, r) {
+			return
+		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)

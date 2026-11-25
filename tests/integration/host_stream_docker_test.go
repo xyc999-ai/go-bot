@@ -25,6 +25,9 @@ func TestDockerHostStreamMultiplexesNewSessionsAndApprovalReconnect(t *testing.T
 	ctx, cancel := context.WithTimeout(t.Context(), 70*time.Second)
 	defer cancel()
 	model := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fixtureTitleResponse(w, r) {
+			return
+		}
 		body, _ := io.ReadAll(r.Body)
 		output := []map[string]any{{"type": "message", "role": "assistant", "content": []map[string]string{{"type": "output_text", "text": "Completed"}}}}
 		if !strings.Contains(string(body), "function_call_output") {

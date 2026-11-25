@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocale } from '../locale'
-import { Ellipsis, MessageSquare, Plus, Trash2, X } from 'lucide-react'
+import { Ellipsis, MessageSquare, Pencil, Pin, Plus, Trash2, X } from 'lucide-react'
 import type { SessionRow } from '../api/controller'
 import type { TranscriptCache } from '../chat/transcriptCache'
 
@@ -19,6 +19,7 @@ type Props = {
   onCreate: () => void
   onChoose: (id: string) => void
   onDelete: (session: SessionRow) => Promise<boolean>
+  onRename: (session: SessionRow, title: string) => Promise<void>
   onMore: () => void
   onRetry: () => void
   onClose: () => void
@@ -32,7 +33,14 @@ export function Sidebar(props: Props) {
   const [menu, setMenu] = useState<ContextMenu | null>(null)
   const [confirm, setConfirm] = useState<ContextMenu | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const menuRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const firstAction = useRef<HTMLButtonElement>(null)
+  const renameDialog = useRef<HTMLDialogElement>(null)
+  const renameInput = useRef<HTMLInputElement>(null)
+  const [renaming, setRenaming] = useState<ContextMenu | null>(null)
+  const [title, setTitle] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [renameError, setRenameError] = useState('')
   const dialog = useRef<HTMLDialogElement>(null)
   const drawerClose = useRef<HTMLButtonElement>(null)
 
@@ -42,7 +50,7 @@ export function Sidebar(props: Props) {
 
   useEffect(() => {
     if (!menu) return
-    menuRef.current?.focus()
+    firstAction.current?.focus()
     function dismiss(event: PointerEvent) {
       if (!menuRef.current?.contains(event.target as Node)) setMenu(null)
     }
@@ -60,9 +68,21 @@ export function Sidebar(props: Props) {
     else dialog.current?.close()
   }, [confirm])
 
+  useEffect(() => {
+    if (renaming) { renameDialog.current?.showModal(); renameInput.current?.focus(); renameInput.current?.select() }
+    else renameDialog.current?.close()
+  }, [renaming])
+
+  function finishRename() {
+    if (saving) return
+    const anchor = renaming?.anchor
+    setRenaming(null)
+    requestAnimationFrame(() => anchor?.focus())
+  }
+
   function openMenu(row: SessionRow, anchor: HTMLElement, x: number, y: number) {
     if (row.isMain) return
-    setMenu({ row, anchor, x: Math.max(8, Math.min(x, window.innerWidth - 188)), y: Math.max(8, Math.min(y, window.innerHeight - 60)) })
+    setMenu({ row, anchor, x: Math.max(8, Math.min(x, window.innerWidth - 188)), y: Math.max(8, Math.min(y, window.innerHeight - 100)) })
   }
 
   function closeConfirm(restoreFocus: boolean) {
@@ -78,7 +98,7 @@ export function Sidebar(props: Props) {
       {props.drawerOpen && <button type="button" className="scrim" onClick={props.onClose} aria-label={t('Close chats')} />}
       <aside id="chat-sidebar" className={props.drawerOpen ? 'sidebar drawer-open' : 'sidebar'} aria-label={t('Chats')}
         inert={!props.drawerOpen || props.filesOverlay} aria-hidden={!props.drawerOpen}
-        onKeyDown={event => { if (event.key === 'Escape' && !menu && !event.defaultPrevented) props.onClose() }}>
+        onKeyDown={event => { if (event.key === 'Escape' && !menu && !renaming && !event.defaultPrevented) props.onClose() }}>
         <div className="sidebar-header">
           <h2>{t('Chats')}</h2>
           <button ref={drawerClose} type="button" className="icon-button drawer-close" onClick={props.onClose} aria-label={t('Close chats')}><X size={18} /></button>
@@ -107,10 +127,11 @@ export function Sidebar(props: Props) {
                   }
                 }}>
                 <MessageSquare size={16} strokeWidth={1.65} />
-                <span className="chat-label">{rowTitle(row)}{row.isMain && <small className="main-chat-label">{t('Main chat')}</small>}
+                <span className="chat-label">{rowTitle(row)}
                   {props.cache.summary(row.sessionId)?.pending && <small className="session-attention"><span aria-hidden="true" />{t(props.cache.summary(row.sessionId)?.pending === 'approval' ? 'Approval needed' : 'Answer needed')}</small>}
                   {!row.title && <small>{new Date(row.createdAt).toLocaleString(language, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</small>}
                 </span>
+                {row.isMain && <span className="main-chat-mark" role="img" aria-label={t('Main chat')} title={t('Main chat')}><Pin size={14} strokeWidth={1.6} aria-hidden="true" /></span>}
               </button>
               {!row.isMain && <button type="button" className="icon-button row-actions" aria-label={t('Actions for {name}', { name: rowTitle(row) })} aria-haspopup="menu"
                 onClick={event => {
@@ -126,8 +147,20 @@ export function Sidebar(props: Props) {
       </aside>
       {menu && (
         <div className="context-menu" role="menu" aria-label={t('Chat actions')}
-          ref={node => { if (node) { node.style.left = menu.x + 'px'; node.style.top = menu.y + 'px' } }}>
-          <button ref={menuRef} type="button" role="menuitem"
+          onKeyDown={event => {
+            if (event.key === 'Escape' || event.key === 'Tab') { event.preventDefault(); menu.anchor.focus(); setMenu(null) }
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault()
+              const actions = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button')]
+              const current = actions.indexOf(document.activeElement as HTMLButtonElement)
+              actions[(current + (event.key === 'ArrowDown' ? 1 : actions.length - 1)) % actions.length]?.focus()
+            }
+          }}
+          ref={node => { menuRef.current = node; if (node) { node.style.left = menu.x + 'px'; node.style.top = menu.y + 'px' } }}>
+          <button ref={firstAction} type="button" role="menuitem" className="rename-chat-action" onClick={() => {
+            setTitle(rowTitle(menu.row)); setRenameError(''); setRenaming(menu); setMenu(null)
+          }}><Pencil size={16} /> {t('Rename chat')}</button>
+          <button type="button" role="menuitem"
             onKeyDown={event => {
               if (event.key === 'Escape' || event.key === 'Tab') {
                 event.preventDefault()
@@ -140,6 +173,34 @@ export function Sidebar(props: Props) {
           </button>
         </div>
       )}
+      <dialog ref={renameDialog} className="archive-dialog rename-dialog" aria-labelledby="rename-title"
+        onClick={event => {
+          if (event.target !== event.currentTarget) return
+          const box = event.currentTarget.getBoundingClientRect()
+          if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) finishRename()
+        }}
+        onCancel={event => { event.preventDefault(); finishRename() }}>
+        {renaming && <form onSubmit={async event => {
+          event.preventDefault()
+          if (!title.trim() || saving) return
+          setSaving(true); setRenameError('')
+          try {
+            await props.onRename(renaming.row, title)
+            const anchor = renaming.anchor
+            setRenaming(null); requestAnimationFrame(() => anchor.focus())
+          } catch { setRenameError('Could not rename chat. Try again.') }
+          finally { setSaving(false) }
+        }}>
+          <h2 id="rename-title">{t('Rename chat')}</h2>
+          <label htmlFor="chat-title">{t('Chat title')}</label>
+          <input id="chat-title" ref={renameInput} value={title} maxLength={160} disabled={saving} onChange={event => setTitle(event.target.value)} autoComplete="off" />
+          {renameError && <p role="alert">{t(renameError)}</p>}
+          <div className="dialog-actions">
+            <button type="button" disabled={saving} onClick={finishRename}>{t('Cancel')}</button>
+            <button type="submit" disabled={saving || !title.trim()}>{t(saving ? 'Saving…' : 'Save')}</button>
+          </div>
+        </form>}
+      </dialog>
       <dialog ref={dialog} className="archive-dialog" aria-labelledby="archive-title" aria-describedby="archive-copy"
         onCancel={event => { event.preventDefault(); if (!deleting) closeConfirm(true) }}>
         {confirm && (

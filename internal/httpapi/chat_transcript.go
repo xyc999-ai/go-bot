@@ -116,6 +116,12 @@ func chatQueue(inbox sessionformat.InboxState) []chatQueueItem {
 func publicChatEvent(event sessionformat.Event) (sessionformat.Event, bool) {
 	var data any
 	switch event.Type {
+	case "session/title":
+		var title sessionformat.SessionTitle
+		if json.Unmarshal(event.Data, &title) != nil || title.Title == "" {
+			return sessionformat.Event{}, false
+		}
+		data = title
 	case "turn/start":
 		var row struct {
 			Turn uint64 `json:"turn"`

@@ -427,6 +427,42 @@ func NewNativeHostHTTP(host *hostruntime.NativeHost, options NativeWorkerHTTPOpt
 				ok = true
 			}
 		}
+		if r.Method == http.MethodPut && suffix == "title" && uuid.Validate(id) == nil {
+			if host.IsMainSession(id) {
+				writeSessionJSON(w, 409, map[string]string{"error": "main_session_title_fixed"})
+				return
+			}
+			var input struct {
+				Title string `json:"title"`
+			}
+			if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input) != nil || sessionformat.NormalizeTitle(input.Title, 80) == "" {
+				writeSessionJSON(w, 400, map[string]string{"error": "invalid_session_title"})
+				return
+			}
+			if !ok {
+				var err error
+				runtime, err = host.Activate(r.Context(), id, true)
+				if errors.Is(err, hostruntime.ErrHostSessionActive) {
+					runtime, err = host.AwaitSession(r.Context(), id)
+				}
+				if errors.Is(err, os.ErrNotExist) || errors.Is(err, hostruntime.ErrHostSessionArchived) {
+					http.NotFound(w, r)
+					return
+				}
+				if err != nil {
+					writeSessionJSON(w, 503, map[string]string{"error": "session_title_unavailable"})
+					return
+				}
+			}
+			title, err := runtime.RenameTitle(r.Context(), input.Title)
+			if err != nil {
+				writeSessionJSON(w, 503, map[string]string{"error": "session_title_unavailable"})
+				return
+			}
+			historyCache.invalidate(id)
+			writeSessionJSON(w, 200, map[string]string{"title": title})
+			return
+		}
 		if !ok && r.Method == http.MethodGet && suffix == "events" && uuid.Validate(id) == nil {
 			serveColdSessionHistory(w, r, host, &historyCache, id)
 			return
@@ -457,11 +493,7 @@ func NewNativeHostHTTP(host *hostruntime.NativeHost, options NativeWorkerHTTPOpt
 		entry, found := publicHandlers[id]
 		if !found || entry.runtime != runtime {
 			sessionOptions := options
-			if host.SaveTitle != nil {
-				sessionOptions.OnMessageAccepted = func(content string) {
-					_ = host.SaveTitle(id, compactSessionTitle(content))
-				}
-			}
+
 			entry = cached{runtime: runtime, handler: NewNativeWorkerHTTP(runtime, runtime.Identity, sessionOptions)}
 			publicHandlers[id] = entry
 		}

@@ -109,6 +109,6 @@ const styles = StyleSheet.create({
   panel: { paddingHorizontal: 7, paddingVertical: 6, gap: 0 },
   root: { ...s.row, minHeight: 46, paddingLeft: 12, paddingRight: 4, borderBottomColor: edge, borderBottomWidth: StyleSheet.hairlineWidth },
   row: { ...s.row, minHeight: 44, paddingRight: 12, gap: 7, borderRadius: 10 },
-  open: { backgroundColor: 'rgba(133, 110, 179, 0.09)' },
+  open: { backgroundColor: '#eff0f2' },
   name: { ...s.body, flex: 1, minWidth: 0 },
 })

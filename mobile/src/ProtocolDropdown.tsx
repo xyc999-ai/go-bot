@@ -27,7 +27,7 @@ export function ProtocolDropdown({ value, onChange, disabled }: { value: ModelPr
       {position && <View style={{ position: 'absolute', left: Math.max(12, Math.min(position.x, screen.width - position.width - 12)), top: position.y, width: position.width,
         padding: 6, backgroundColor: '#fffdfd', borderRadius: 14, borderWidth: 1, borderColor: edge, boxShadow: '0 8px 24px rgba(29,34,49,0.12)' }}>
         {(Object.keys(protocolNames) as ModelProtocol[]).map(protocol => <Pressable key={protocol} accessibilityRole="menuitem" accessibilityState={{ selected: protocol === value }}
-          onPress={() => { onChange(protocol); setPosition(undefined) }} style={{ minHeight: 48, paddingHorizontal: 12, borderRadius: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: protocol === value ? '#f0edf8' : 'transparent' }}>
+          onPress={() => { onChange(protocol); setPosition(undefined) }} style={{ minHeight: 48, paddingHorizontal: 12, borderRadius: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: protocol === value ? '#eff0f2' : 'transparent' }}>
           <Text style={[s.body, { color: ink }]}>{protocolNames[protocol]}</Text>{protocol === value && <Check size={16} color={accent} />}
         </Pressable>)}
       </View>}

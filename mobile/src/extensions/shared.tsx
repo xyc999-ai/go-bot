@@ -5,7 +5,7 @@ import { extensionOperations } from '../../../frontend/src/extensions/operations
 import type { TranscriptCache } from '../../../frontend/src/chat/transcriptCache'
 import { ApiError, type Controller } from '../api'
 import { useLocale } from '../locale'
-import { accent, Button, danger, edge, Field, glass, Hint, IconButton, ink, muted, Panel, s } from '../ui'
+import { accent, Button, danger, edge, Field, glass, Hint, IconButton, ink, muted, Panel, s, success } from '../ui'
 
 export type ScreenProps = { api: Controller; cache: TranscriptCache; onDirtyChange: (value: boolean) => void; onBusyChange: (value: boolean) => void }
 export function useManagement<T>({ api, cache }: ScreenProps, load: (api: Controller, signal?: AbortSignal) => Promise<T>) {
@@ -34,7 +34,7 @@ export type Runner = ReturnType<typeof useManagement>['run']
 const stateLabels: Record<string, string> = { installed: 'Installed', active: 'Active', running: 'Running', connected: 'Connected', ready: 'Ready', installing: 'Installing', 'installation-failed': 'Installation failed', loading: 'Starting', applying: 'Starting', connecting: 'Connecting', pending: 'Pending', failed: 'Failed', unavailable: 'Unavailable', stopped: 'Stopped', disabled: 'Disabled', stopping: 'Stopping', 'waiting-credentials': 'Needs credentials', 'waiting-authorization': 'Authorization needed' }
 export function State({ value }: { value: string }) {
   const { t } = useLocale()
-  const color = ['active', 'connected', 'running', 'ready'].includes(value) ? '#3d7967' : ['failed', 'installation-failed'].includes(value) ? danger : muted
+  const color = ['active', 'connected', 'running', 'ready'].includes(value) ? success : ['failed', 'installation-failed'].includes(value) ? danger : muted
   return <View style={x.state}>{['installing', 'loading'].includes(value) ? <ActivityIndicator size={12} color={color} /> : <View style={[x.dot, { backgroundColor: color }]} />}<Text style={[x.stateLabel, { color }]}>{t(stateLabels[value] ?? value)}</Text></View>
 }
 export function Toolbar({ title, busy, onBack, onRefresh, children }: { title: string; busy?: boolean; onBack?: () => void; onRefresh?: () => void; children?: ReactNode }) {
@@ -50,7 +50,7 @@ export function Empty({ title, text, children }: { title: string; text: string; 
   const { t } = useLocale()
   return <View style={x.empty}>{children}<Text style={x.heading}>{t(title)}</Text><Text style={[s.hint, { textAlign: 'center', maxWidth: 300 }]}>{t(text)}</Text></View>
 }
-export function Loading() { return <View accessibilityLabel="Loading" style={{ gap: 14 }}>{[0, 1, 2].map(i => <View key={i} style={{ height: 66, borderRadius: 17, backgroundColor: '#ebe9f1' }} />)}</View> }
+export function Loading() { return <View accessibilityLabel="Loading" style={{ gap: 14 }}>{[0, 1, 2].map(i => <View key={i} style={{ height: 66, borderRadius: 17, backgroundColor: '#f1f2f3' }} />)}</View> }
 export function Fact({ label, value }: { label: string; value: string | number }) { const { t } = useLocale(); return <View style={x.fact}><Text style={[s.caption, { width: 98 }]}>{t(label)}</Text><Text selectable style={[s.meta, { flex: 1, color: ink }]}>{value}</Text></View> }
 export function JSONField({ label, value, onChange, editable = true }: { label: string; value: string; onChange: (text: string) => void; editable?: boolean }) {
   const { t } = useLocale()

@@ -21,6 +21,7 @@ Serve a custom browser UI from the same origin as the Controller API, or use the
 | GET /v1/sessions?limit=&cursor= | Page through unarchived top-level sessions with an optional derived title |
 | GET /v1/sessions?latest=true | Return only the newest unarchived top-level session by creation time, or an empty list |
 | GET /v1/sessions/{id} | Active session state |
+| PUT /v1/sessions/{id}/title | Rename an ordinary chat with `{"title":"…"}`; returns the normalized title |
 | DELETE /v1/sessions/{id} | Archive a top-level session and retain its data on disk |
 | POST /v1/sessions/{id}/messages | JSON content or multipart content/files/images |
 | GET /v1/sessions/{id}/events?after=&limit= | Durable events and nextCursor for active or cold sessions |
@@ -362,6 +363,17 @@ bounded recent 20-turn page used for initial history, covering messages that
 arrive while a session is being discovered. Clients deduplicate by session ID
 and sequence, and buffer events while fetching history. Unopened chats keep
 only in-memory activity/pending summaries, not whole transcripts.
+
+Titles are derived from `session/title` journal records, never separate title
+files. Ordinary chats get a deterministic first-human-prompt fallback and one
+asynchronous title request using their selected model. Failure keeps the fallback.
+`PUT /v1/sessions/{id}/title` pins a user title and cancels automatic naming;
+empty titles return `400 invalid_session_title`. Titles are terminal-safe,
+normalized single lines limited to 80 UTF-8 bytes. The main chat retains
+`Go Bot` and rejects renaming with `409 main_session_title_fixed`. Title changes
+are projected as `{sessionId, type:"session", data:{seq,type:"session/title",data:{title,messageSeqs,source}}}`
+on the same Host stream, including for unopened chats. They do not become chat
+messages or model-context content. Auxiliary request details stay private.
 
 The projected `session` events carry ordered user and assistant blocks, tool
 outcomes and turn boundaries. `assistant-stream-baseline` and

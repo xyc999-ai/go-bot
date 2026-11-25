@@ -4,7 +4,7 @@ import Markdown, { MarkdownIt, type ASTNode } from 'react-native-markdown-displa
 import * as Clipboard from 'expo-clipboard'
 import { Check, Copy } from 'lucide-react-native'
 import { useLocale } from './locale'
-import { accent, ink, muted } from './ui'
+import { accent, ink, muted } from './messageTheme'
 
 const mono = Platform.OS === 'ios' ? 'Menlo' : 'monospace'
 const border = '#e1e3e8', paper = '#f6f7f9'

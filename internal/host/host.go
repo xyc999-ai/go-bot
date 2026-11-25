@@ -195,18 +195,20 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 		if native.IsMainSession(sid) {
 			return "Go Bot"
 		}
-		store, err := resolveStore(context.Background(), sid)
+		window, err := native.SessionHistoryWindow(context.Background(), sid, sessionformat.HistoryRequest{Kind: sessionformat.HistoryState})
 		if err != nil {
 			return ""
 		}
-		return chatTitle(store, sid)
+		var title string
+		_ = json.Unmarshal(window.Views["title"], &title)
+		return title
 	}
 	native.SaveTitle = func(sid, title string) error {
-		store, err := resolveStore(context.Background(), sid)
-		if err != nil {
-			return err
+		runtime, ok := native.Session(sid)
+		if !ok {
+			return hostruntime.ErrHostSessionAbsent
 		}
-		return saveChatTitle(store, sid, title)
+		return runtime.SetInitialTitle(context.Background(), title)
 	}
 	native.Schedule.SetSessionTargetCheck(native.ValidateScheduleDestination)
 	native.Schedule.ConfigureDelivery(schedule.Limits{
@@ -264,7 +266,7 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 		return fmt.Errorf("sync Host session search index: %w", err)
 	}
 	buildRuntime := func(sid, workspace, preset string) (*hostruntime.NativeRuntime, error) {
-		return &hostruntime.NativeRuntime{
+		runtime := &hostruntime.NativeRuntime{
 			Factory: assembly.NativeFactory{
 				Presets: presets,
 				Storage: executor.NativeFileStorage{Store: atWorkspace(workspace), SessionID: sid},
@@ -289,12 +291,19 @@ func run(ctx context.Context, c config.Config, newSearchProvider web.Factory, fe
 			Identity:            assembly.NativeRuntimeIdentity{UserID: c.Host.AccountID, SessionID: sid, Workspace: workspace, AgentPreset: preset},
 			HostOwnsSchedule:    true,
 			UserMessageAccepted: noteBackgroundChange,
+			TitleGenerator: func(ctx context.Context, route agent.ModelRoute, text string) (string, error) {
+				return models.generateTitle(ctx, route, text)
+			},
 			TurnCommitted: func(events []sessionformat.Event) {
 				if background := backgroundRef.Load(); background != nil {
 					background.observeTurn(events)
 				}
 			},
-		}, nil
+		}
+		if native.IsMainSession(sid) {
+			runtime.TitleGenerator = nil
+		}
+		return runtime, nil
 	}
 	background, err := newBackgroundService(root, native, models, history, atWorkspace, buildRuntime)
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 
 	"go-bot/harness/session"
@@ -123,9 +122,6 @@ func serveColdSessionHistory(w http.ResponseWriter, r *http.Request, host *hostr
 			writeSessionJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "agent_events_unavailable"})
 			return
 		}
-		if after == nil && host.SaveTitle != nil && value.TitleHint != "" && (host.ReadTitle == nil || host.ReadTitle(id) == "") {
-			_ = host.SaveTitle(id, compactSessionTitle(value.TitleHint))
-		}
 		writeSessionJSON(w, http.StatusOK, publicEventPageFrom(value.Events))
 		return
 	}
@@ -142,27 +138,7 @@ func serveColdSessionHistory(w http.ResponseWriter, r *http.Request, host *hostr
 		writeSessionJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "agent_events_unavailable"})
 		return
 	}
-	if host.SaveTitle != nil && after == nil && (host.ReadTitle == nil || host.ReadTitle(id) == "") {
-		for _, event := range artifact.Events {
-			if event.Type != "user/message" {
-				continue
-			}
-			var message struct {
-				Source  struct{ Kind string }
-				Content []struct{ Type, Text string }
-			}
-			if json.Unmarshal(event.Data, &message) != nil || message.Source.Kind != "user" {
-				continue
-			}
-			for _, block := range message.Content {
-				if block.Type == "text" && strings.TrimSpace(block.Text) != "" {
-					_ = host.SaveTitle(id, compactSessionTitle(block.Text))
-					break
-				}
-			}
-			break
-		}
-	}
+
 	events := artifact.Events
 	if after != nil {
 		if *after >= uint64(len(events)) {
@@ -172,14 +148,6 @@ func serveColdSessionHistory(w http.ResponseWriter, r *http.Request, host *hostr
 		}
 	}
 	writeSessionJSON(w, http.StatusOK, publicEventPageFrom(events[:min(len(events), limit)]))
-}
-
-func compactSessionTitle(text string) string {
-	runes := []rune(strings.Join(strings.Fields(text), " "))
-	if len(runes) > 56 {
-		return string(runes[:55]) + "…"
-	}
-	return string(runes)
 }
 
 func writeSessionJSON(w http.ResponseWriter, status int, value any) {

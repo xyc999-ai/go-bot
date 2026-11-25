@@ -78,6 +78,9 @@ func NewLiveSession(header Header, journal EventJournal) (*LiveSession, error) {
 	if _, err := RegisterProjection(s, &childCatalogDefinition); err != nil {
 		return nil, err
 	}
+	if _, err := RegisterProjection(s, &titleDefinition); err != nil {
+		return nil, err
+	}
 	if _, err := RegisterProjection(s, &inboxHistoryDefinition); err != nil {
 		return nil, err
 	}
@@ -164,6 +167,9 @@ func replaySession(artifact PhysicalArtifact, journal EventJournal, durable int)
 		return nil, err
 	}
 	if _, err := RegisterProjection(s, &childCatalogDefinition); err != nil {
+		return nil, err
+	}
+	if _, err := RegisterProjection(s, &titleDefinition); err != nil {
 		return nil, err
 	}
 	if _, err := RegisterProjection(s, &inboxHistoryDefinition); err != nil {

@@ -29,6 +29,9 @@ func TestDockerWebChatQueueAndQuestions(t *testing.T) {
 
 	var calls atomic.Int32
 	model := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fixtureTitleResponse(w, r) {
+			return
+		}
 		input, _ := io.ReadAll(r.Body)
 		call := calls.Add(1)
 		var output []map[string]any

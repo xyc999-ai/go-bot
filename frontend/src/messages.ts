@@ -4,6 +4,7 @@ import { proactiveChinese } from './settings/proactiveState'
 export type Language = 'en' | 'zh-CN'
 
 const chinese: Readonly<Record<string, string>> = {
+  'Rename chat': '重命名会话', 'Chat title': '会话标题', 'Could not rename chat. Try again.': '无法重命名会话，请重试。',
   'Copy table': '复制表格', 'Copy code': '复制代码', 'Copied': '已复制', 'Copy failed. Try again.': '复制失败，重试', 'Code': '代码',
   'Table — scroll horizontally': '表格，可左右滚动', 'Code — scroll horizontally': '代码，可左右滚动',
   ...extensionChinese,

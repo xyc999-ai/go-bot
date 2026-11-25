@@ -1,19 +1,22 @@
 import { useLocale } from './locale'
-import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react'
-import { ActivityIndicator, Alert, Animated, AppState, Easing, Image, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import { ArrowUp, ChevronDown, FileText, ImagePlus, Images, ListFilter, MessageCircle, MessageCircleQuestion, Plus, Shield, ShieldAlert, Square, X } from 'lucide-react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ComponentType, type ReactElement } from 'react'
+import { ActivityIndicator, Alert, Animated, AppState, Easing, Image, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewProps } from 'react-native'
+import { ArrowUp, ChevronDown, Ellipsis, FileText, ImagePlus, Images, ListFilter, MessageCircle, MessageCircleQuestion, Pin, Plus, Shield, ShieldAlert, Square, X } from 'lucide-react-native'
 import { attemptMessage, groupAssistantReplies, messageText, visibleQueue, type Message } from '../../frontend/src/chat/transcript'
 import type { TranscriptCache } from '../../frontend/src/chat/transcriptCache'
 import { ApiError, Controller, problem, type ModelSelection, type SessionRow } from './api'
 import { LibrarySheet, ModelSheet, QuestionSheet } from './ChatSheets'
+import MaskedView from '@react-native-masked-view/masked-view'
+import { BlurTargetView, BlurView } from 'expo-blur'
+import { LinearGradient } from 'expo-linear-gradient'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FileIcon } from './FileIcon'
 import { ChatMenu } from './ChatMenu'
-import { PluginSheet } from './extensions/PluginSheet'
 import { HostFilesSheet } from './HostFilesSheet'
 import { ImageViewer } from './ImageViewer'
 import { addAttachments, pickPhotos, readLibrary, type LibraryEntry } from './library'
 import { MessageView, type Preview } from './Message'
-import { accent, Button, edge, glass, Hint, IconButton, ink, logo, muted, Panel, s, Sheet, SheetScroll, TintIcon, useReducedMotion, wash } from './ui'
+import { accent, Button, Field, edge, glass, Hint, IconButton, ink, logo, muted, Panel, s, Sheet, SheetScroll, TintIcon, useReducedMotion, userBubble, warning, wash } from './ui'
 import { ApprovalSheet, PermissionSheet, permissionNames } from './PermissionSheets'
 import type { PermissionMode } from '../../frontend/src/chat/permissions'
 import { useTranscript } from './useTranscript'
@@ -23,13 +26,42 @@ type Props = {
   api: Controller; cache: TranscriptCache; id: string; active: boolean
   preparation: 'running' | 'failed' | ''; retryPreparation: () => void
   resolving: boolean; lookupError: boolean; retryLookup: () => void
+  bottomInset: number; openPlugins: () => void
   selectSession: (id: string) => void; onUnavailable: (id: string) => void; openModelSettings: () => void
 }
-type Overlay = 'plugins' | 'chats' | 'files' | 'model' | 'permission' | 'tools' | 'image' | 'file' | ''
+const HeaderMask = MaskedView as unknown as ComponentType<ViewProps & { maskElement: ReactElement }>
+type Overlay = 'chats' | 'files' | 'model' | 'permission' | 'tools' | 'image' | 'file' | 'rename' | ''
 
-export function Chat({ api, cache, id, active, preparation, retryPreparation, resolving, lookupError, retryLookup, selectSession, onUnavailable, openModelSettings }: Props) {
+export function Chat({ api, cache, id, active, preparation, retryPreparation, resolving, lookupError, retryLookup, selectSession, onUnavailable, openModelSettings, bottomInset, openPlugins }: Props) {
   const { t } = useLocale()
+  const inset = useSafeAreaInsets()
+  const headerHeight = inset.top + 80
+  const blurTarget = useRef<ComponentRef<typeof View>>(null)
   const [rows, setRows] = useState<SessionRow[]>([])
+  const [renameRow, setRenameRow] = useState<SessionRow>()
+  const [renameTitle, setRenameTitle] = useState('')
+  const [renameBusy, setRenameBusy] = useState(false)
+  const [renameError, setRenameError] = useState('')
+  function chatActions(row: SessionRow, afterClose: (action: () => void) => void) {
+    if (row.isMain) return
+    Alert.alert(row.title || t('未命名会话'), undefined, [
+      {text:t('返回'),style:'cancel'},
+      {text:t('重命名会话'),onPress:()=>afterClose(()=>{setRenameRow(row);setRenameTitle(row.title || '');setRenameError('');show('rename')})},
+      {text:t('归档'),style:'destructive',onPress:()=>Alert.alert(t('归档此会话？'),t('会话将从列表隐藏。'),[
+        {text:t('返回'),style:'cancel'}, {text:t('归档'),style:'destructive',onPress:()=>void archiveChat(row)},
+      ])},
+    ])
+  }
+  async function saveTitle(close: () => void) {
+    if (!renameRow || !renameTitle.trim() || renameBusy) return
+    setRenameBusy(true);setRenameError('')
+    try {
+      const updated = await api.rename(renameRow.sessionId,renameTitle)
+      setRows(current=>current.map(row=>row.sessionId===renameRow.sessionId?{...row,title:updated.title}:row))
+      close()
+    } catch { setRenameError('无法重命名会话，请重试。') }
+    finally { setRenameBusy(false) }
+  }
   const [, updateSummaries] = useState(0)
   useEffect(() => cache.subscribe('@summaries', () => updateSummaries(value => value + 1)), [cache])
 
@@ -70,6 +102,8 @@ export function Chat({ api, cache, id, active, preparation, retryPreparation, re
     return () => { unsubscribe(); clearTimeout(timer) }
   }, [cache, overlay, api])
   const [sending, setSending] = useState(false)
+  const [activity, setActivity] = useState({ id: '', working: false })
+  const reportWorking = useCallback((working: boolean) => setActivity(previous => previous.id === id && previous.working === working ? previous : { id, working }), [id])
   const [creating, setCreating] = useState(false)
   const createInFlight = useRef(false)
   const [picking, setPicking] = useState(false)
@@ -158,24 +192,14 @@ export function Chat({ api, cache, id, active, preparation, retryPreparation, re
     } finally { setSending(false) }
   }
 
+  const preparationNotice = preparation !== '' ? <View style={styles.preparation}>
+    <Text style={[s.meta, { flex: 1 }]}>{t(preparation === 'running' ? '正在准备浏览器与 Office 能力…' : '部分插件未能准备完成。')}</Text>
+    <Pressable accessibilityRole="button" onPress={preparation === 'failed' ? retryPreparation : openPlugins} style={{ paddingVertical: 8 }}><Text style={s.caption}>{t(preparation === 'failed' ? '重试' : '查看插件')}</Text></Pressable>
+  </View> : null
   return <>
-    <View style={styles.head}>
-      {!!id && <View style={styles.brandPosition} pointerEvents="none"><FloatingLogo active={active} /></View>}
-      <IconButton label={t('打开会话列表')} style={styles.headButton} onPress={() => { Keyboard.dismiss(); show('chats'); void refreshChats() }}>
-        <ListFilter size={21} color={ink} strokeWidth={1.75} />
-      </IconButton>
-      <View style={{ flex: 1 }} />
-      <ChatMenu onFiles={() => show('files')} onPlugins={() => show('plugins')} />
-    </View>
-    {id === api.mainSessionId && <Text style={{ textAlign: 'center', color: muted, fontSize: 11, marginTop: -3, marginBottom: 5 }}>{t('主会话')}</Text>}
-    {preparation !== '' && <View style={{ paddingHorizontal: 24, paddingVertical: 9, gap: 4 }}>
-      <Text style={s.caption}>{t(preparation === 'running' ? '正在准备浏览器与 Office 能力…' : '部分插件未能准备完成。')}</Text>
-      <View style={{ flexDirection: 'row', gap: 20 }}>
-        {preparation === 'failed' && <Pressable onPress={retryPreparation}><Text style={[s.caption, { color: accent }]}>{t('重试')}</Text></Pressable>}
-        <Pressable onPress={() => show('plugins')}><Text style={[s.caption, { color: accent }]}>{t('查看插件')}</Text></Pressable>
-      </View>
-    </View>}
-    {!id ? <View style={styles.emptyChat}>
+    <View style={{ flex: 1, paddingBottom: bottomInset, backgroundColor: '#fff' }}>
+    <BlurTargetView ref={blurTarget} style={{ flex: 1 }}>
+    {!id ? <View style={[styles.emptyChat, { paddingTop: headerHeight }]}>
       <Image source={logo} accessibilityLabel="Go Bot" resizeMode="contain" style={styles.emptyLogo} />
       {resolving && !lookupError ? <ActivityIndicator color={accent} accessibilityLabel={t('正在读取会话…')} />
         : <Button label={t('创建新会话')} primary busy={creating} onPress={createChat}><Plus size={18} color="white" /></Button>}
@@ -183,8 +207,8 @@ export function Chat({ api, cache, id, active, preparation, retryPreparation, re
       {!overlay && !!notice && <View style={styles.createError}><Hint error={notice !== '将在下一轮使用此模型。'}>{t(notice)}</Hint>
         {notice.includes('默认模型') && <Button label={t('打开模型设置')} onPress={openModelSettings} />}
       </View>}
-    </View> : <Conversation key={id} api={api} cache={cache} id={id} active={active && !overlay} onUnavailable={onUnavailable}
-      pending={pending?.session === id ? pending : undefined} sending={sending}
+    </View> : <Conversation key={id} api={api} cache={cache} id={id} topInset={headerHeight} lead={preparationNotice} active={active && !overlay} onUnavailable={onUnavailable}
+      pending={pending?.session === id ? pending : undefined} sending={sending} onWorkingChange={reportWorking}
       renderComposer={({ idle, generation, cancel, questionButton, livePermission }) => <View style={styles.composerShell}>
         {questionButton}
         {attachments.length > 0 && <View style={styles.draftRail}>
@@ -199,7 +223,7 @@ export function Chat({ api, cache, id, active, preparation, retryPreparation, re
         </View>}
         {id === api.mainSessionId && (cache.get(id)?.transcript.messages.length ?? 0) <= 1 && <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 24, marginBottom: 10 }}>
           <Pressable onPress={openModelSettings}><Text style={[s.caption, { color: accent }]}>{t('配置模型')}</Text></Pressable>
-          <Pressable onPress={() => show('plugins')}><Text style={[s.caption, { color: accent }]}>{t('查看插件')}</Text></Pressable>
+          <Pressable onPress={openPlugins}><Text style={[s.caption, { color: accent }]}>{t('查看插件')}</Text></Pressable>
         </View>}
         <View style={styles.composer}>
           <TextInput accessibilityLabel={t('消息')} placeholder={t('问点什么，或交给我一项任务…')} placeholderTextColor={muted} multiline value={draft}
@@ -227,20 +251,34 @@ export function Chat({ api, cache, id, active, preparation, retryPreparation, re
         {!!notice && <View><Hint error={notice !== '将在下一轮使用此模型。'}>{t(notice)}</Hint>{notice.includes('默认模型') && <Button label={t('打开模型设置')} onPress={openModelSettings} />}</View>}
       </View>}
     />}
+    </BlurTargetView>
+    <View pointerEvents="box-none" style={[styles.headerLayer, { height: headerHeight + 16 }]}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <HeaderMask style={StyleSheet.absoluteFill} maskElement={<LinearGradient colors={['#000', 'rgba(0,0,0,0.88)', 'rgba(0,0,0,0.48)', 'rgba(0,0,0,0.12)', 'transparent']} locations={[0, .35, .65, .88, 1]} style={StyleSheet.absoluteFill} />}>
+          <BlurView blurTarget={blurTarget} blurMethod="dimezisBlurViewSdk31Plus" tint="light" intensity={30} style={StyleSheet.absoluteFill} />
+        </HeaderMask>
+      </View>
+      <View pointerEvents="box-none" style={[styles.head, { marginTop: inset.top }]}>
+        {!!id && <View style={styles.brandPosition} pointerEvents="none"><FloatingLogo active={active} working={activity.id === id && activity.working} /></View>}
+        <IconButton label={t('打开会话列表')} style={styles.headButton} onPress={() => { Keyboard.dismiss(); show('chats'); void refreshChats() }}><ListFilter size={21} color={ink} strokeWidth={1.65} /></IconButton>
+        <View pointerEvents="none" style={{ flex: 1 }} />
+        <ChatMenu onFiles={() => show('files')} onPlugins={openPlugins} />
+      </View>
+    </View>
+    </View>
     {overlay === 'permission' && permission?.id === id && <PermissionSheet mode={permission.mode} close={() => show('')}
       choose={async mode => { const state = await api.selectPermission(id, mode); if (scopedId.current === id) setPermission({ id, mode: state.mode }) }} />}
-    {overlay === 'chats' && <Sheet title={t('会话')} drawer onClose={() => show('')}><SheetScroll>
+    {overlay === 'chats' && <Sheet title={t('会话')} drawer onClose={() => show('')}>{afterClose => <SheetScroll>
       <Button label={t('新会话')} primary disabled={sending} busy={creating} onPress={createChat}><Plus size={20} color="white" /></Button>
       {[{ sessionId: api.mainSessionId, title: 'Go Bot', createdAt: '', isMain: true }, ...rows.filter(row => row.sessionId !== api.mainSessionId)].map(row => <View key={row.sessionId} style={[s.row, { borderRadius: 13, backgroundColor: row.sessionId === id ? wash : glass, paddingLeft: 11 }]}>
-        <Pressable accessibilityRole="button" onPress={() => switchChat(row.sessionId)} disabled={sending || creating} style={[s.row, { flex: 1, minHeight: 44 }]}>
+        <Pressable accessibilityRole="button" onPress={() => switchChat(row.sessionId)} onLongPress={() => chatActions(row, afterClose)} disabled={sending || creating} style={[s.row, { flex: 1, minHeight: 44 }]}>
           <MessageCircle size={17} color={accent} /><View style={{ flex: 1, gap: 3 }}>
-            <Text style={s.body} numberOfLines={2}>{row.isMain ? 'Go Bot' : row.title || t('未命名会话')}</Text>{row.isMain && <Text style={s.caption}>{t('主会话')}</Text>}
-            {cache.summary(row.sessionId)?.pending && <Text style={[s.caption, { color: '#936433' }]}>{t(cache.summary(row.sessionId)?.pending === 'approval' ? '待审批' : '待回答')}</Text>}
+            <Text style={s.body} numberOfLines={2}>{row.isMain ? 'Go Bot' : row.title || t('未命名会话')}</Text>
+            {cache.summary(row.sessionId)?.pending && <Text style={[s.caption, { color: warning }]}>{t(cache.summary(row.sessionId)?.pending === 'approval' ? '待审批' : '待回答')}</Text>}
           </View>
+          {row.isMain && <View accessible accessibilityLabel={t('主会话')} style={{ width: 36, alignItems: 'center', justifyContent: 'center' }}><Pin size={15} color={muted} strokeWidth={1.6} /></View>}
         </Pressable>
-        {!row.isMain && <IconButton label={t('归档会话')} disabled={sending} onPress={() => Alert.alert(t('归档此会话？'), t('会话将从列表隐藏。'), [
-          { text: t('返回'), style: 'cancel' }, { text: t('归档'), style: 'destructive', onPress: () => void archiveChat(row) },
-        ])}><X size={16} color={muted} /></IconButton>}
+        {!row.isMain && <IconButton label={t('会话操作')} disabled={sending} onPress={() => chatActions(row, afterClose)}><Ellipsis size={18} color={muted} /></IconButton>}
       </View>)}
       {!!cursor && <Button label={t('查看更早的会话')} busy={loadingRows} onPress={() => refreshChats(cursor)} />}
       {loadingRows && !rows.length && <Hint>{t('正在读取会话…')}</Hint>}
@@ -248,25 +286,32 @@ export function Chat({ api, cache, id, active, preparation, retryPreparation, re
       <Hint error>{t(listError)}</Hint>
       <Hint error={notice !== '将在下一轮使用此模型。'}>{t(notice)}</Hint>
       {notice.includes('默认模型') && <Button label={t('打开模型设置')} onPress={() => { show(''); openModelSettings() }} />}
-    </SheetScroll></Sheet>}
+    </SheetScroll>}</Sheet>}
+    {overlay === 'rename' && <Sheet title={t('重命名会话')} beforeDismiss={dismiss => { if (!renameBusy) dismiss() }} onClose={() => {
+      show(''); setRenameRow(undefined); requestAnimationFrame(() => show('chats'))
+    }}>{afterClose => <SheetScroll>
+      <Field label={t('会话标题')} value={renameTitle} onChangeText={setRenameTitle} maxLength={160} autoFocus editable={!renameBusy} returnKeyType="done" onSubmitEditing={() => void saveTitle(() => afterClose(() => {}))} />
+      <Hint error>{t(renameError)}</Hint>
+      <Button primary label={t('保存')} busy={renameBusy} disabled={!renameTitle.trim()} onPress={() => void saveTitle(() => afterClose(() => {}))} />
+      <Button label={t('返回')} disabled={renameBusy} onPress={() => afterClose(() => {})} />
+    </SheetScroll>}</Sheet>}
     {modelRequired && <Sheet title={t(modelRequired === 'selection' ? '选择模型' : '配置模型')} onClose={() => setModelRequired(undefined)}>{afterClose => <SheetScroll>
       <Text style={s.body}>{t(modelRequired === 'selection' ? '当前会话的模型不可用，请重新选择。' : '请先配置模型，再开始聊天。')}</Text>
       <Hint>{t('文字和附件已保留在输入框中。')}</Hint>
       {modelRequired === 'selection' && <Button primary label={t('选择模型')} onPress={() => afterClose(() => { setModelRequired(undefined); show('model') })} />}
       <Button primary={modelRequired !== 'selection'} label={t('打开模型设置')} onPress={() => afterClose(() => { setModelRequired(undefined); openModelSettings() })} />
     </SheetScroll>}</Sheet>}
-    {overlay === 'plugins' && <PluginSheet api={api} cache={cache} close={() => show('')} />}
     {overlay === 'files' && <HostFilesSheet api={api} close={() => show('')} />}
     {overlay === 'model' && <ModelSheet api={api} choice={selectedModel} choose={choose} close={() => show('')} settingsOpen={openModelSettings} />}
     {overlay === 'tools' && <Sheet title={t('工具栏')} raised={122} onClose={() => show('')}>{afterClose => <SheetScroll>
       <Panel style={{ paddingHorizontal: 12, paddingVertical: 2, gap: 0 }}>
         {([
-          ['相册', ImagePlus, '#ebe1fa', '#7753a4', () => afterClose(photos)],
-          ['图片', Images, '#dff2e9', '#337b61', () => {
+          ['相册', ImagePlus, '#f1f2f3', ink, () => afterClose(photos)],
+          ['图片', Images, '#f1f2f3', ink, () => {
             try { if (readLibrary('image').length) afterClose(() => show('image')); else afterClose(photos) }
             catch { setNotice('无法读取本地图片。'); show('') }
           }],
-          ['文件', FileText, '#e2edfb', '#3e659a', () => afterClose(() => show('file'))],
+          ['文件', FileText, '#f1f2f3', ink, () => afterClose(() => show('file'))],
         ] as const).map(([label, Icon, background, color, action], index) =>
           <Pressable key={label} accessibilityRole="button" onPress={action}
             style={[s.row, { minHeight: 52 }, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: edge }]}>
@@ -280,9 +325,26 @@ export function Chat({ api, cache, id, active, preparation, retryPreparation, re
   </>
 }
 
-function FloatingLogo({ active }: { active: boolean }) {
+function FloatingLogo({ active, working }: { active: boolean; working: boolean }) {
+  const { t } = useLocale()
   const reduced = useReducedMotion()
   const offset = useRef(new Animated.Value(0)).current
+  const progress = useRef(new Animated.Value(working ? 1 : 0)).current
+  const pulse = useRef(new Animated.Value(1)).current
+  useEffect(() => {
+    const transition = Animated.timing(progress, { toValue: working ? 1 : 0, duration: reduced ? 0 : 220, easing: Easing.out(Easing.cubic), useNativeDriver: true })
+    transition.start()
+    return () => transition.stop()
+  }, [working, reduced, progress])
+  useEffect(() => {
+    if (!working || !active || reduced) { pulse.setValue(1); return }
+    const breathing = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: .3, duration: 750, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 750, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]))
+    breathing.start()
+    return () => breathing.stop()
+  }, [working, active, reduced, pulse])
   useEffect(() => {
     if (!active || reduced) { offset.setValue(0); return }
     const settings = { duration: 1450, easing: Easing.inOut(Easing.sin), useNativeDriver: true }
@@ -293,13 +355,22 @@ function FloatingLogo({ active }: { active: boolean }) {
     floating.start()
     return () => floating.stop()
   }, [active, offset, reduced])
-  return <Animated.Image source={logo} accessibilityLabel="Go Bot" resizeMode="contain" style={{ width: 62, height: 58, transform: [{ translateY: offset }] }} />
+  return <Animated.View accessible accessibilityLabel={working ? 'Go Bot · ' + t('Working') : 'Go Bot'} accessibilityLiveRegion="polite" style={[styles.brandBadge, { transform: [{ translateY: offset }] }]}>
+    <View style={styles.brandAvatar}><Image source={logo} resizeMode="contain" style={styles.brandLogo} /></View>
+    <View style={styles.brandNamePlate}>
+      <Animated.View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.brandStatus, { opacity: Animated.subtract(1, progress), transform: [{ translateY: Animated.multiply(progress, -3) }] }]}><Text style={styles.brandName}>Go Bot</Text></Animated.View>
+      <Animated.View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.brandStatus, { opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [3, 0] }) }] }]}>
+        <Animated.View style={[styles.workingDot, { opacity: pulse }]} /><Text style={styles.brandName}>{t('Working')}</Text>
+      </Animated.View>
+    </View>
+  </Animated.View>
 }
 
 type Pending = { id: string; session: string; text: string; files: LibraryEntry[] }
-function Conversation({ api, cache, id, pending, active, sending, onUnavailable, renderComposer }: {
+function Conversation({ api, cache, id, pending, active, sending, onUnavailable, onWorkingChange, renderComposer, topInset, lead }: {
   api: Controller; cache: TranscriptCache; id: string; pending?: Pending; active: boolean; sending: boolean
-  onUnavailable: (id: string) => void
+  onUnavailable: (id: string) => void; topInset: number; lead?: React.ReactNode
+  onWorkingChange: (working: boolean) => void
   renderComposer: (controls: { idle: boolean; generation: boolean; cancel: () => void; questionButton?: React.ReactNode; livePermission?: PermissionMode }) => React.ReactNode
 }) {
   const { t } = useLocale()
@@ -333,6 +404,7 @@ function Conversation({ api, cache, id, pending, active, sending, onUnavailable,
   const displayTurn = turn ?? playback.pendingTurn
   const hasReply = generating && replies.some(message => message.role === 'assistant' && message.turn === displayTurn)
   const waiting = awaiting || generating && !hasReply
+  useEffect(() => { onWorkingChange(Boolean(awaiting || generating || sending)) }, [awaiting, generating, sending, onWorkingChange])
   const title = waiting ? t('正在等待回复…') : t('生成中')
   const queue = visibleQueue(state, state.messages)
 
@@ -345,12 +417,13 @@ function Conversation({ api, cache, id, pending, active, sending, onUnavailable,
   }
 
   return <>
-    <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={styles.thread} keyboardShouldPersistTaps="handled"
+    <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={[styles.thread, { paddingTop: topInset + 12 }]} keyboardShouldPersistTaps="handled"
       maintainVisibleContentPosition={{ minIndexForVisible: 1 }} scrollEventThrottle={120}
       onScroll={({ nativeEvent: { layoutMeasurement, contentOffset, contentSize } }) => {
         following.current = contentSize.height - layoutMeasurement.height - contentOffset.y < 92
       }}
       onContentSizeChange={() => { if (following.current) scroll.current?.scrollToEnd({ animated: false }) }}>
+      {lead}
       {before !== null && <Button label={t('加载更早的消息')} onPress={() => { following.current = false; void loadOlder() }} busy={older} />}
       {loading && <Hint>{t('正在读取会话…')}</Hint>}
       {!!error && <><Hint error>{t(error)}</Hint><Button label={t('重新加载')} onPress={reload} /></>}
@@ -393,9 +466,18 @@ function Conversation({ api, cache, id, pending, active, sending, onUnavailable,
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: 'row', alignItems: 'center', minHeight: 60, paddingHorizontal: 16, gap: 6 },
-  brandPosition: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  headButton: { backgroundColor: glass, borderWidth: 1, borderColor: '#fff', boxShadow: '0 3px 9px rgba(44,54,71,0.07)' },
+  headerLayer: { position: 'absolute', top: 0, left: 0, right: 0 },
+  preparation: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: '#f6f6f7', borderRadius: 14 },
+  head: { flexDirection: 'row', alignItems: 'center', height: 64, paddingHorizontal: 16, gap: 6 },
+  brandPosition: { position: 'absolute', left: 0, right: 0, top: 4, alignItems: 'center' },
+  brandBadge: { alignItems: 'center' },
+  brandAvatar: { width: 48, height: 44, alignItems: 'center', justifyContent: 'center' },
+  brandLogo: { width: 48, height: 44 },
+  brandNamePlate: { marginTop: -1, height: 28, width: 80, borderRadius: 16, backgroundColor: '#fff', boxShadow: '0 4px 14px rgba(23,25,28,0.075)' },
+  brandStatus: { ...StyleSheet.absoluteFill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  workingDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: ink },
+  brandName: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: ink, letterSpacing: -.2 },
+  headButton: { backgroundColor: 'rgba(255,255,255,0.7)' },
   thread: { flexGrow: 1, paddingHorizontal: 18, paddingVertical: 15, gap: 20, width: '100%', maxWidth: 760, alignSelf: 'center' },
   welcome: { alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 160, gap: 9 },
   welcomeTitle: { color: ink, fontSize: 27, fontWeight: '700', letterSpacing: -0.6 },
@@ -403,7 +485,7 @@ const styles = StyleSheet.create({
   emptyLogo: { width: 172, height: 152 },
   createError: { alignItems: 'center', gap: 7, maxWidth: 360 },
   composerShell: { gap: 7, paddingHorizontal: 14, alignSelf: 'center', width: '100%', maxWidth: 760 },
-  composer: { backgroundColor: glass, borderRadius: 26, padding: 8, gap: 3, borderWidth: 1, borderColor: '#fff', boxShadow: '0 4px 18px rgba(58,42,90,0.08)' },
+  composer: { backgroundColor: glass, borderRadius: 26, padding: 8, gap: 3, borderWidth: StyleSheet.hairlineWidth, borderColor: '#d1d4d8', boxShadow: '0 4px 18px rgba(23,25,28,0.045)' },
   input: { minHeight: 42, maxHeight: 124, fontSize: 16, lineHeight: 22, color: ink, paddingHorizontal: 10, paddingVertical: 8 },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   toolButton: { backgroundColor: 'rgba(255,255,255,0.69)' },
@@ -411,9 +493,9 @@ const styles = StyleSheet.create({
   modelName: { flexShrink: 1, color: accent, fontSize: 13, fontWeight: '600' },
   send: { backgroundColor: accent },
   draftRail: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, borderRadius: 17, borderWidth: 1, borderColor: '#fff', backgroundColor: glass },
-  chip: { flexDirection: 'row', alignItems: 'center', maxWidth: 166, borderRadius: 13, paddingLeft: 8, gap: 5, backgroundColor: '#f3f0fb' },
+  chip: { flexDirection: 'row', alignItems: 'center', maxWidth: 166, borderRadius: 13, paddingLeft: 8, gap: 5, backgroundColor: '#f1f2f3' },
   chipName: { flexShrink: 1, color: ink, fontSize: 12 },
-  pending: { backgroundColor: '#fff', borderWidth: StyleSheet.hairlineWidth, borderColor: edge, borderRadius: 16, padding: 9, gap: 4, alignSelf: 'flex-end', maxWidth: '86%' },
+  pending: { backgroundColor: userBubble, borderRadius: 16, padding: 9, gap: 4, alignSelf: 'flex-end', maxWidth: '86%' },
   queue: { marginHorizontal: 20, paddingHorizontal: 10, borderRadius: 13, marginBottom: 6, backgroundColor: glass, borderWidth: 1, borderColor: edge },
   steer: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 },
 })

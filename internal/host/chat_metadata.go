@@ -3,10 +3,8 @@ package host
 import (
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"go-bot/harness/session"
@@ -42,32 +40,4 @@ func archiveChat(ctx context.Context, store sessionformat.FileStore, id string) 
 		return err
 	}
 	return localstate.WritePrivate(marker, []byte(time.Now().UTC().Format(time.RFC3339Nano)+"\n"))
-}
-
-func chatTitle(store sessionformat.FileStore, id string) string {
-	path, err := chatMetadataPath(store, id, "title.txt")
-	if err != nil {
-		return ""
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer file.Close()
-	data, err := io.ReadAll(io.LimitReader(file, 513))
-	if err != nil || len(data) > 512 {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
-}
-
-func saveChatTitle(store sessionformat.FileStore, id, title string) error {
-	path, err := chatMetadataPath(store, id, "title.txt")
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return localstate.WritePrivate(path, []byte(title+"\n"))
 }
