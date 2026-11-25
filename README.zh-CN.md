@@ -33,24 +33,23 @@ Go Bot 会记住与你交流的背景，持续关注你关心的事，并主动�
 
 ### 移动端演示
 
-以下从移动端展示的中文会话均使用本地 Controller 和 Docker Host。Word 和 PPT 的动图末尾展示了在 WPS Office 中打开的成品。
 
 <table align="center" width="100%">
   <tr>
     <td width="33%" valign="top" align="center">
-      <h4>浏览器调研</h4>
-      <a href="docs/showcase/mobile-research-demo.gif"><img src="docs/showcase/mobile-research-demo.gif" width="260" alt="移动端查询斯坦福 AI Index，在会话中交付图表、Markdown 摘要和 CSV"></a>
-      <p>核对斯坦福 AI Index，在会话中收到原文图表、摘要和数据表。<br><a href="docs/showcase/mobile-research-key.png">查看原尺寸关键帧</a></p>
-    </td>
-    <td width="33%" valign="top" align="center">
-      <h4>Word 行业报告</h4>
-      <a href="docs/showcase/mobile-word-demo.gif"><img src="docs/showcase/mobile-word-demo.gif" width="260" alt="手机完成 Word 报告的制作与多轮修改，随后在 WPS Office 中打开成品"></a>
-      <p>制作行业报告，再补充调查口径和适合团队落地的试点方案。<br><a href="docs/showcase/mobile-word-key.png">查看原尺寸关键帧</a></p>
+      <h4>Word 文档</h4>
+      <a href="docs/showcase/mobile/word.gif"><img src="docs/showcase/mobile/word.gif" width="260" alt="英文移动端会话制作和修改 Word 简报，并在 WPS Office 中展示成品"></a>
+      <p>制作 AI 试点简报，再通过多轮对话明确负责人、指标与评审节点。</p>
     </td>
     <td width="33%" valign="top" align="center">
       <h4>PPT 汇报</h4>
-      <a href="docs/showcase/mobile-slides-demo.gif"><img src="docs/showcase/mobile-slides-demo.gif" width="260" alt="手机制作并修改三页 PPT，随后在 WPS Office 中重点展示第二页成品"></a>
-      <p>调整采用率说明，把最后一页改成三步试点计划。<br><a href="docs/showcase/mobile-slides-key.png">查看原尺寸关键帧</a></p>
+      <a href="docs/showcase/mobile/slides.gif"><img src="docs/showcase/mobile/slides.gif" width="260" alt="英文移动端会话制作和修改 PPT，并在 WPS Office 中展示成品"></a>
+      <p>制作三页汇报，并将最后一页改为清晰的试点检查点。</p>
+    </td>
+    <td width="33%" valign="top" align="center">
+      <h4>图片生成与编辑</h4>
+      <a href="docs/showcase/mobile/image.gif"><img src="docs/showcase/mobile/image.gif" width="260" alt="英文移动端会话中的两张参考图、工具图片预览和生成的珊瑚色鲸鱼"></a>
+      <p>上传鲸鱼和色板，用参考图生成珊瑚色版本，并全屏查看结果。</p>
     </td>
   </tr>
 </table>
@@ -58,14 +57,14 @@ Go Bot 会记住与你交流的背景，持续关注你关心的事，并主动�
 <table align="center" width="67%">
   <tr>
     <td width="50%" valign="top" align="center">
-      <h4>两张参考图编辑图片</h4>
-      <a href="docs/showcase/mobile-image-demo.gif"><img src="docs/showcase/mobile-image-demo.gif" width="260" alt="移动端上传蓝鲸和色板，在会话中预览生成图片并保存到图库"></a>
-      <p>结合参考图为鲸鱼换色，全屏预览后保存到手机图库。<br><a href="docs/showcase/mobile-image-key.png">查看原尺寸关键帧</a></p>
+      <h4>定时任务</h4>
+      <a href="docs/showcase/mobile/schedule.gif"><img src="docs/showcase/mobile/schedule.gif" width="260" alt="英文移动端会话中的提醒请求、创建确认和到点送达的检查清单"></a>
+      <p>安排一次提醒，到点后在同一会话中收到检查清单。</p>
     </td>
     <td width="50%" valign="top" align="center">
-      <h4>定时任务</h4>
-      <a href="docs/showcase/mobile-schedule-demo.gif"><img src="docs/showcase/mobile-schedule-demo.gif" width="260" alt="手机会话中的中文定时任务请求、创建确认和到点送达的提醒"></a>
-      <p>在手机会话中查看定时任务的创建确认，以及随后送达的检查清单。</p>
+      <h4>丰富的插件和连接器</h4>
+      <a href="docs/showcase/mobile/plugins.png"><img src="docs/showcase/mobile/plugins.png" width="260" alt="移动端我的页面选中插件市场分栏，展示五个可用插件"></a>
+      <p>通过插件市场扩展浏览器、Office、Google Workspace、X 等工具和服务。</p>
     </td>
   </tr>
 </table>
