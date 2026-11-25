@@ -178,7 +178,7 @@ configuration or background retry is used.
 | POST /v1/host/plugins/runtime/restart | Restart Cordis and apply saved selections |
 
 The public catalog and first-party business packages are published independently in
-[got-bot-plugins](https://github.com/xyc999-ai/got-bot-plugins). No business package is
+[go-bot-plugins](https://github.com/xyc999-ai/go-bot-plugins). No business package is
 shipped with the Host. The Controller caches the catalog for five minutes;
 `refresh=true` requests revalidation and transient failures retain the last valid snapshot.
 Reviewed sources may be exact npm versions, pinned Git commits or versioned HTTPS archives. Clients cannot submit source URLs, directories or arbitrary

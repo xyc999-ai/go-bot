@@ -147,7 +147,7 @@ Open the browser after startup. Controller already serves the web app.
 
 Choose **English** or **简体中文** on the account page or in **Settings**. The browser remembers your choice.
 
-New accounts automatically install and enable **agent-browser** and **OfficeCLI**. First installation downloads their official CLI dependencies while you can configure your model. Later logins reuse the installation and respect plugins you disable or uninstall. Manage them from the sidebar **Plugin market**. Plugin packages, original Skills, icons and tutorials are published in the independent [plugin repository](https://github.com/xyc999-ai/got-bot-plugins). Refresh the market to discover newly published releases without rebuilding the Host image.
+New accounts automatically install and enable **agent-browser** and **OfficeCLI**. First installation downloads their official CLI dependencies while you can configure your model. Later logins reuse the installation and respect plugins you disable or uninstall. Manage them from the sidebar **Plugin market**. Plugin packages, original Skills, icons and tutorials are published in the independent [plugin repository](https://github.com/xyc999-ai/go-bot-plugins). Refresh the market to discover newly published releases without rebuilding the Host image.
 
 Proactive assistance is off by default. After configuring a usable model, turn it on in **Settings → Proactive assistance**. It researches useful opportunities and shares relevant findings in your main chat, using your model and connected service credits. The settings page also shows its next check. [How it works](docs/configuration.md#proactive-assistance)
 

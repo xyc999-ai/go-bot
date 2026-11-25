@@ -15,7 +15,7 @@ import (
 	"go-bot/plugin"
 )
 
-const DefaultURL = "https://raw.githubusercontent.com/xyc999-ai/got-bot-plugins/main/catalog.json"
+const DefaultURL = "https://raw.githubusercontent.com/xyc999-ai/go-bot-plugins/main/catalog.json"
 const AssetPrefix = "/assets/plugins/"
 
 type Entry struct {

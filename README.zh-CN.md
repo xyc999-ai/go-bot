@@ -143,7 +143,7 @@ docker compose up -d
 
 可在账号页或「设置」选择简体中文或 English。浏览器会记住语言偏好。
 
-新账号会自动安装并启用 **agent-browser** 和 **OfficeCLI**，安装期间可以先配置模型。后续登录复用安装结果，也不会恢复你已停用或卸载的插件；可在侧栏「插件市场」管理。插件包、原始 Skills、图标和教程由独立的[插件仓库](https://github.com/xyc999-ai/got-bot-plugins)发布；刷新市场即可发现新版本，无需重构 Host 镜像。
+新账号会自动安装并启用 **agent-browser** 和 **OfficeCLI**，安装期间可以先配置模型。后续登录复用安装结果，也不会恢复你已停用或卸载的插件；可在侧栏「插件市场」管理。插件包、原始 Skills、图标和教程由独立的[插件仓库](https://github.com/xyc999-ai/go-bot-plugins)发布；刷新市场即可发现新版本，无需重构 Host 镜像。
 
 主动服务默认关闭。配置可用模型后，可在「设置 → 主动服务」开启：结合近期交流和记忆自主研究，在合适时将发现带到主会话，并产生相应的模型与服务用量；设置页也可查看下次检查安排。[工作机制](docs/configuration.md#proactive-assistance)
 

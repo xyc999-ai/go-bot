@@ -72,7 +72,7 @@ The Host supplies PyYAML 6.0.3 (MIT) for the bundled Python helpers. Its license
 is retained in the installed distribution's metadata.
 
 Business integrations below are distributed separately in
-https://github.com/xyc999-ai/got-bot-plugins; business packages and their display
+https://github.com/xyc999-ai/go-bot-plugins; business packages and their display
 assets are not embedded in the Host image. Each package retains its own notices.
 
 ## OfficeCLI and image components

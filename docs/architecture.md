@@ -78,7 +78,7 @@ assistant message and is eligible for ordinary compaction. It has no fabricated
 model usage or execution turn. See [main-chat design](main-chat-and-first-run-plan.zh-CN.md).
 
 Business plugin sources, original Skills and media are published independently in
-[got-bot-plugins](https://github.com/xyc999-ai/got-bot-plugins), with versioned
+[go-bot-plugins](https://github.com/xyc999-ai/go-bot-plugins), with versioned
 GitHub Release archives and a public catalog. Controller caches and refreshes
 that catalog; Host images contain only the shared runtime and SDK.
 

@@ -1,6 +1,6 @@
 # Reviewed remote plugin market
 
-The Controller reads the public [plugin repository](https://github.com/xyc999-ai/got-bot-plugins)'s `catalog.json`. Business packages, original Skills, icons and tutorial videos are released there, independently from Host/Controller images. Clients choose a reviewed plugin ID; they cannot submit arbitrary package addresses.
+The Controller reads the public [plugin repository](https://github.com/xyc999-ai/go-bot-plugins)'s `catalog.json`. Business packages, original Skills, icons and tutorial videos are released there, independently from Host/Controller images. Clients choose a reviewed plugin ID; they cannot submit arbitrary package addresses.
 
 Each package owns its `plugin.json` display metadata. The release workflow prepares original upstream Skills, runs `npm pack`, publishes complete versioned GitHub Release assets, and only then appends the generated metadata to the catalog. Keep historical entries: an installed selection resolves its exact package and version, while the market shows the newest reviewed version as an explicit update.
 

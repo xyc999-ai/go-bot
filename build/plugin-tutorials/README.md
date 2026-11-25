@@ -27,4 +27,4 @@ The last scene shows the current console restriction on downloading old secrets;
 it reminds users to keep the JSON at creation time. It does not fabricate a
 post-creation download screen or generate another application for the recording.
 
-Business plugin sources and published tutorial assets live in the sibling [plugin repository](https://github.com/xyc999-ai/got-bot-plugins). Run the capture helper from the main repository and select that output path.
+Business plugin sources and published tutorial assets live in the sibling [plugin repository](https://github.com/xyc999-ai/go-bot-plugins). Run the capture helper from the main repository and select that output path.
