@@ -2,7 +2,7 @@
   "expo": {
     "name": "Go Bot",
     "slug": "go-bot-mobile",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "userInterfaceStyle": "light",
     "experiments": {
       "tsconfigPaths": false
@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "com.gobot.mobile",
-      "versionCode": 2,
+      "versionCode": 3,
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
       ]
