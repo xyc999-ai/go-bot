@@ -2,12 +2,6 @@ cordis-runtime:
   node: 24.22.3
   pnpm: 11.25.0
   dependency_lockfile: extensions/cordis/pnpm-lock.yaml
-agent-browser:
-  repository: vercel-labs/agent-browser
-  version: v0.43.0
-  commit: 1cc19526f3641c8543d55aa6700e7c55b37ac356
-  installer: npm
-  skills_cli: 1.8.1
 skill-creator:
   repository: openai/skills
   commit: 49f948faa9258a0c61caceaf225e179651397431

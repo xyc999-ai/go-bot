@@ -1,5 +1,7 @@
 # Gemini API CLI 插件接入方案
 
+> 分发更新：业务源码、资源与发布已迁至独立的 [got-bot-plugins](https://github.com/xyc999-ai/got-bot-plugins)；本文原镜像内 bundled 分发章节由 [远程市场方案](remote-plugin-market-plan.zh-CN.md) 替代，授权与业务行为保持不变。
+
 状态：已实现，2026-11-21 完成本地 Docker、真实 Web 和 Android 模拟器的安装与 API Key 配置验收。生图实调受 Google 项目计费前提限制，详见末尾验收记录。
 
 ## 1. 接入目标与边界

@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"go-bot/extensions/catalog"
 	"go-bot/frontend"
 	"go-bot/internal/config"
 	"go-bot/internal/controller"
@@ -81,6 +82,7 @@ func run() error {
 	path := flags.String("config", "", "optional tuning YAML")
 	envFile := flags.String("env-file", "", "deployment environment file")
 	user := flags.String("user", "", "account name for a Host command")
+	pluginCatalog := flags.String("plugin-catalog", catalog.DefaultURL, "reviewed remote plugin catalog URL")
 	webDevOrigin := flags.String("web-dev-origin", "", "optional loopback Vite development origin")
 	printRuntime := flags.Bool("print-runtime", false, "print validated runtime and image")
 	if err := flags.Parse(args); err != nil {
@@ -147,6 +149,7 @@ func run() error {
 	}
 	defer store.Close()
 	manager := controller.New(c, driver, store)
+	manager.Catalog.URL = *pluginCatalog
 	server := &http.Server{
 		Handler:           manager.HandlerWithWeb(controller.WebOptions{Files: frontend.Files(), DevOrigin: *webDevOrigin}),
 		ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10,

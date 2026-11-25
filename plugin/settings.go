@@ -44,10 +44,7 @@ func (s RuntimeSettings) Validate() error {
 			if !strings.HasPrefix(source.Spec, name+"@") || !exactVersion.MatchString(strings.TrimPrefix(source.Spec, name+"@")) {
 				return errors.New("stored registry sources require exact versions")
 			}
-		case "bundled":
-			if !instanceName.MatchString(source.Spec) {
-				return errors.New("invalid bundled plugin")
-			}
+
 		case "directory":
 			if !filepath.IsAbs(source.Spec) {
 				return errors.New("development directories must be absolute Host paths")

@@ -169,17 +169,19 @@ configuration or background retry is used.
 
 | Method/path | Purpose |
 | --- | --- |
-| GET /assets/plugins/{pluginId}/{file} | Public static image declared by plugin.json; available before Host startup or plugin installation |
-| GET /v1/settings/plugins | Reviewed catalog, user package selections, actual Host state |
+| GET /assets/plugins/{pluginId}/{file} | Proxy a declared versioned icon/tutorial asset; supports HEAD and video Range |
+| GET /v1/settings/plugins?refresh=true | Reviewed catalog, user package selections, actual Host state |
 | POST /v1/settings/plugins/packages | Install `{pluginId}`, including declared CLI dependencies; disabled initially |
 | PUT /v1/settings/plugins/packages/{name} | Set `{enabled}` for one installed plugin |
 | POST /v1/settings/plugins/packages/{name}/update | Explicit update or reinstall from the reviewed `{pluginId}` |
 | DELETE /v1/settings/plugins/packages/{name} | Withdraw contributions and remove package; retain credentials, files and globally installed CLI dependencies |
 | POST /v1/host/plugins/runtime/restart | Restart Cordis and apply saved selections |
 
-The catalog includes the first-party agent-browser and OfficeCLI packages shipped
-with the Host. Other reviewed sources may be fixed npm versions, pinned Git commits
-or fixed HTTPS archives. Clients cannot submit source URLs, directories or arbitrary
+The public catalog and first-party business packages are published independently in
+[got-bot-plugins](https://github.com/xyc999-ai/got-bot-plugins). No business package is
+shipped with the Host. The Controller caches the catalog for five minutes;
+`refresh=true` requests revalidation and transient failures retain the last valid snapshot.
+Reviewed sources may be exact npm versions, pinned Git commits or versioned HTTPS archives. Clients cannot submit source URLs, directories or arbitrary
 business config. Catalog maintainers must retain selected versions for supported
 releases; users explicitly update to a new version.
 

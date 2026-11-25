@@ -21,7 +21,7 @@ func (m *Manager) preparePluginsHTTP(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	settings := accountPlugins(record)
-	resolved, err := m.resolvePlugins(settings)
+	resolved, err := m.resolvePlugins(r.Context(), settings)
 	if err != nil {
 		httpError(w, 422, err.Error())
 		return

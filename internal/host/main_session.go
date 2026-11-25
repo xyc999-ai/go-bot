@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"go-bot/extensions/catalog"
 	"go-bot/harness/agentpreset"
 	"go-bot/harness/assembly"
 	"go-bot/harness/session"
@@ -16,13 +15,7 @@ import (
 )
 
 func mainWelcome(locale string) string {
-	mediaName := ""
-	for _, release := range catalog.Entries() {
-		if release.ID == "gemini-api" {
-			mediaName = release.Name
-			break
-		}
-	}
+	mediaName := "Gemini API CLI"
 	if locale == "zh-CN" {
 		text := "你好，我是 Go Bot，你的个人 AI 助手。\n\n日常事务或工作上的事情，都可以交给我一起处理：查找资料、操作浏览器，或者制作和编辑 Word、PPT、Excel 文件。你可以直接说想完成什么，我们再一起把细节理清楚。"
 		if mediaName != "" {

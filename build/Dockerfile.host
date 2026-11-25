@@ -50,20 +50,7 @@ RUN python -m pip install --cert /etc/ssl/certs/ca-certificates.crt --no-cache-d
 COPY build/fontconfig/60-office-fonts.conf /etc/fonts/conf.d/60-office-fonts.conf
 RUN mkdir -p /root/harness && fc-cache -f
 
-# Package resources are assembled with official installers in a disposable stage.
-# The final Host ships wrapper packages only; package installation prepares each CLI.
-FROM computer AS plugin-packages
-COPY extensions/plugins/ /opt/plugins/
-RUN --mount=type=secret,id=build_ca,required=false \
-    if [ -s /run/secrets/build_ca ]; then cat /run/secrets/build_ca >> /etc/ssl/certs/ca-certificates.crt; fi; \
-    NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt bash /opt/plugins/prepare-assets.sh
-
 FROM computer AS host
-COPY --from=plugin-packages /opt/plugins/agent-browser/ /usr/share/go-bot/plugins/agent-browser/
-COPY --from=plugin-packages /opt/plugins/officecli/ /usr/share/go-bot/plugins/officecli/
-COPY --from=plugin-packages /opt/plugins/x/ /usr/share/go-bot/plugins/x/
-COPY --from=plugin-packages /opt/plugins/google-workspace/ /usr/share/go-bot/plugins/google-workspace/
-COPY --from=plugin-packages /opt/plugins/gemini-api/ /usr/share/go-bot/plugins/gemini-api/
 
 # Plugin runtime dependencies are shared; business modules load only after activation.
 COPY --from=cordis /opt/cordis/ /usr/share/go-bot/cordis/

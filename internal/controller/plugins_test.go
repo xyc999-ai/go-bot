@@ -164,6 +164,7 @@ func TestPluginHTTPPersistsPackageSelectionBeforeNativeCordisApply(t *testing.T)
 	if err = os.WriteFile(filepath.Join(nextDirectory, "index.mjs"), []byte(`export const inject=['host'];export async function apply(ctx){await ctx.host.tools.register({name:'echo',description:'Echo',inputSchema:{type:'object'},async execute(){return{content:[{type:'text',text:'Updated'}]}}})}`), 0600); err != nil {
 		t.Fatal(err)
 	}
+	manager.pluginCatalog = append(manager.pluginCatalog, manager.pluginCatalog[0])
 	manager.pluginCatalog[0].Version = "2.0.0"
 	manager.pluginCatalog[0].Source.Spec = nextDirectory
 	// A market refresh does not force an upgrade when the user only toggles

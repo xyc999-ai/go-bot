@@ -2,72 +2,75 @@ package controller
 
 import (
 	"bytes"
+	"image"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"go-bot/extensions/catalog"
-	pluginassets "go-bot/extensions/plugins"
+	"go-bot/plugin"
 )
 
+func assetFixture(t *testing.T) http.Handler {
+	t.Helper()
+	var icon bytes.Buffer
+	_ = png.Encode(&icon, image.NewRGBA(image.Rect(0, 0, 2, 2)))
+	video := make([]byte, 128)
+	copy(video[4:8], "ftyp")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := icon.Bytes()
+		if strings.HasSuffix(r.URL.Path, ".mp4") {
+			data = video
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		http.ServeContent(w, r, r.URL.Path, time.Time{}, bytes.NewReader(data))
+	}))
+	t.Cleanup(server.Close)
+	entry := testPluginCatalog()[0]
+	entry.AssetBase = server.URL + "/"
+	entry.Tutorials = []plugin.Tutorial{{Language: "en", Title: "Setup", Video: "/assets/plugins/agent-browser/setup.en.mp4"}}
+	m := &Manager{pluginCatalog: []catalog.Entry{entry}, Catalog: catalog.NewRemote(server.URL)}
+	return m.Handler()
+}
 func TestPluginManifestIconsAreServedWithoutAHost(t *testing.T) {
-	handler := (&Manager{}).Handler()
-	for _, plugin := range catalog.Entries() {
-		res := httptest.NewRecorder()
-		handler.ServeHTTP(res, httptest.NewRequest(http.MethodGet, plugin.Icon, nil))
-		if res.Code != http.StatusOK || res.Header().Get("Content-Type") != "image/png" {
-			t.Fatalf("%s: %d %s", plugin.Icon, res.Code, res.Header().Get("Content-Type"))
+	handler := assetFixture(t)
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(method, "/assets/plugins/agent-browser/icon.png?v=0.1.0", nil))
+		if response.Code != 200 || response.Header().Get("Content-Type") != "image/png" {
+			t.Fatal(response.Code, response.Header())
 		}
-		if _, err := png.Decode(res.Body); err != nil {
-			t.Fatalf("%s: invalid image: %v", plugin.Icon, err)
-		}
-		head := httptest.NewRecorder()
-		handler.ServeHTTP(head, httptest.NewRequest(http.MethodHead, plugin.Icon, nil))
-		if head.Code != http.StatusOK || head.Body.Len() != 0 {
-			t.Fatalf("HEAD %s: %d", plugin.Icon, head.Code)
+		if method == http.MethodGet {
+			if _, err := png.Decode(response.Body); err != nil {
+				t.Fatal(err)
+			}
+		} else if response.Body.Len() != 0 {
+			t.Fatal("HEAD returned a body")
 		}
 	}
-	for _, path := range []string{"/assets/plugins/missing/icon.png", "/assets/plugins/agent-browser/../package.json"} {
-		res := httptest.NewRecorder()
-		handler.ServeHTTP(res, httptest.NewRequest(http.MethodGet, path, nil))
-		if res.Code != http.StatusNotFound {
-			t.Fatalf("unexpected asset %s: %d", path, res.Code)
+	for _, path := range []string{"/assets/plugins/missing/icon.png", "/assets/plugins/agent-browser/../package.json", "/assets/plugins/agent-browser/private.json", "/assets/plugins/agent-browser/icon.png?v=9.0.0"} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest("GET", path, nil))
+		if response.Code != 404 {
+			t.Fatal(path, response.Code)
 		}
 	}
 }
-
 func TestPluginTutorialVideoSupportsNativePlayerRequests(t *testing.T) {
-	handler := (&Manager{}).Handler()
-	count := 0
-	for _, entry := range catalog.Entries() {
-		for _, tutorial := range entry.Tutorials {
-			count++
-			t.Run(entry.ID+"/"+tutorial.Language, func(t *testing.T) {
-				data, err := pluginassets.Asset(tutorial.Video)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if len(data) < 32 || string(data[4:8]) != "ftyp" {
-					t.Fatal("tutorial must be an actual MP4")
-				}
-				request := httptest.NewRequest(http.MethodGet, tutorial.Video, nil)
-				request.Header.Set("Range", "bytes=0-31")
-				res := httptest.NewRecorder()
-				handler.ServeHTTP(res, request)
-				if res.Code != http.StatusPartialContent || !bytes.Equal(res.Body.Bytes(), data[:32]) || res.Header().Get("Content-Range") != "bytes 0-31/"+strconv.Itoa(len(data)) || res.Header().Get("Content-Type") != "video/mp4" {
-					t.Fatalf("video range: %d %v", res.Code, res.Header())
-				}
-				head := httptest.NewRecorder()
-				handler.ServeHTTP(head, httptest.NewRequest(http.MethodHead, tutorial.Video, nil))
-				if head.Code != http.StatusOK || head.Body.Len() != 0 || head.Header().Get("Content-Length") != strconv.Itoa(len(data)) {
-					t.Fatalf("video HEAD: %d %v", head.Code, head.Header())
-				}
-			})
-		}
+	handler := assetFixture(t)
+	request := httptest.NewRequest("GET", "/assets/plugins/agent-browser/setup.en.mp4?v=0.1.0", nil)
+	request.Header.Set("Range", "bytes=0-31")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != 206 || response.Body.Len() != 32 || response.Header().Get("Content-Range") != "bytes 0-31/128" || response.Header().Get("Content-Type") != "video/mp4" {
+		t.Fatal(response.Code, response.Header())
 	}
-	if count == 0 {
-		t.Fatal("no tutorial videos exercised")
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("HEAD", "/assets/plugins/agent-browser/setup.en.mp4?v=0.1.0", nil))
+	if response.Code != 200 || response.Body.Len() != 0 || response.Header().Get("Content-Length") != "128" {
+		t.Fatal(response.Code, response.Header())
 	}
 }

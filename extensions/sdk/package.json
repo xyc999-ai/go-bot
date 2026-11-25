@@ -20,15 +20,21 @@
   "scripts": {
     "test": "tsc --noEmit && node --test test/*.test.mjs"
   },
-  "dependencies": {
-    "@deepseek-ai/cordis": "4.1.0"
-  },
   "devDependencies": {
     "@types/node": "24.10.0",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "@deepseek-ai/cordis": "4.1.0"
   },
   "engines": {
     "node": ">=24.9.0"
   },
-  "packageManager": "pnpm@11.25.0"
+  "packageManager": "pnpm@11.25.0",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  }
 }

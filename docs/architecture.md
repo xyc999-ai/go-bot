@@ -41,7 +41,9 @@ flowchart LR
 | providers/model, providers/web, providers/image | Model, search, page-fetch and image-generation implementations |
 | thirdparty | Our integration code around external SDKs and HTTP APIs |
 | client, examples | Go client and minimal frontend integration |
-| build, harness/skills | Public Host image and bundled capabilities |
+| build, harness/skills | Public Host image and built-in Skill support |
+| extensions/cordis, extensions/sdk | Shared plugin framework and asynchronous Go Host API |
+| extensions/catalog | Reviewed remote plugin catalog and release validation |
 | tests/integration | Real Docker Host acceptance tests |
 
 SDKs are resolved through Go modules. SDK request types remain inside thirdparty. Historical v1 helpers are only
@@ -74,6 +76,11 @@ On the first model step, the current system prompt replaces the initial system
 through the existing append-only surface operation; the greeting remains an
 assistant message and is eligible for ordinary compaction. It has no fabricated
 model usage or execution turn. See [main-chat design](main-chat-and-first-run-plan.zh-CN.md).
+
+Business plugin sources, original Skills and media are published independently in
+[got-bot-plugins](https://github.com/xyc999-ai/got-bot-plugins), with versioned
+GitHub Release archives and a public catalog. Controller caches and refreshes
+that catalog; Host images contain only the shared runtime and SDK.
 
 Default plugin selection is written once at account creation from the reviewed
 catalog. The client automatically requests package preparation after core startup;

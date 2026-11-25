@@ -1,10 +1,8 @@
-// Package catalog embeds the project's reviewed business plugin releases.
-// It is build-time data, never a user-configured remote index.
+// Package catalog validates the reviewed, independently published plugin market.
 package catalog
 
 import (
 	"bytes"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,15 +12,15 @@ import (
 	"regexp"
 	"strings"
 
-	bundled "go-bot/extensions/plugins"
 	"go-bot/plugin"
 )
 
-//go:embed plugins.json
-var manifest []byte
+const DefaultURL = "https://raw.githubusercontent.com/xyc999-ai/got-bot-plugins/main/catalog.json"
+const AssetPrefix = "/assets/plugins/"
 
 type Entry struct {
-	DefaultEnabled bool `json:"defaultEnabled,omitempty"`
+	DefaultEnabled bool   `json:"defaultEnabled,omitempty"`
+	AssetBase      string `json:"assetBase"`
 	plugin.CatalogEntry
 	Source plugin.Source `json:"source"`
 	Builds []string      `json:"builds,omitempty"`
@@ -31,15 +29,6 @@ type Entry struct {
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 var versionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
 
-// Entries returns a fresh copy so request processing cannot mutate the catalog.
-func Entries() []Entry {
-	entries, err := Parse(manifest)
-	if err != nil {
-		panic("invalid bundled plugin catalog: " + err.Error())
-	}
-	return entries
-}
-
 func Parse(data []byte) ([]Entry, error) {
 	var entries []Entry
 	d := json.NewDecoder(bytes.NewReader(data))
@@ -47,26 +36,16 @@ func Parse(data []byte) ([]Entry, error) {
 	if err := d.Decode(&entries); err != nil {
 		return nil, err
 	}
-	if !errors.Is(d.Decode(new(any)), io.EOF) || entries == nil || len(entries) > 200 {
-		return nil, errors.New("catalog must be one array of at most 200 releases")
+	if !errors.Is(d.Decode(new(any)), io.EOF) || entries == nil || len(entries) > 2000 {
+		return nil, errors.New("catalog must be one array of at most 2000 releases")
 	}
-	ids, packages := map[string]bool{}, map[string]bool{}
+	ids, packages, releases := map[string]string{}, map[string]string{}, map[string]bool{}
 	for i := range entries {
 		entry := &entries[i]
-		if entry.Source.Type == "bundled" {
-			display, err := bundled.Metadata(entry.Source.Spec)
-			if err != nil {
-				return nil, err
-			}
-			if display.ID != entry.ID || display.Package != entry.Package || display.Version != entry.Version {
-				return nil, fmt.Errorf("%s: bundled identity differs from the catalog", entry.ID)
-			}
-			entry.CatalogEntry = display
+		if !idPattern.MatchString(entry.ID) || (ids[entry.ID] != "" && ids[entry.ID] != entry.Package) || (packages[entry.Package] != "" && packages[entry.Package] != entry.ID) || releases[entry.ID+"@"+entry.Version] {
+			return nil, errors.New("catalog identities and release versions must be unique")
 		}
-		if !idPattern.MatchString(entry.ID) || ids[entry.ID] || packages[entry.Package] {
-			return nil, errors.New("catalog plugin IDs and package names must be unique")
-		}
-		ids[entry.ID], packages[entry.Package] = true, true
+		ids[entry.ID], packages[entry.Package], releases[entry.ID+"@"+entry.Version] = entry.Package, entry.ID, true
 		if !versionPattern.MatchString(entry.Version) || entry.Maintainer == "" || entry.License == "" || strings.TrimSpace(entry.Name) == "" {
 			return nil, fmt.Errorf("%s: version, maintainer and license are required", entry.ID)
 		}
@@ -75,8 +54,30 @@ func Parse(data []byte) ([]Entry, error) {
 				return nil, fmt.Errorf("%s: English and Simplified Chinese copy are required", entry.ID)
 			}
 		}
-		if !strings.HasPrefix(entry.Icon, bundled.AssetPrefix) || !fs.ValidPath(strings.TrimPrefix(entry.Icon, bundled.AssetPrefix)) || strings.ContainsAny(entry.Icon, "\\?#") {
+		if !strings.HasPrefix(entry.Icon, AssetPrefix) || !fs.ValidPath(strings.TrimPrefix(entry.Icon, AssetPrefix)) || strings.ContainsAny(entry.Icon, "\\?#") {
 			return nil, fmt.Errorf("%s: icon must reference a backend plugin asset", entry.ID)
+		}
+
+		if err := distributionURL(entry.AssetBase); err != nil || !strings.HasSuffix(entry.AssetBase, "/") {
+			return nil, fmt.Errorf("%s: assetBase must be a release directory URL", entry.ID)
+		}
+		paths := []string{entry.Icon}
+		languages := map[string]bool{}
+		for _, tutorial := range entry.Tutorials {
+			if (tutorial.Language != "en" && tutorial.Language != "zh-CN") || languages[tutorial.Language] || tutorial.Title == "" || !strings.HasSuffix(tutorial.Video, ".mp4") {
+				return nil, fmt.Errorf("%s: invalid tutorial", entry.ID)
+			}
+			languages[tutorial.Language] = true
+			paths = append(paths, tutorial.Video)
+			if tutorial.Poster != "" {
+				paths = append(paths, tutorial.Poster)
+			}
+		}
+		for _, resource := range paths {
+			rel, ok := strings.CutPrefix(resource, AssetPrefix+entry.ID+"/")
+			if !ok || !fs.ValidPath(rel) || strings.ContainsAny(rel, "/\\?#") {
+				return nil, fmt.Errorf("%s: resource must be a plugin asset filename", entry.ID)
+			}
 		}
 
 		settings := plugin.RuntimeSettings{Packages: map[string]plugin.RuntimePackage{entry.Package: {Source: entry.Source, Builds: entry.Builds}}}
@@ -88,19 +89,44 @@ func Parse(data []byte) ([]Entry, error) {
 			if entry.Source.Spec != entry.Package+"@"+entry.Version {
 				return nil, fmt.Errorf("%s: registry source must match the catalog release", entry.ID)
 			}
-		case "bundled":
-			if entry.Source.Spec != entry.ID {
-				return nil, fmt.Errorf("%s: bundled source must match plugin ID", entry.ID)
-			}
 		case "git": // Settings.Validate requires a full commit, never a branch.
 		case "tarball":
-			u, err := url.Parse(entry.Source.Spec)
-			if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-				return nil, fmt.Errorf("%s: distribution archives require a fixed HTTPS release URL", entry.ID)
+			if err := distributionURL(entry.Source.Spec); err != nil {
+				return nil, fmt.Errorf("%s: invalid archive URL", entry.ID)
 			}
+
 		default:
 			return nil, fmt.Errorf("%s: development directories are not market releases", entry.ID)
 		}
 	}
 	return entries, nil
+}
+
+// HTTP loopback is useful for a self-hosted development market; published
+// releases use HTTPS. The index is supplied by the deployment, never a client.
+func distributionURL(value string) error {
+	u, err := url.Parse(value)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return errors.New("invalid distribution URL")
+	}
+	local := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1" || u.Hostname() == "host.docker.internal"
+	if u.Scheme != "https" && !(u.Scheme == "http" && local) {
+		return errors.New("distribution URL must use HTTPS")
+	}
+	return nil
+}
+func Latest(entries []Entry) []Entry {
+	result := []Entry{}
+	byID := map[string]int{}
+	for _, entry := range entries {
+		if i, ok := byID[entry.ID]; ok {
+			if plugin.NewerVersion(result[i].Version, entry.Version) != "" {
+				result[i] = entry
+			}
+			continue
+		}
+		byID[entry.ID] = len(result)
+		result = append(result, entry)
+	}
+	return result
 }

@@ -109,7 +109,7 @@ func (m *Manager) syncPlugins(ctx context.Context, id string, account Account) e
 	if account.Plugins == nil {
 		return nil
 	}
-	resolved, err := m.resolvePlugins(*account.Plugins)
+	resolved, err := m.resolvePlugins(ctx, *account.Plugins)
 	if err != nil {
 		return err
 	}
@@ -118,13 +118,20 @@ func (m *Manager) syncPlugins(ctx context.Context, id string, account Account) e
 
 // Resolve reviewed package sources only while sending private Host commands.
 // Redis stores neither installation sources nor Cordis entry/config objects.
-func (m *Manager) resolvePlugins(settings plugin.Settings) (plugin.RuntimeSettings, error) {
+func (m *Manager) resolvePlugins(ctx context.Context, settings plugin.Settings) (plugin.RuntimeSettings, error) {
 	resolved := plugin.RuntimeSettings{Packages: map[string]plugin.RuntimePackage{}, Instances: []plugin.InstanceConfig{}}
+	if len(settings.Packages) == 0 {
+		return resolved, nil
+	}
+	entries, err := m.marketEntries(ctx, false)
+	if err != nil {
+		return resolved, err
+	}
 	for name, selection := range settings.Packages {
 		var release *catalog.Entry
-		for i := range m.pluginCatalog {
-			entry := &m.pluginCatalog[i]
-			if entry.ID == selection.CatalogID && entry.Package == name {
+		for i := range entries {
+			entry := &entries[i]
+			if entry.ID == selection.CatalogID && entry.Package == name && entry.Version == selection.Version {
 				release = entry
 				break
 			}
@@ -149,10 +156,18 @@ func (m *Manager) pluginView(ctx context.Context, record Account, settings plugi
 			status.Error = "host_plugins_unavailable"
 		}
 	}
-	entries := make([]plugin.CatalogEntry, 0, len(m.pluginCatalog))
-	for _, entry := range m.pluginCatalog {
+	releases, _ := m.marketEntries(ctx, false)
+	entries := make([]plugin.CatalogEntry, 0, len(releases))
+	for _, entry := range catalog.Latest(releases) {
 		display := entry.CatalogEntry
-		display.Icon = pluginIconURL(display.Icon)
+		display.Icon = pluginAssetURL(display.Icon, entry.Version)
+		display.Tutorials = append([]plugin.Tutorial{}, entry.Tutorials...)
+		for i := range display.Tutorials {
+			display.Tutorials[i].Video = pluginAssetURL(display.Tutorials[i].Video, entry.Version)
+			if display.Tutorials[i].Poster != "" {
+				display.Tutorials[i].Poster = pluginAssetURL(display.Tutorials[i].Poster, entry.Version)
+			}
+		}
 		entries = append(entries, display)
 		for i := range status.Packages {
 			actual := &status.Packages[i]
@@ -174,7 +189,7 @@ func (m *Manager) savePlugins(w http.ResponseWriter, r *http.Request, id string,
 		return
 	}
 	if record.DesiredState == running && record.HostEndpoint != "" {
-		resolved, resolveErr := m.resolvePlugins(settings)
+		resolved, resolveErr := m.resolvePlugins(r.Context(), settings)
 		if resolveErr != nil {
 			httpError(w, 422, resolveErr.Error())
 			return
@@ -194,6 +209,12 @@ func (m *Manager) savePlugins(w http.ResponseWriter, r *http.Request, id string,
 }
 
 func (m *Manager) pluginsHTTP(w http.ResponseWriter, r *http.Request, id string) {
+	releases, marketErr := m.marketEntries(r.Context(), r.URL.Query().Get("refresh") == "true")
+	if marketErr != nil {
+		httpError(w, 503, "plugin_catalog_unavailable")
+		return
+	}
+
 	if r.Method != http.MethodGet {
 		lock := m.pluginLock(id)
 		lock.Lock()
@@ -232,9 +253,10 @@ func (m *Manager) pluginsHTTP(w http.ResponseWriter, r *http.Request, id string)
 			return
 		}
 		var release *catalog.Entry
-		for i := range m.pluginCatalog {
-			if m.pluginCatalog[i].ID == input.PluginID {
-				release = &m.pluginCatalog[i]
+		latest := catalog.Latest(releases)
+		for i := range latest {
+			if latest[i].ID == input.PluginID {
+				release = &latest[i]
 				break
 			}
 		}
@@ -337,7 +359,7 @@ func (m *Manager) restartPluginsHTTP(w http.ResponseWriter, r *http.Request, id 
 	input := struct {
 		Settings plugin.RuntimeSettings `json:"settings"`
 	}{}
-	input.Settings, err = m.resolvePlugins(accountPlugins(record))
+	input.Settings, err = m.resolvePlugins(r.Context(), accountPlugins(record))
 	if err != nil {
 		httpError(w, 422, err.Error())
 		return

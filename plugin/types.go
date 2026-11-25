@@ -20,7 +20,7 @@ type RuntimePackage struct {
 }
 
 // CatalogEntry is the public, reviewed description. Installation sources stay
-// in the Controller's compiled catalog and are never accepted from clients.
+// in the Controller's reviewed remote catalog and are never accepted from clients.
 type Localized struct {
 	EN string `json:"en"`
 	ZH string `json:"zh-CN"`
