@@ -335,7 +335,7 @@ func NewNativeHostHTTP(host *hostruntime.NativeHost, options NativeWorkerHTTPOpt
 			}
 			return
 		}
-		if r.Method == http.MethodGet && suffix == "files/content" {
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && suffix == "files/content" {
 			if host.WorkspaceForSession == nil || uuid.Validate(id) != nil {
 				http.NotFound(w, r)
 				return

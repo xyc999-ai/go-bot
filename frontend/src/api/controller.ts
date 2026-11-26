@@ -258,3 +258,8 @@ export async function readHostStream(
 export function renameSession(userId: string, id: string, title: string) {
   return request<{ title: string }>(`/v1/sessions/${encodeURIComponent(id)}/title`, write('PUT', { title }), userId)
 }
+
+// Streaming URL for native media elements; account routing is limited to this read endpoint.
+export function chatVideoURL(userId: string, id: string, path: string) {
+  return sessionPath(id) + '/files/content?' + new URLSearchParams({ path, userId, inline: '1' })
+}

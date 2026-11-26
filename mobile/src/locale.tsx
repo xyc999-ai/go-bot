@@ -1,3 +1,4 @@
+import { videoChinese } from '../../frontend/src/chat/video'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { File, Paths } from 'expo-file-system'
 import { getLocales } from 'expo-localization'
@@ -152,6 +153,7 @@ const english: Record<string, string> = {
 const notices: Record<string, string> = {
  'Device connected': '连接', 'Android Emulator': 'Android 模拟器',
   ...proactiveChinese,
+  ...videoChinese,
   'Working': '处理中',
   'Approve this plan and leave plan mode?': '确认方案后开始执行，或提出修改意见继续规划。',
   'Approve': '按此方案执行', 'Keep planning': '继续完善方案',

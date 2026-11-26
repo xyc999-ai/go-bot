@@ -120,6 +120,14 @@ of the file. URL-encode it as the `path` query parameter to that session's
 the path stays within the session workspace. The chat renders the card as
 soon as the event arrives. Attachments use the separate attachment endpoint.
 
+Presented MP4, WebM, MOV and M4V files use inline video players in the bundled
+clients. `GET` and `HEAD` on the same file endpoint support byte ranges. Add
+`inline=1` to request an inline media response. Browser media elements may pass
+`userId` in the query instead of `X-User-ID`, only on this inline GET/HEAD route;
+other API calls still require the account header. Downloads retain attachment
+responses. Unsupported codecs fall back to a download option.
+
+
 | Model settings endpoint | Behavior |
 | --- | --- |
 | GET /v1/settings/models | Returns `defaultEndpointId` and endpoints keyed by ID, with `hasApiKey` |

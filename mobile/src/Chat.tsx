@@ -1,3 +1,4 @@
+import { VideoViewport, notifyVideoViewport } from './VideoViewport'
 import { useLocale } from './locale'
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ComponentType, type ReactElement } from 'react'
 import { ActivityIndicator, Alert, Animated, AppState, Easing, Image, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewProps } from 'react-native'
@@ -417,12 +418,13 @@ function Conversation({ api, cache, id, pending, active, sending, onUnavailable,
   }
 
   return <>
-    <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={[styles.thread, { paddingTop: topInset + 12 }]} keyboardShouldPersistTaps="handled"
+    <VideoViewport active={active}><ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={[styles.thread, { paddingTop: topInset + 12 }]} keyboardShouldPersistTaps="handled"
       maintainVisibleContentPosition={{ minIndexForVisible: 1 }} scrollEventThrottle={120}
       onScroll={({ nativeEvent: { layoutMeasurement, contentOffset, contentSize } }) => {
+        notifyVideoViewport()
         following.current = contentSize.height - layoutMeasurement.height - contentOffset.y < 92
       }}
-      onContentSizeChange={() => { if (following.current) scroll.current?.scrollToEnd({ animated: false }) }}>
+      onContentSizeChange={() => { notifyVideoViewport(); if (following.current) scroll.current?.scrollToEnd({ animated: false }) }}>
       {lead}
       {before !== null && <Button label={t('加载更早的消息')} onPress={() => { following.current = false; void loadOlder() }} busy={older} />}
       {loading && <Hint>{t('正在读取会话…')}</Hint>}
@@ -441,7 +443,7 @@ function Conversation({ api, cache, id, pending, active, sending, onUnavailable,
         <ActivityIndicator size="small" color={accent} /><Text accessibilityLiveRegion="polite" style={s.caption}>{title}</Text>
       </View>}
       {connecting && <Hint>{t('正在重新连接…')}</Hint>}
-    </ScrollView>
+    </ScrollView></VideoViewport>
     {queue.length > 0 && <View style={styles.queue}>
       {queue.map(item => <View key={item.id} style={s.row}>
         <Text numberOfLines={1} style={[s.caption, { flex: 1 }]}>{t(item.placement === 'steering' ? '引导中' : '排队中') + ' · '}{messageText(item) || t('附件')}</Text>

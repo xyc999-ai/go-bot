@@ -256,7 +256,7 @@ func NewNativeWorkerHTTP(worker NativeWorkerHTTPRuntime, identity assembly.Nativ
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "workspace_unavailable"})
 		})
 	})
-	group.GET("/files/content", func(c *gin.Context) { downloadWorkspaceFile(c, identity.Workspace) })
+	group.Match([]string{http.MethodGet, http.MethodHead}, "/files/content", func(c *gin.Context) { downloadWorkspaceFile(c, identity.Workspace) })
 	group.GET("/usage", func(c *gin.Context) {
 		usage, err := worker.Usage()
 		if err != nil {

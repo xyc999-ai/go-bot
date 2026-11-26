@@ -2,6 +2,7 @@ import { useLocale } from './locale'
 import { useState } from 'react'
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { MarkdownText } from './MarkdownText'
+import { ChatVideo } from './ChatVideo'
 import { ChevronDown, CircleCheck, CircleX, Layers2 } from 'lucide-react-native'
 import { groupDisplayBlocks, messageBlocksForDisplay, type Message as Item, type ToolBlock, type Transcript } from '../../frontend/src/chat/transcript'
 import { Controller } from './api'
@@ -21,6 +22,7 @@ export function MessageView({ api, id, message, results, openImage, generating =
     <View style={[styles.content, user && styles.bubble]}>
       {groupDisplayBlocks(messageBlocksForDisplay(message), results).map(block => {
         if (block.type === 'text') return <View key={block.id}><MarkdownText text={block.text} /></View>
+        if (block.type === 'video') return block.file.source === 'presented' && <ChatVideo key={block.id} api={api} sessionId={id} path={block.file.path} name={block.name} description={block.description} />
         if (block.type === 'file') {
           const delivery = block.file.source === 'presented'
             ? { account: api.profile.account, path: block.file.path }

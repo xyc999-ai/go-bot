@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { useLocale } from '../locale'
 import { Check, ChevronLeft, ChevronRight, CircleAlert, Download, Image as Picture, LoaderCircle, RotateCcw, Terminal, Wrench, X } from 'lucide-react'
 import { MarkdownText } from './MarkdownText'
+import { ChatVideo } from './ChatVideo'
 export { MarkdownText } from './MarkdownText'
 import { fetchChatFile } from '../api/controller'
 import { HarnessAvatar } from '../HarnessAvatar'
@@ -28,6 +29,8 @@ export function MessageBubble({ message, tools, ...address }: SessionAddress & {
               return <ToolGroup key={block.id} blocks={block.tools} tools={tools} />
             case 'image-tools':
               return <ImageToolGroup key={block.id} blocks={block.tools} images={block.images} tools={tools} {...address} />
+            case 'video':
+              return block.file.source === 'presented' && <ChatVideo key={block.id} path={block.file.path} name={block.name} description={block.description} {...address} />
             case 'file':
               return <FileBlock key={block.id} name={block.name} description={block.description} file={block.file} {...address} />
             case 'image-row':

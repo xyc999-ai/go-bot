@@ -1,3 +1,4 @@
+import { videoChinese } from './chat/video'
 import { extensionChinese } from './extensions/messages'
 import { proactiveChinese } from './settings/proactiveState'
 
@@ -8,6 +9,7 @@ const chinese: Readonly<Record<string, string>> = {
   'Copy table': '复制表格', 'Copy code': '复制代码', 'Copied': '已复制', 'Copy failed. Try again.': '复制失败，重试', 'Code': '代码',
   'Table — scroll horizontally': '表格，可左右滚动', 'Code — scroll horizontally': '代码，可左右滚动',
   ...extensionChinese,
+  ...videoChinese,
   ...proactiveChinese,
   'Switch to dark theme': '切换为深色主题',
   'Switch to light theme': '切换为浅色主题',
