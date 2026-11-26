@@ -195,13 +195,14 @@ API 密钥认证公证服务。个人 API 密钥要求 Xcode 26 及以上，省�
 拒绝、超时或其他验证失败均阻止正式产物生成；保留提交记录及可用日志。
 `--from-app` 可复用版本、架构及签名匹配的已有 App，避免重新签名应用。
 
-桌面测试打包及正式发布工作流均仅由 `workflow_dispatch` 手动触发，推送代码、
-PR 和版本标签均不自动启动桌面构建。在 Actions 选择 Desktop release，点击
+统一的客户端发布工作流 `client-release.yml` 仅由 `workflow_dispatch` 手动触发，
+推送代码、PR 和版本标签均不自动启动客户端发布构建。在 Actions 选择 Client release，点击
 Run workflow 并填写既有版本标签。正式发布工作流保持一次运行完成，使用独立 macOS arm64、Intel runner
-和 Windows x64 runner；Windows 按用户要求不配置签名。版本标签必须匹配
+和 Windows x64 runner，并行构建 Android ARM64 签名 APK（保留移动端独立版本）；Windows 按用户要求不配置签名。版本标签必须匹配
 `desktop/package.json` 且提交已合入 main。全部产物验证后才创建/更新草稿
-Release，不覆盖已发布版本。启用需要四个仓库 Secrets、团队/签名身份变量，
-通过终端配置脚本隐藏输入 `.p12` 保护密码。证书私钥不写入源码或应用资源。
+Release，不覆盖已发布版本。macOS 需要四个仓库 Secrets、团队/签名身份变量，
+通过终端配置脚本隐藏输入 `.p12` 保护密码。Android 另需四个签名 Secrets 和
+证书指纹变量，配置见移动端 README。证书私钥不写入源码或应用资源。
 
 本机 macOS arm64 正式 DMG 已完成单次容器公证、票据和 Gatekeeper 验证，
 原生聊天、菜单、侧栏、上传下载及视频测试通过。该轮上传约 66 秒，Apple

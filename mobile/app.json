@@ -30,6 +30,7 @@
     },
     "plugins": [
       "./plugins/with-shared-source-inputs",
+      "./plugins/with-unsigned-android-release",
       [
         "expo-build-properties",
         {
