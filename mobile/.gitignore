@@ -9,6 +9,7 @@
 /ios/
 
 # Build and test output
+/out/
 /dist/
 /web-build/
 /coverage/

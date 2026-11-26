@@ -202,16 +202,17 @@ APPLE_TEAM_ID='YOURTEAMID' npm run verify:mac -- '/path/to/go-bot-release.dmg'
 
 ### GitHub Actions releases
 
-Both desktop workflows are **manual-only** (`workflow_dispatch`): pushes,
-pull requests and version tags do not automatically start a desktop build.
-The ordinary `Desktop` workflow tests/builds macOS and Windows without release
-credentials. `Desktop release` is a separate **single-run** workflow, manually
-started with an existing `desktop-v<version>` tag. The tag must match
-`desktop/package.json`, and its commit must already be merged into `main`.
+The [Client release workflow](../.github/workflows/client-release.yml) is
+**manual-only** (`workflow_dispatch`): pushes, pull requests and version tags do
+not automatically start a client release build. It tests and packages macOS,
+Windows and Android in a **single run**, started with an existing
+`desktop-v<version>` tag. The tag must match `desktop/package.json`, and its
+commit must already be merged into `main`.
 
 It builds/signs/notarizes macOS arm64 and x64 on separate compatible runners
-(Xcode 26+), builds an unsigned Windows x64 installer, and verifies the complete
-artifact set before creating/updating a **draft** GitHub Release. Linux packages
+(Xcode 26+), builds an unsigned Windows x64 installer and a signed Android ARM64
+APK in parallel, and verifies the complete artifact set before creating/updating
+a **draft** GitHub Release. Linux packages
 are not built. A published release is never overwritten. Publishing the verified
 draft remains a manual action.
 
@@ -235,7 +236,12 @@ Configure these **repository Secrets**, never source files:
 Configure repository **Variables** `APPLE_TEAM_ID` and `APPLE_SIGNING_IDENTITY`.
 For team API keys only, also set `MACOS_NOTARY_API_ISSUER`; omit it for personal
 keys. An Apple account password/app-specific password is not used by this workflow.
-No Windows signing secrets are needed.
+No Windows signing secrets are needed. Android additionally requires the four
+repository Secrets and existing release certificate fingerprint described in
+[the mobile release guide](../mobile/README.md#github-actions与桌面端一起发布).
+Android keeps its own version and versionCode; the shared release tag continues
+to use the desktop version. Missing Android signing configuration or a failed
+Android job prevents draft Release assembly.
 
 The helper below configures the settings using GitHub CLI. Run it yourself in a
 local terminal after installing `gh` and completing `gh auth login`. It prompts
@@ -251,10 +257,11 @@ bash desktop/scripts/configure-macos-ci.sh \
 
 After merging the source/workflow into `main`, create and push the matching tag
 (for example `desktop-v0.3.2` for version `0.3.2`). This does not start a build.
-In GitHub, open **Actions > Desktop release > Run workflow**, select `main`,
+In GitHub, open **Actions > Client release > Run workflow**, select `main`,
 enter the existing tag in the `tag` input, and run the workflow. Each
 platform/architecture remains a separate download in the same draft Release,
-accompanied by `SHA256SUMS` and macOS verification reports.
+accompanied by `SHA256SUMS` and macOS/Android verification reports. Android
+filenames and release notes state its independent mobile version.
 
 The renderer includes font, icon and dependency license notices; the source
 snapshot retains the project's MIT license. Generated files, dependencies,

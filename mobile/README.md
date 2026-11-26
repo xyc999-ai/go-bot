@@ -20,7 +20,48 @@ npm run android
 
 在 `mobile/` 运行 `npx expo prebuild --clean`，从 Expo 配置重新生成 Android 和 iOS 工程。两端的应用 ID 都是 `com.gobot.mobile`。原生配置应写入 `app.json`，这样重新生成时会保留 Android Release 的 R8 设置和连接配置。
 
-在 `android/` 运行 `./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a` 可生成 ARM64 Release APK。发布时用 Android SDK 的 `zipalign -P 16` 对齐、再用 `apksigner` 签名，最后验证签名和对齐。发布密钥保存在仓库外。
+在 `android/` 运行 `./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a` 可生成 ARM64 Release APK。发布时用 Android SDK 的 `zipalign -P 16` 对齐、再用 `apksigner` 签名，最后验证签名和对齐。发布密钥保存在项目的本地忽略目录 `.local/signing/android/`，不能提交到 Git。
+
+### GitHub Actions：与桌面端一起发布
+
+在 **Actions → Client release → Run workflow** 手动运行
+[发布工作流](../.github/workflows/client-release.yml)，输入已经合并到 `main` 的
+`desktop-v<桌面版本>` 标签。保留这个标签格式以兼容桌面发布；一次运行并行构建
+macOS、Windows 和 Android，全部成功后才创建或更新同一份**草稿 Release**。
+推送代码或标签不会自动构建，也不会自动公开发布。
+
+Android 使用 `mobile/package.json` 与 `app.json` 中一致的版本号，以及
+`app.json` 的 `android.versionCode`，无需与桌面版本相同。每次 Android 正式升级，
+应同时更新这两处版本号并递增 `versionCode`；不要为了与桌面合并 CI 重置它。
+桌面单独更新时，可以再次构建相同的 Android 版本。
+
+CI 使用 Node 24、JDK 17、Android SDK 37 / Build Tools 37.0.0 和
+React Native 0.88 对应的 NDK 27.1.12297006。先运行类型检查和测试，执行
+`expo prebuild --platform android --clean --no-install` 生成临时工程，再构建 ARM64
+Release APK。`with-unsigned-android-release` 插件确保 Release 不使用 Expo 模板的
+调试签名，开发用 Debug 签名保持可用。随后用既有发布密钥签名，并验证包名、
+版本、架构、非调试模式、证书 SHA256 和 16KB ZIP 对齐。
+
+在仓库 **Settings → Secrets and variables → Actions** 配置：
+
+| 类型 | 名称 | 内容 |
+| --- | --- | --- |
+| Secret | `ANDROID_KEYSTORE_BASE64` | **既有 Android 发布 keystore** 的 Base64（单行） |
+| Secret | `ANDROID_KEYSTORE_PASSWORD` | keystore 密码 |
+| Secret | `ANDROID_KEY_ALIAS` | 既有发布密钥 alias |
+| Secret | `ANDROID_KEY_PASSWORD` | 该密钥密码，即使与 keystore 密码相同也需配置 |
+| Variable | `ANDROID_SIGNING_CERT_SHA256` | 既有发布证书的 SHA256 指纹，64 位十六进制，可带冒号 |
+
+必须沿用之前发布 APK 的密钥，不能生成新密钥替代，否则已安装用户无法覆盖升级。
+可以对之前正式分发的 APK 运行 `apksigner verify --print-certs <旧APK>`，从
+`certificate SHA-256 digest` 行获取公开证书指纹；不要用 APK 文件自身的
+SHA256 替代证书指纹。缺少配置、证书不匹配或签名/对齐失败时，本次 Release 组装失败。
+签名文件只在签名步骤写入，临时 keystore 在 always-run 清理步骤删除，不上传为产物。
+
+产物为 `go-bot-<Android版本>-android-arm64.apk` 和对应的 `.verification.json`，
+与桌面安装包一起附在草稿 Release 中，统一的 `SHA256SUMS` 包含所有产物。
+安装 APK 时允许浏览器或文件管理器安装来自此来源的应用；安装后在 App 中填写
+手机可访问的 Controller 地址。当前不生成 AAB、不上传 Google Play，也不构建 iOS。
 
 `with-shared-source-inputs` 配置插件会把共用的 `frontend/src` 纳入 Android JavaScript 打包任务的输入，修改共享文案、会话投影或授权交互后，增量 Release 构建也会更新包。Metro 的 React 映射和 TypeScript 路径使用移动端自己的依赖，无需另外安装 Web 的 node_modules。
 
