@@ -96,6 +96,21 @@ func (m *Manager) HandlerWithWeb(web WebOptions) http.Handler {
 			return
 		}
 		id := r.Header.Get(UserHeader)
+		// Native media elements cannot set X-User-ID. Keep query routing
+		// confined to inline session-file reads; it is not an API-wide login.
+		if isInlineSessionFile(r) {
+			queryID := r.URL.Query().Get("userId")
+			if id != "" && queryID != "" && id != queryID {
+				httpError(w, http.StatusBadRequest, "conflicting user identifiers")
+				return
+			}
+			if id == "" {
+				id = queryID
+			}
+			query := r.URL.Query()
+			query.Del("userId")
+			r.URL.RawQuery = query.Encode()
+		}
 		if !userName.MatchString(id) {
 			httpError(w, http.StatusBadRequest, "provide a valid X-User-ID")
 			return
@@ -384,4 +399,13 @@ func (m *Manager) forward(w http.ResponseWriter, r *http.Request, id string) {
 		},
 	}
 	proxy.ServeHTTP(w, r)
+}
+
+// isInlineSessionFile deliberately excludes listings, attachments and mutations.
+func isInlineSessionFile(r *http.Request) bool {
+	if (r.Method != http.MethodGet && r.Method != http.MethodHead) || r.URL.Query().Get("inline") != "1" {
+		return false
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+	return len(parts) == 5 && parts[0] == "v1" && parts[1] == "sessions" && uuid.Validate(parts[2]) == nil && parts[3] == "files" && parts[4] == "content"
 }

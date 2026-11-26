@@ -1645,39 +1645,85 @@ paths:
           type: integer
   /v1/sessions/{id}/files/content:
     parameters:
-    - $ref: "#/components/parameters/AccountName"
+    - name: X-User-ID
+      in: header
+      description: Account name; required unless inline=1 supplies userId for a media GET or HEAD.
+      schema:
+        type: string
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: path
+      in: query
+      description: Workspace-relative path or absolute Host path within the session workspace.
+      required: true
+      schema:
+        type: string
+    - name: inline
+      in: query
+      description: Set to 1 for an inline supported-video response. Other files remain downloads.
+      schema:
+        type: string
+        enum: ['0', '1']
+    - name: userId
+      in: query
+      description: Browser media account routing, accepted only with inline=1. Must match X-User-ID if both are supplied.
+      schema:
+        type: string
     get:
-      summary: Download regular workspace file
-      description: A present file block supplies the absolute Host path. The requested file must be inside the session workspace.
+      summary: Download or stream regular workspace file
+      description: A present file block supplies the Host path. The file must be inside the session workspace. Supports Range and If-Range.
       operationId: get__v1_sessions_id_files_content
       responses:
         '200':
-          description: Success
+          description: Complete file
           content:
             application/octet-stream:
               schema:
                 type: string
                 format: binary
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+            video/webm:
+              schema:
+                type: string
+                format: binary
+            video/quicktime:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Requested byte range; Content-Range and Accept-Ranges describe the response.
         '400':
           description: Invalid request
         '404':
           description: Not found
         '409':
           description: State conflict
+        '416':
+          description: Unsatisfiable byte range
         '503':
           description: Service unavailable
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-      - name: path
-        in: query
-        description: Workspace-relative path or absolute Host path within the workspace.
-        schema:
-          type: string
-        required: true
+    head:
+      summary: Inspect workspace file headers without downloading its body
+      operationId: head__v1_sessions_id_files_content
+      responses:
+        '200':
+          description: File headers
+        '206':
+          description: Requested byte-range headers
+        '400':
+          description: Invalid request
+        '404':
+          description: Not found
+        '416':
+          description: Unsatisfiable byte range
+        '503':
+          description: Service unavailable
   /v1/sessions/{id}/usage:
     parameters:
     - $ref: "#/components/parameters/AccountName"

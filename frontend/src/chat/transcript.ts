@@ -15,7 +15,8 @@ type ToolGroup = { id: string; type: 'tool-group'; tools: ToolBlock[] }
 export type ChatImage = { id: string; file: FileRef; name?: string; mediaType?: string; width?: number; height?: number }
 type ImageRow = { id: string; type: 'image-row'; images: ChatImage[] }
 type ImageTools = { id: string; type: 'image-tools'; name: string; tools: ToolBlock[]; images: ChatImage[] }
-type DisplayBlock = Exclude<Block, ImageBlock> | ToolGroup | ImageRow | ImageTools
+type VideoBlock = Omit<Extract<Block, { type: 'file' }>, 'type'> & { type: 'video' }
+type DisplayBlock = Exclude<Block, ImageBlock> | ToolGroup | ImageRow | ImageTools | VideoBlock
 
 function attachmentImage(block: ImageBlock): ChatImage {
   const { attachmentId, ...metadata } = block.attachment
@@ -26,6 +27,10 @@ function attachmentImage(block: ImageBlock): ChatImage {
 // file blocks keep their existing semantics. A failed preview falls back to a file.
 export function isPresentedImage(file: FileRef) {
   return file.source === 'presented' && /\.(png|jpe?g|webp|gif|avif|bmp)$/i.test(file.path)
+}
+
+export function isPresentedVideo(file: FileRef) {
+  return file.source === 'presented' && /\.(mp4|webm|mov|m4v)$/i.test(file.path)
 }
 
 export function groupDisplayBlocks(blocks: Block[], toolResults: Transcript['toolResults']): DisplayBlock[] {
@@ -46,6 +51,8 @@ export function groupDisplayBlocks(blocks: Block[], toolResults: Transcript['too
     } else if (block.type === 'image') image(attachmentImage(block))
     else if (block.type === 'file' && isPresentedImage(block.file)) {
       image({ id: block.id, file: block.file, name: block.name })
+    } else if (block.type === 'file' && isPresentedVideo(block.file)) {
+      groups.push({ ...block, type: 'video' })
     } else {
       if (block.type === 'tool' && previous?.type === 'tool-group') previous.tools.push(block)
       else if (block.type === 'tool' && previous?.type === 'tool') {

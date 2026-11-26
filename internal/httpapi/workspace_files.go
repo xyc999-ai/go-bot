@@ -56,7 +56,15 @@ func serveWorkspaceFile(w http.ResponseWriter, r *http.Request, workspace string
 		writeSessionJSON(w, 400, gin.H{"error": "not_a_regular_file"})
 		return
 	}
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(rel)}))
+	disposition := "attachment"
+	if r.URL.Query().Get("inline") == "1" {
+		mediaType := map[string]string{".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime"}[strings.ToLower(filepath.Ext(rel))]
+		if mediaType != "" {
+			disposition = "inline"
+			w.Header().Set("Content-Type", mediaType)
+		}
+	}
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": filepath.Base(rel)}))
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)

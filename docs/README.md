@@ -45,6 +45,7 @@ commands, use the guides above.
 | [Web search and fetch](web-tools-parity-plan.zh-CN.md) | Provider boundaries, formatting and bounded output |
 | [Web UI](web-lumeo-redesign-plan.zh-CN.md) | Navigation, themes, typography and interaction |
 | [Chat images and tools](chat-media-display-plan.zh-CN.md) | Image groups, scrolling and presented-image previews |
+| [Chat videos](chat-video-display-plan.zh-CN.md) | Inline playback, fixed video frames, fullscreen viewing and HTTP range reads |
 | [Streaming text](stream-text-playback-plan.zh-CN.md) | Progressive display across Web and mobile |
 | [Markdown and attachments](markdown-and-demo-refresh-plan.zh-CN.md) | Tables, code, copying, attachment order and demos |
 
