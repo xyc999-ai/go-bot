@@ -83,3 +83,9 @@ last delivery and associated conversation. Create or change tasks through your
 Agent or the existing API.
 
 Visual architecture and validation: [Lumeo redesign plan](../docs/web-lumeo-redesign-plan.zh-CN.md).
+
+When the conversation sidebar is expanded on a desktop-size window, drag its
+right edge to resize it. The chat and composer reflow with the available space.
+Double-click the edge to reset, or focus it and use arrow keys / Home / End.
+The browser remembers the width, clamped to leave room for chat and Host files;
+the narrow-screen drawer keeps its fixed overlay layout.

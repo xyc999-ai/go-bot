@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+test-results/
+playwright-report/
+*.p8
+*.p12
+*.pfx
+
+# Local visual comparison captures and measurements
+design/evidence/
