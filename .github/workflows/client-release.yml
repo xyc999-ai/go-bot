@@ -71,9 +71,6 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v4
-        with:
-          # The retired SDK package "tools" is no longer available from Google.
-          packages: platform-tools
       - name: Install Android SDK matching React Native 0.88
         run: |
           sdkmanager 'platforms;android-37' 'build-tools;37.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1'
