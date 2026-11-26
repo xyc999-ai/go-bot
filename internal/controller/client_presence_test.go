@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,7 @@ func (s *memoryStore) ClientDevices(_ context.Context, id string, now int64) ([]
 	if _, ok := s.records[id]; !ok {
 		return nil, ErrAccountNotFound
 	}
+	normalizeClientRecords(s.clients[id])
 	return publicClients(s.clients[id], now), nil
 }
 func clientHeader(info ClientIdentity) string {
@@ -42,19 +44,33 @@ func TestClientIdentityValidationAndWebPrivacy(t *testing.T) {
 	request := httptest.NewRequest("GET", "/v1/host/stream", nil)
 	request.Header.Set(ClientHeader, clientHeader(ClientIdentity{ID: "browser-fixture", Type: "web", Platform: "macOS", Model: "Hidden model"}))
 	info, err := clientIdentity(request)
-	if err != nil || info.Model != "" || info.Platform != "" {
+	if err != nil || info != nil {
 		t.Fatal(info, err)
 	}
-	for _, raw := range []string{`{"id":"valid-client","type":"web"} {}`, `{`, `{"id":"a","type":"web"}`, `{"id":"valid-client","type":"unknown"}`, `{"id":"valid-client","type":"mobile","model":"bad\nname"}`, `{"id":"valid-client","type":"web","unknown":true}`} {
+	for _, raw := range []string{`{"id":"valid-client","type":"web"} {}`, `{`, `{"id":"a","type":"web"}`, `{"type":"unknown"}`, `{"type":"mobile","platform":"ios","model":"bad\nname"}`, `{"type":"mobile","platform":"ios"}`, `{"type":"desktop","model":"Computer"}`, `{"type":"web","unknown":true}`} {
 		request.Header.Set(ClientHeader, url.PathEscape(raw))
 		if _, err := clientIdentity(request); err == nil {
 			t.Fatal("accepted invalid identity", raw)
 		}
 	}
+	request.Header.Set(ClientHeader, clientHeader(ClientIdentity{Type: "mobile", Platform: "ios", Model: " iPhone 13 mini "}))
+	info, err = clientIdentity(request)
+	if err != nil || info == nil || !strings.HasPrefix(info.ID, "device-") || info.Model != "iPhone 13 mini" {
+		t.Fatal(info, err)
+	}
+	request.Header.Set(ClientHeader, clientHeader(ClientIdentity{ID: "old-installation", Type: "mobile", Platform: "ios", Model: "iPhone 13 mini"}))
+	other, err := clientIdentity(request)
+	if err != nil || other == nil || other.ID != info.ID {
+		t.Fatal("installation ID affected name grouping", other, err)
+	}
+	request.Header.Set(ClientHeader, clientHeader(ClientIdentity{Type: "desktop", Platform: "darwin", Model: strings.Repeat("名", 120)}))
+	if _, err := clientIdentity(request); err != nil {
+		t.Fatal("120-character Unicode computer name rejected", err)
+	}
 }
-func TestClientLeasesKeepOtherTabsOnlineAndExpireWithoutAScanner(t *testing.T) {
+func TestClientLeasesKeepSameModelConnectionsOnlineAndExpireWithoutAScanner(t *testing.T) {
 	records := map[string]clientRecord{}
-	info := ClientIdentity{ID: "web-fixture", Type: "web"}
+	info := ClientIdentity{Type: "mobile", Platform: "ios", Model: "iPhone 13 mini"}
 	update := func(id string, now int64, connected bool) {
 		t.Helper()
 		if err := updateClientRecords(records, ClientUpdate{Identity: info, ConnectionID: id, Now: now, Connected: connected}); err != nil {
@@ -65,7 +81,7 @@ func TestClientLeasesKeepOtherTabsOnlineAndExpireWithoutAScanner(t *testing.T) {
 	update("tab-two", 1100, true)
 	update("tab-one", 1200, false)
 	if publicClients(records, 1200)[0].Status != "connected" {
-		t.Fatal("closing one tab disconnected the browser")
+		t.Fatal("closing one connection disconnected the model group")
 	}
 	// A delayed close for the preceding connection cannot remove its reconnect.
 	update("reconnected", 1300, true)
@@ -80,6 +96,34 @@ func TestClientLeasesKeepOtherTabsOnlineAndExpireWithoutAScanner(t *testing.T) {
 	update("reconnected", 100001, false)
 	if d := publicClients(records, 100001)[0]; d.Status != "disconnected" || d.LastSeenAt != 100001 {
 		t.Fatal(d)
+	}
+}
+
+func TestClientHistoryMigrationRemovesWebAndMergesNamedInstallations(t *testing.T) {
+	phone := ClientIdentity{Type: "mobile", Platform: "ios", Model: "iPhone 13 mini"}
+	records := map[string]clientRecord{
+		"old-web":       {ClientIdentity: ClientIdentity{ID: "old-web", Type: "web"}, Connections: map[string]int64{"tab": 10000}},
+		"old-phone-one": {ClientIdentity: ClientIdentity{ID: "old-phone-one", Type: phone.Type, Platform: phone.Platform, Model: phone.Model}, LastSeenAt: 1000, Connections: map[string]int64{"one": 10000}},
+		"old-phone-two": {ClientIdentity: ClientIdentity{ID: "old-phone-two", Type: phone.Type, Platform: phone.Platform, Model: phone.Model}, LastSeenAt: 1100, Connections: map[string]int64{"two": 11000}},
+		"unnamed-phone": {ClientIdentity: ClientIdentity{ID: "unnamed-phone", Type: "mobile", Platform: "ios"}, LastSeenAt: 500},
+	}
+	if !normalizeClientRecords(records) || len(records) != 2 {
+		t.Fatal(records)
+	}
+	merged := records[namedClientIdentity(phone).ID]
+	if merged.LastSeenAt != 1100 || len(merged.Connections) != 2 || records["unnamed-phone"].LastSeenAt != 500 {
+		t.Fatal("history or active connections lost", records)
+	}
+	if normalizeClientRecords(records) {
+		t.Fatal("migration was not idempotent")
+	}
+	if err := updateClientRecords(records, ClientUpdate{Identity: ClientIdentity{ID: "old-web", Type: "web"}, ConnectionID: "new-tab", Now: 2000, Connected: true}); err != nil || len(records) != 2 {
+		t.Fatal("Web re-registered", records, err)
+	}
+	for _, other := range []ClientIdentity{{Type: "desktop", Platform: "ios", Model: phone.Model}, {Type: "mobile", Platform: "android", Model: phone.Model}, {Type: "mobile", Platform: "ios", Model: "iPhone 14"}} {
+		if namedClientIdentity(other).ID == namedClientIdentity(phone).ID {
+			t.Fatal("type, platform or model was ignored", other)
+		}
 	}
 }
 func TestClientPresenceTracksOnlySuccessfulStreamsAndKeepsChatProjection(t *testing.T) {
@@ -101,25 +145,32 @@ func TestClientPresenceTracksOnlySuccessfulStreamsAndKeepsChatProjection(t *test
 	manager := New(config.Default(), nil, store)
 	server := httptest.NewServer(manager.Handler())
 	defer server.Close()
-	open := func(path, id string) *http.Response {
+	open := func(path string, identity ClientIdentity) *http.Response {
 		t.Helper()
 		req, _ := http.NewRequestWithContext(t.Context(), "GET", server.URL+path, nil)
 		req.Header.Set(UserHeader, "alice")
-		req.Header.Set(ClientHeader, clientHeader(ClientIdentity{ID: id, Type: "web"}))
+		req.Header.Set(ClientHeader, clientHeader(identity))
 		response, err := server.Client().Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return response
 	}
-	failed := open("/v1/host/stream?fail=true", "failed-browser")
+	phone := ClientIdentity{Type: "mobile", Platform: "ios", Model: "iPhone 13 mini"}
+	key := namedClientIdentity(phone).ID
+	failed := open("/v1/host/stream?fail=true", phone)
 	failed.Body.Close()
 	if devices, _ := store.ClientDevices(t.Context(), "alice", time.Now().UnixMilli()); len(devices) != 0 {
 		t.Fatal("failed stream registered", devices)
 	}
-	one := open("/v1/host/stream", "browser-one")
+	web := open("/v1/host/stream", ClientIdentity{ID: "legacy-browser", Type: "web"})
+	defer web.Body.Close()
+	if devices, _ := store.ClientDevices(t.Context(), "alice", time.Now().UnixMilli()); web.StatusCode != 200 || len(devices) != 0 {
+		t.Fatal("Web chat stream failed or created a lease", web.StatusCode, devices)
+	}
+	one := open("/v1/host/stream", phone)
 	defer one.Body.Close()
-	two := open("/v1/host/stream", "browser-one")
+	two := open("/v1/host/stream", phone)
 	defer two.Body.Close()
 	if one.StatusCode != 200 || two.StatusCode != 200 {
 		t.Fatal("stream failed")
@@ -135,7 +186,7 @@ func TestClientPresenceTracksOnlySuccessfulStreamsAndKeepsChatProjection(t *test
 	deadline := time.Now().Add(time.Second)
 	for {
 		store.mu.Lock()
-		count := len(store.clients["alice"]["browser-one"].Connections)
+		count := len(store.clients["alice"][key].Connections)
 		store.mu.Unlock()
 		if count == 1 {
 			break

@@ -14,15 +14,16 @@ let language = 'en'
 const { menuTemplate, trayTemplate } = require('./menus.cjs')
 let controller = 'http://127.0.0.1:8080'
 const configFile = () => path.join(app.getPath('userData'), 'desktop.json')
-function loadConfig() {
+async function loadConfig() {
   try { config = JSON.parse(fs.readFileSync(configFile(), 'utf8')) } catch { config = {} }
   // The installed client always targets the local Controller; the environment
   // override is used by isolated native integration tests. Old preferences expire.
   controller = controllerURL(process.env.GOBOT_DESKTOP_CONTROLLER || 'http://127.0.0.1:8080')
   delete config.controller
   delete config.keepInTray
-  identity = require('./client-identity.cjs').desktopIdentity(config.clientId)
-  config.clientId = identity.id
+  const { computerName, desktopIdentity } = require('./client-identity.cjs')
+  identity = desktopIdentity(await computerName())
+  delete config.clientId
   language = config.language === 'zh-CN' || config.language === 'en' ? config.language : /^zh/i.test(app.getLocale()) ? 'zh-CN' : 'en'
   persist()
 }
@@ -108,8 +109,8 @@ else {
   app.on('activate', show)
   // Closing a window never quits the app; only an explicit Quit does.
   app.on('window-all-closed', () => {})
-  app.whenReady().then(() => {
-    loadConfig()
+  app.whenReady().then(async () => {
+    await loadConfig()
     const ses = session.defaultSession
     ses.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === 'clipboard-sanitized-write'))
     ses.setPermissionCheckHandler((_contents, permission) => permission === 'clipboard-sanitized-write')

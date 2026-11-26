@@ -1,4 +1,3 @@
-import { clientIdentityHeader, encodeClientIdentity, webClientIdentity } from '../clients/identity'
 import type { ModelProtocol } from "../settings/modelProtocol"
 import type { PermissionMode, SessionPermission } from '../chat/permissions'
 import { messageRequest } from '../chat/attachments'
@@ -232,7 +231,7 @@ export async function readHostStream(
 ) {
   const query = new URLSearchParams({ cursors: JSON.stringify(cursors) })
   const response = await fetch('/v1/host/stream?' + query, {
-    headers: controllerHeaders({ Accept: 'text/event-stream', [clientIdentityHeader]: encodeClientIdentity(webClientIdentity()) }, userId),
+    headers: controllerHeaders({ Accept: 'text/event-stream' }, userId),
     signal,
   })
   await requireSuccess(response)

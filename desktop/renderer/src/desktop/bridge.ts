@@ -1,9 +1,9 @@
 export type DesktopCommand = { type: 'new-chat' | 'resume' | 'navigate'; path?: string }
 import type { ClientIdentity } from '../clients/identity'
 export type Configuration = { controller: string; version: string; identity: ClientIdentity }
-let installation: ClientIdentity
-export function setDesktopIdentity(value: ClientIdentity) { installation = value }
-export function desktopClientIdentity(): ClientIdentity { return installation }
+let device: ClientIdentity
+export function setDesktopIdentity(value: ClientIdentity) { device = value }
+export function desktopClientIdentity(): ClientIdentity { return device }
 
 let configuredOrigin = ''
 export function setControllerOrigin(value: string) { configuredOrigin = value }

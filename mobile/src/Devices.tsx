@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native'
 import { Laptop, MonitorSmartphone, RefreshCw, Smartphone, Tablet } from 'lucide-react-native'
 import { Controller } from './api'
-import { clientDisplayName, clientLastSeen, type ClientDevice } from '../../frontend/src/clients/identity'
+import { clientDisplayName, clientIdentityKey, clientLastSeen, type ClientDevice } from '../../frontend/src/clients/identity'
 import { useLocale } from './locale'
 import { edge, Hint, IconButton, ink, muted, SheetScroll, type PageChrome } from './ui'
 
 export function Devices({ api, active, ...chrome }: PageChrome & { api: Controller; active: boolean }) {
  const { t, language } = useLocale()
- const [devices, setDevices] = useState<ClientDevice[]>(), [ownId, setOwnId] = useState('')
+ const [devices, setDevices] = useState<ClientDevice[]>(), [ownKey, setOwnKey] = useState('')
  const [error, setError] = useState(''), [loading, setLoading] = useState(false), [revision, setRevision] = useState(0)
  useEffect(() => {
   if (!active) return
@@ -18,7 +18,7 @@ export function Devices({ api, active, ...chrome }: PageChrome & { api: Controll
    inFlight = true; request = new AbortController(); setLoading(true)
    try {
     const [data, identity] = await Promise.all([api.clients(request.signal), api.clientIdentity()])
-    if (!request.signal.aborted) { setDevices(data.clients); setOwnId(identity.id); setError('') }
+    if (!request.signal.aborted) { setDevices(data.clients.filter(device => device.type !== 'web')); setOwnKey(clientIdentityKey(identity)); setError('') }
    } catch { if (!request?.signal.aborted) setError('无法读取设备，请重试。') }
    finally { inFlight = false; if (!stopped) setLoading(false) }
   }
@@ -27,8 +27,8 @@ export function Devices({ api, active, ...chrome }: PageChrome & { api: Controll
   const listener = AppState.addEventListener('change', state => { if (state === 'active') void load(); else request?.abort() })
   return () => { stopped = true; clearInterval(timer); listener.remove(); request?.abort(); setLoading(false) }
  }, [api, active, revision])
- const own = devices?.find(device => device.id === ownId)
- const others = devices?.filter(device => device.id !== ownId) ?? []
+ const own = devices?.find(device => clientIdentityKey(device) === ownKey)
+ const others = devices?.filter(device => clientIdentityKey(device) !== ownKey) ?? []
  function row(device: ClientDevice) {
   const connected = device.status === 'connected'
   const Icon = device.type === 'web' || device.type === 'desktop' ? Laptop : /ipad|tablet/i.test(device.model ?? '') ? Tablet : Smartphone

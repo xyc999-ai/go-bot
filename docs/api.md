@@ -365,28 +365,45 @@ own `sessionId`; `sessions.changed`, `schedule/changed` and `extensions.changed`
 invalidate their Host-level lists or settings. Session switches do not reconnect.
 No separate task or plugin stream is needed.
 
-Clients may attach `X-Go-Bot-Client` to the existing Host-stream request. Its
-value is `encodeURIComponent(JSON.stringify({id, type, platform?, model?}))`.
-Use a persistent anonymous installation ID (8–80 ASCII letters, digits, `_` or
-`-`); `type` is `web`, `mobile` or `desktop`. Platform/model are optional, limited
-to 32/120 bytes; Web metadata is discarded so its name remains Web. Missing
-metadata leaves the stream unchanged. Malformed metadata returns HTTP 400.
+Native clients attach `X-Go-Bot-Client` to the existing Host-stream request. Its
+value is `encodeURIComponent(JSON.stringify({type, platform, model}))`.
+`type` is `mobile` or `desktop`; `platform` is limited to 32 bytes and `model`
+to 120 characters. Mobile uses the actual model name (for example `iPhone 13 mini`),
+falling back to iPhone/iPad/Android when unavailable. Desktop uses the system
+computer name without a Go Bot prefix; macOS prefers ComputerName, and Windows,
+Linux or a failed macOS lookup use the OS hostname. Platform labels are the
+fallback when a name cannot be read. No random installation ID is generated or
+persisted. Missing metadata leaves the stream unchanged. Malformed metadata returns HTTP 400.
 The header is consumed by Controller and never forwarded to Host or the model.
 
-Controller registers a client only after a successful SSE handshake. Multiple
-tabs share the installation ID but maintain independent connection leases.
+Controller registers a native client only after a successful SSE handshake and
+groups records within the account by `(type, platform, model)`. Two phones of
+the same model share a record; changing a computer name creates a new record
+after the desktop app restarts. Multiple connections share the name group but
+maintain independent connection leases.
 Leases renew every 30 seconds and expire after 90 seconds; a normal disconnect
 ends only that stream's lease. Status describes the application's event
 connection, rather than the device's power or network state.
 
 `GET /v1/clients` uses `X-User-ID`, does not start Host, and returns
-`{"clients":[{"id":"client-example","type":"web","status":"connected","lastSeenAt":1795640000000}]}`.
-Native records may also include `platform` and `model`. Status is `connected` or
+`{"clients":[{"id":"device-<hash>","type":"mobile","platform":"ios","model":"iPhone 13 mini","status":"connected","lastSeenAt":1795640000000}]}`.
+The server derives the stable record ID from the grouping fields; clients match
+“this device” by those fields rather than an installation ID. Status is `connected` or
 `disconnected`; `lastSeenAt` is a Unix millisecond timestamp. Internal connection
-IDs and leases are not exposed. At most 50 installation records are retained,
+IDs and leases are not exposed. At most 50 device records are retained,
 evicting the oldest disconnected record when necessary. Unreported clients do
 not appear. The mobile Devices tab refreshes every five seconds while visible
 and in the foreground, with a manual refresh action.
+
+Web opens the same chat event stream without device metadata and creates no
+device record or presence lease. Older Web clients' headers are also ignored.
+Existing Web records are removed transactionally on device-list reads or presence
+updates; only the account's `clients` field is changed. Named native records from
+older installations are merged without losing their live connection leases.
+Legacy native records without a model remain as history because their hardware
+cannot be inferred. There is no device deletion or remote logout endpoint.
+Upgrade Controller before installing the new native clients: an older Controller
+requires an installation ID and rejects the new name-only header with HTTP 400.
 
 The first transcript page includes `events`, `throughSeq`, `before`, `queue`,
 `questions`, optional live `baseline`, and `permission`. Pass `before` for older

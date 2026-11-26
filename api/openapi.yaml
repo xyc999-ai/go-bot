@@ -740,7 +740,7 @@ paths:
     - $ref: '#/components/parameters/AccountName'
     get:
       summary: List this account's reported application clients and connection status
-      description: Does not start Host. Normal closes remove the stream lease; silent loss expires within 90 seconds. Connection IDs are never exposed.
+      description: Does not start Host. Native devices are grouped by type, platform and name (model). Web clients are excluded and their stored history is cleaned up. Normal closes remove the stream lease; silent loss expires within 90 seconds. Connection IDs are never exposed.
       responses:
         '200':
           description: Clients ordered by connected status and last seen time
@@ -756,10 +756,10 @@ paths:
                       type: object
                       required: [id, type, status, lastSeenAt]
                       properties:
-                        id: {type: string}
-                        type: {type: string, enum: [web, mobile, desktop]}
+                        id: {type: string, description: Server-derived name group key; legacy unnamed native records retain their old ID. Not an authentication token.}
+                        type: {type: string, enum: [mobile, desktop]}
                         platform: {type: string}
-                        model: {type: string}
+                        model: {type: string, description: Mobile model name or desktop system computer name}
                         status: {type: string, enum: [connected, disconnected]}
                         lastSeenAt: {type: integer, format: int64, description: Unix milliseconds}
         '404': {description: Account not found}
@@ -773,7 +773,7 @@ paths:
       parameters:
       - name: X-Go-Bot-Client
         in: header
-        description: Optional encodeURIComponent(JSON.stringify({id,type,platform?,model?})); persistent anonymous installation identity, not an authentication token. Web platform and model are discarded.
+        description: Optional encodeURIComponent(JSON.stringify({type,platform,model})); type is mobile or desktop, platform is limited to 32 bytes, and model is a mobile model name or desktop computer name limited to 120 characters. Controller groups by these fields without a client-generated ID. Legacy installation IDs are accepted for compatibility; Web metadata is ignored and creates no presence lease. Missing metadata leaves the event stream unchanged.
         schema: {type: string, maxLength: 2048}
       - name: cursors
         in: query
