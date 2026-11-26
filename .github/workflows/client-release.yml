@@ -73,7 +73,7 @@ jobs:
       - uses: android-actions/setup-android@v4
       - name: Install Android SDK matching React Native 0.88
         run: |
-          sdkmanager 'platforms;android-37' 'build-tools;37.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1'
+          sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1'
           echo "ANDROID_BUILD_TOOLS=$ANDROID_HOME/build-tools/37.0.0" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run typecheck
