@@ -1,0 +1,16 @@
+const { test } = require('node:test')
+const assert = require('node:assert/strict')
+const { desktopIdentity } = require('../electron/client-identity.cjs')
+
+test('installation ID survives restarts and reports desktop rather than Web', () => {
+  const first = desktopIdentity(undefined, 'darwin')
+  assert.match(first.id, /^[A-Za-z0-9_-]{8,80}$/)
+  assert.deepEqual(desktopIdentity(first.id, 'darwin'), first)
+  assert.equal(first.type, 'desktop')
+  assert.equal(first.platform, 'darwin')
+  assert.equal(first.model, 'Go Bot · macOS')
+  assert.notEqual(desktopIdentity('corrupt id').id, 'corrupt id')
+  assert.notEqual(desktopIdentity().id, first.id)
+  assert.equal(desktopIdentity(first.id, 'win32').model, 'Go Bot · Windows')
+  assert.equal(desktopIdentity(first.id, 'linux').model, 'Go Bot · Linux')
+})

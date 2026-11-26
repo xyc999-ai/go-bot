@@ -1,0 +1,53 @@
+{
+  "name": "go-bot-desktop",
+  "productName": "Go Bot",
+  "version": "0.3.2",
+  "description": "Go Bot desktop client",
+  "author": "Go Bot contributors",
+  "license": "MIT",
+  "private": true,
+  "main": "electron/main.cjs",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "npm run build && electron .",
+    "build": "tsc --project renderer/tsconfig.json --noEmit && vite build",
+    "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.cjs",
+    "package": "npm run build && electron-forge package",
+    "make": "npm run build && electron-forge make",
+    "release:mac": "node scripts/release-macos.cjs",
+    "verify:mac": "node scripts/verify-macos-release.cjs",
+    "check": "npm run test && npm run build",
+    "smoke": "npm run build && node scripts/smoke.cjs",
+    "test:visual": "npm run build && node scripts/visual-parity.cjs",
+    "test:video": "npm run build && node scripts/video-smoke.cjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "eventsource-parser": "4.1.3",
+    "lucide-react": "1.72.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "8.0.1",
+    "@electron-forge/maker-deb": "8.0.1",
+    "@electron-forge/maker-rpm": "8.0.1",
+    "@electron-forge/maker-squirrel": "8.0.1",
+    "@electron-forge/maker-zip": "8.0.1",
+    "@electron/notarize": "3.1.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "electron": "45.5.0",
+    "playwright": "1.65.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.8"
+  },
+  "config": {
+    "forge": "./forge.config.cjs"
+  },
+  "type": "module"
+}

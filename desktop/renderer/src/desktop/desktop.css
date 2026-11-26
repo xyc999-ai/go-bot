@@ -1,0 +1,8 @@
+.desktop-titlebar { height: 38px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--line); -webkit-app-region: drag; user-select: none; }
+[data-platform='darwin'] .desktop-titlebar { padding-left: 86px; }
+.desktop-app-name { font-size: 12px; font-weight: 550; color: var(--muted); }
+.desktop-content, .desktop-content .app { height: calc(100dvh - 38px); }
+.desktop-content .account-page { min-height: calc(100dvh - 38px); }
+.desktop-content { --video-viewport-height: calc(100dvh - 38px); }
+.desktop-content dialog:not(.chat-video-dialog) { translate: 0 19px; }
+.desktop-content .chat-video-dialog.is-fullscreen { top: 38px; height: calc(100dvh - 38px); }

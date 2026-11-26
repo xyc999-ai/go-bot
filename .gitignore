@@ -27,6 +27,10 @@ controller.lock
 state.json
 *.token
 .credentials.yaml
+# Signing private keys and encrypted certificate exports
+*.p8
+*.p12
+*.pfx
 .credential-write-*
 .write-*
 .install-*/
