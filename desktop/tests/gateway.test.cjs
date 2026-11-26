@@ -95,8 +95,8 @@ test('plugin assets stream from the Controller with HEAD and byte ranges', async
   assert.equal((await head(new Request('gobot://desktop/assets/plugins/office/icon.svg', { method: 'HEAD' }))).headers.get('content-type'), 'image/svg+xml')
 })
 
-test('installation identity reaches the Controller stream unchanged', async () => {
-  const value = encodeURIComponent(JSON.stringify({ id: 'client-persistent', type: 'desktop', platform: 'darwin' }))
+test('computer name reaches the Controller stream unchanged', async () => {
+  const value = encodeURIComponent(JSON.stringify({ type: 'desktop', platform: 'darwin', model: 'xyc的MacBook Air' }))
   const run = gateway({ root: '/unused', getController: () => 'http://localhost:8080', fetchImpl: async (_url, options) => {
     assert.equal(options.headers.get('x-go-bot-client'), value); return new Response(': ready\n\n')
   } })

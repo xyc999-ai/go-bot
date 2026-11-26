@@ -58,9 +58,9 @@ func TestDockerClientPresenceUsesOnlyTheUserHash(t *testing.T) {
 	}
 	now := time.Now().UnixMilli()
 	var group sync.WaitGroup
-	for _, device := range []controller.ClientIdentity{{ID: "browser-fixture", Type: "web"}, {ID: "mobile-fixture", Type: "mobile", Platform: "ios", Model: "iPhone"}} {
+	for _, device := range []controller.ClientIdentity{{Type: "desktop", Platform: "darwin", Model: "Work Mac"}, {Type: "mobile", Platform: "ios", Model: "iPhone 13 mini"}} {
 		group.Go(func() {
-			if err := store.UpdateClientPresence(ctx, "alice", controller.ClientUpdate{Identity: device, ConnectionID: device.ID + "-connection", Now: now, Connected: true}); err != nil {
+			if err := store.UpdateClientPresence(ctx, "alice", controller.ClientUpdate{Identity: device, ConnectionID: device.Type + "-connection", Now: now, Connected: true}); err != nil {
 				t.Error(err)
 			}
 		})
@@ -103,7 +103,44 @@ func TestDockerClientPresenceUsesOnlyTheUserHash(t *testing.T) {
 		t.Fatal("extra Redis state", string(raw), err)
 	}
 	raw, err = docker.Run(ctx, nil, "exec", container, "redis-cli", "--raw", "HGET", "user:alice", "clients")
-	if err != nil || !strings.Contains(string(raw), "browser-fixture") || !strings.Contains(string(raw), "mobile-fixture") {
+	if err != nil || !strings.Contains(string(raw), "Work Mac") || !strings.Contains(string(raw), "iPhone 13 mini") {
 		t.Fatal("missing clients field", err)
+	}
+	// Upgrade an existing account without leaking old Web history or losing native leases.
+	var records map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &records); err != nil {
+		t.Fatal(err)
+	}
+	records["old-browser"] = json.RawMessage(`{"id":"old-browser","type":"web","lastSeenAt":1000,"connections":{"old-tab":9999999999999}}`)
+	records["old-unnamed-phone"] = json.RawMessage(`{"id":"old-unnamed-phone","type":"mobile","platform":"ios","lastSeenAt":1000}`)
+	seed, err := json.Marshal(records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := docker.Run(ctx, nil, "exec", container, "redis-cli", "HSET", "user:alice", "clients", string(seed)); err != nil {
+		t.Fatal(err)
+	}
+	group.Go(func() {
+		if _, err := second.ClientDevices(ctx, "alice", now); err != nil {
+			t.Error(err)
+		}
+	})
+	group.Go(func() {
+		if err := store.UpdateClientPresence(ctx, "alice", controller.ClientUpdate{Identity: controller.ClientIdentity{Type: "mobile", Platform: "ios", Model: "iPhone 13 mini"}, ConnectionID: "mobile-after-migration", Now: now, Connected: true}); err != nil {
+			t.Error(err)
+		}
+	})
+	group.Wait()
+	devices, err = second.ClientDevices(ctx, "alice", now)
+	if err != nil || len(devices) != 3 {
+		t.Fatal("upgrade removed native history", devices, err)
+	}
+	// Even an old Web client's renewal cannot recreate its record.
+	if err := store.UpdateClientPresence(ctx, "alice", controller.ClientUpdate{Identity: controller.ClientIdentity{ID: "old-browser", Type: "web"}, ConnectionID: "old-tab", Now: now, Connected: true}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err = docker.Run(ctx, nil, "exec", container, "redis-cli", "--raw", "HGET", "user:alice", "clients")
+	if err != nil || strings.Contains(string(raw), "old-browser") || !strings.Contains(string(raw), "old-unnamed-phone") || !strings.Contains(string(raw), "mobile-after-migration") {
+		t.Fatal("Web history survived or native history was removed", string(raw), err)
 	}
 }

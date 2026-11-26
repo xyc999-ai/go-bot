@@ -2,8 +2,10 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -12,6 +14,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -23,7 +26,7 @@ const clientHeartbeat = 30 * time.Second
 const clientsField = "clients"
 
 type ClientIdentity struct {
-	ID       string `json:"id"`
+	ID       string `json:"id,omitempty"` // Server-derived record key; old clients may still send their installation ID.
 	Type     string `json:"type"`
 	Platform string `json:"platform,omitempty"`
 	Model    string `json:"model,omitempty"`
@@ -62,17 +65,73 @@ func clientIdentity(r *http.Request) (*ClientIdentity, error) {
 	var identity ClientIdentity
 	decoder := json.NewDecoder(strings.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&identity) != nil || decoder.Decode(new(any)) != io.EOF || !clientIDPattern.MatchString(identity.ID) ||
+	if decoder.Decode(&identity) != nil || decoder.Decode(new(any)) != io.EOF || (identity.ID != "" && !clientIDPattern.MatchString(identity.ID)) ||
 		(identity.Type != "web" && identity.Type != "mobile" && identity.Type != "desktop") ||
-		len(identity.Platform) > 32 || len(identity.Model) > 120 ||
+		len(identity.Platform) > 32 || utf8.RuneCountInString(identity.Model) > 120 ||
 		strings.IndexFunc(identity.Platform+identity.Model, unicode.IsControl) >= 0 {
 		return nil, errors.New("invalid_client_identity")
 	}
 	if identity.Type == "web" {
-		identity.Platform = ""
-		identity.Model = ""
+		return nil, nil // Also ignore metadata sent by older Web clients.
+	}
+	identity = namedClientIdentity(identity)
+	if identity.ID == "" || identity.Platform == "" {
+		return nil, errors.New("invalid_client_identity")
 	}
 	return &identity, nil
+}
+
+func namedClientIdentity(identity ClientIdentity) ClientIdentity {
+	identity.Model = strings.TrimSpace(identity.Model)
+	if identity.Model != "" {
+		data, _ := json.Marshal([]string{identity.Type, identity.Platform, identity.Model})
+		identity.ID = fmt.Sprintf("device-%x", sha256.Sum256(data))
+	}
+	return identity
+}
+
+// Keep legacy unnamed native records, merge named installations and remove Web history.
+// Connection UUIDs remain separate when multiple devices share the same name.
+func normalizeClientRecords(records map[string]clientRecord) bool {
+	changed := false
+	for key, record := range records {
+		if record.Type == "web" {
+			delete(records, key)
+			changed = true
+			continue
+		}
+		identity := namedClientIdentity(record.ClientIdentity)
+		if identity.ID == "" {
+			identity.ID = key
+		}
+		if key == identity.ID && record.ClientIdentity == identity {
+			continue
+		}
+		delete(records, key)
+		previous := records[identity.ID]
+		record.ClientIdentity = identity
+		record.LastSeenAt = max(record.LastSeenAt, previous.LastSeenAt)
+		if record.Connections == nil {
+			record.Connections = map[string]int64{}
+		}
+		for connection, expires := range previous.Connections {
+			record.Connections[connection] = max(record.Connections[connection], expires)
+		}
+		records[identity.ID] = record
+		changed = true
+	}
+	return changed
+}
+
+func decodeClientRecords(value any) (map[string]clientRecord, bool, error) {
+	records := map[string]clientRecord{}
+	if value != nil && json.Unmarshal([]byte(redisString(value)), &records) != nil {
+		return nil, false, errors.New("invalid Redis clients")
+	}
+	if records == nil {
+		records = map[string]clientRecord{}
+	}
+	return records, normalizeClientRecords(records), nil
 }
 
 func pruneClientConnections(records map[string]clientRecord, now int64) {
@@ -86,6 +145,11 @@ func pruneClientConnections(records map[string]clientRecord, now int64) {
 	}
 }
 func updateClientRecords(records map[string]clientRecord, u ClientUpdate) error {
+	normalizeClientRecords(records)
+	if u.Identity.Type == "web" {
+		return nil
+	}
+	u.Identity = namedClientIdentity(u.Identity)
 	pruneClientConnections(records, u.Now)
 	record, exists := records[u.Identity.ID]
 	if !exists && !u.Connected {
@@ -119,6 +183,9 @@ func updateClientRecords(records map[string]clientRecord, u ClientUpdate) error 
 func publicClients(records map[string]clientRecord, now int64) []ClientDevice {
 	result := make([]ClientDevice, 0, len(records))
 	for _, record := range records {
+		if record.Type == "web" {
+			continue
+		}
 		status := "disconnected"
 		for _, expires := range record.Connections {
 			if expires > now {
@@ -149,12 +216,9 @@ func (s *RedisStore) UpdateClientPresence(ctx context.Context, id string, u Clie
 		if fields[0] == nil {
 			return ErrAccountNotFound
 		}
-		records := map[string]clientRecord{}
-		if fields[1] != nil && json.Unmarshal([]byte(redisString(fields[1])), &records) != nil {
-			return errors.New("invalid Redis clients")
-		}
-		if records == nil {
-			records = map[string]clientRecord{}
+		records, _, err := decodeClientRecords(fields[1])
+		if err != nil {
+			return err
 		}
 		if err := updateClientRecords(records, u); err != nil {
 			return err
@@ -168,23 +232,40 @@ func (s *RedisStore) UpdateClientPresence(ctx context.Context, id string, u Clie
 	})
 }
 func (s *RedisStore) ClientDevices(ctx context.Context, id string, now int64) ([]ClientDevice, error) {
-	fields, err := s.client.HMGet(ctx, accountPrefix+id, "desiredState", clientsField).Result()
-	if err != nil {
-		return nil, err
-	}
-	if fields[0] == nil {
-		return nil, ErrAccountNotFound
-	}
-	records := map[string]clientRecord{}
-	if fields[1] != nil && json.Unmarshal([]byte(redisString(fields[1])), &records) != nil {
-		return nil, errors.New("invalid Redis clients")
-	}
-	return publicClients(records, now), nil
+	key := accountPrefix + id
+	var devices []ClientDevice
+	err := s.watch(ctx, []string{key}, func(tx *redis.Tx) error {
+		fields, err := tx.HMGet(ctx, key, "desiredState", clientsField).Result()
+		if err != nil {
+			return err
+		}
+		if fields[0] == nil {
+			return ErrAccountNotFound
+		}
+		records, changed, err := decodeClientRecords(fields[1])
+		if err != nil {
+			return err
+		}
+		devices = publicClients(records, now)
+		if !changed {
+			return nil
+		}
+		data, err := json.Marshal(records)
+		if err != nil {
+			return err
+		}
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error { pipe.HSet(ctx, key, clientsField, data); return nil })
+		return err
+	})
+	return devices, err
 }
 
 // Each accepted stream owns only its renewal loop. Redis leases survive an
 // unclean Controller exit; no global scanner or in-memory device registry exists.
 func (m *Manager) trackClient(ctx context.Context, user string, identity ClientIdentity) func() {
+	if identity.Type == "web" {
+		return func() {}
+	}
 	lease := uuid.NewString()
 	update := func(ctx context.Context, connected bool) error {
 		call, cancel := context.WithTimeout(ctx, 2*time.Second)

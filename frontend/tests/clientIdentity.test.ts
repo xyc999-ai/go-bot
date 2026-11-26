@@ -1,31 +1,25 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { webClientIdentity, validClientId, encodeClientIdentity, clientDisplayName, clientLastSeen } from '../src/clients/identity.ts'
+import { clientIdentityKey, encodeClientIdentity, clientDisplayName, clientLastSeen } from '../src/clients/identity.ts'
 
-test('browser reconnects use a persistent identity and never report a machine model', () => {
- const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
- const values = new Map<string, string>([['go-bot-client-id', 'browser-persistent']])
- Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
-  getItem: (key: string) => values.get(key) ?? null,
-  setItem: (key: string, value: string) => values.set(key, value),
- } })
- try {
-  const first = webClientIdentity(), second = webClientIdentity()
-  assert.deepEqual(first, { id: 'browser-persistent', type: 'web' })
-  assert.deepEqual(second, first)
-  assert.ok(validClientId(first.id))
-  assert.equal(clientDisplayName({ ...first, model: 'private model', platform: 'macOS' }), 'Web')
- } finally {
-  if (original) Object.defineProperty(globalThis, 'localStorage', original)
-  else Reflect.deleteProperty(globalThis, 'localStorage')
+test('this device is matched by type, platform and name rather than an installation ID', () => {
+ const own = { type: 'mobile' as const, platform: 'ios', model: 'iPhone 13 mini' }
+ const oldInstall = { ...own, id: 'old-installation' }
+ const newInstall = { ...own, id: 'new-installation' }
+ assert.equal(clientIdentityKey(oldInstall), clientIdentityKey(newInstall))
+ assert.equal(clientIdentityKey(own), clientIdentityKey(newInstall))
+ for (const other of [{ ...own, type: 'desktop' as const }, { ...own, platform: 'android' }, { ...own, model: 'iPhone 14' }]) {
+  assert.notEqual(clientIdentityKey(other), clientIdentityKey(own))
  }
 })
 
 test('native identity survives the header encoding and missing model has a usable label', () => {
- const identity = { id: 'native-fixture', type: 'mobile' as const, platform: 'android', model: '测试手机' }
+ const identity = { type: 'mobile' as const, platform: 'android', model: '测试手机' }
  assert.deepEqual(JSON.parse(decodeURIComponent(encodeClientIdentity(identity))), identity)
  assert.equal(clientDisplayName(identity), '测试手机')
- assert.equal(clientDisplayName({ id: 'native-fixture', type: 'mobile', platform: 'ios' }), 'iPhone')
+ assert.equal(clientDisplayName({ type: 'mobile', platform: 'ios' }), 'iPhone')
+ assert.equal(clientDisplayName({ type: 'desktop', platform: 'darwin', model: 'xyc的MacBook Air' }), 'xyc的MacBook Air')
+ assert.equal(clientDisplayName({ type: 'desktop', platform: 'darwin', model: 'Go Bot · macOS' }), 'macOS')
  const time = new Date(2026, 10, 26, 4, 5).getTime()
  assert.equal(clientLastSeen(time, 'zh-CN'), '11月26日 04:05')
  assert.equal(clientLastSeen(time, 'en'), 'Nov 26, 04:05')

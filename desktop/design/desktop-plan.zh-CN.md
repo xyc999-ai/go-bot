@@ -97,8 +97,10 @@ Forge 配置 macOS ZIP、Windows Squirrel、Linux deb/rpm；保留签名、公�
 
 - 普通会话菜单增加重命名及输入校验，主会话改为固定图钉标识，不允许重命名
   或删除。`session/title` 事件刷新列表，包括从未打开的会话。
-- 主进程保存匿名 installation ID，重连与重新启动保持一致；SSE 使用
-  `X-Go-Bot-Client` 上报 `desktop` 类型及通用系统名称，不读取机器名或序列号。
+- 设备识别已于 2026-11-27 调整：主进程读取系统电脑名称，SSE 使用
+  `X-Go-Bot-Client` 上报 `desktop`、平台和电脑名称，不添加 Go Bot 前缀。
+  macOS 优先使用系统 ComputerName，Windows/Linux 使用 hostname；同名同平台
+  桌面客户端合并记录。删除旧配置中的随机 clientId，不再生成或保存安装标识。
 - 插件市场手动刷新使用 `refresh=true`；后台状态刷新保持普通请求。
 - `/assets/plugins/…` 交由 Controller 转发，补齐新版远程市场的图标和教程；
   保留 HEAD、视频 Range / 206 和流式响应，拒绝资产写请求和跨源重定向。
