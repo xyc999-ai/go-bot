@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { SidebarResize } from './SidebarResize'
 import { useLocale } from '../locale'
 import { Ellipsis, MessageSquare, Pencil, Pin, Plus, Trash2, X } from 'lucide-react'
 import type { SessionRow } from '../api/controller'
@@ -144,6 +145,7 @@ export function Sidebar(props: Props) {
           ))}
           {props.hasMore && <button type="button" className="text-button more" disabled={props.isLoading} onClick={props.onMore}>{t('Load more')}</button>}
         </div>
+        <SidebarResize active={props.drawerOpen && !props.filesOverlay} />
       </aside>
       {menu && (
         <div className="context-menu" role="menu" aria-label={t('Chat actions')}
