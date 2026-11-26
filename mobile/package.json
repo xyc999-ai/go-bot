@@ -1,6 +1,6 @@
 {
   "name": "go-bot-mobile",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {

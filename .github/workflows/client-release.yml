@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing desktop-vX.Y.Z tag (commit must be merged into main)'
+        description: 'Release tag of your choice (for example v0.0.4); created automatically if missing'
         required: true
         type: string
 
@@ -12,42 +12,27 @@ permissions:
   contents: read
 
 concurrency:
-  group: desktop-release-${{ inputs.tag }}
+  group: client-release-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
       commit: ${{ steps.version.outputs.commit }}
-      android-version: ${{ steps.android.outputs.android-version }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ inputs.tag }}
-          fetch-depth: 0
-      - name: Validate tag, package version and release ancestry
-        id: version
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: |
-          git merge-base --is-ancestor HEAD origin/main
-          node <<'NODE'
-          const fs = require('node:fs')
-          const { execFileSync } = require('node:child_process')
-          const tag = process.env.RELEASE_TAG
-          const match = /^desktop-v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(tag)
-          const version = require('./desktop/package.json').version
-          if (!match || match[1] !== version) throw new Error('Tag must match desktop/package.json version')
-          const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\nversion=${version}\ncommit=${commit}\n`)
-          NODE
-
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Read unified client version and build commit
+        id: version
+        run: |
+          node scripts/client-release-config.cjs >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Validate Android version and expected signing certificate
         id: android
         env:
@@ -268,9 +253,9 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_TAG: ${{ inputs.tag }}
       RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-      ANDROID_RELEASE_VERSION: ${{ needs.prepare.outputs.android-version }}
+      RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
       ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
     steps:
@@ -288,14 +273,4 @@ jobs:
       - name: Validate artifact set and generate checksums and release notes
         run: node desktop/scripts/collect-desktop-release.cjs release-artifacts
       - name: Create or update draft only
-        run: |
-          set -euo pipefail
-          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/existing-release.json" 2>/dev/null; then
-            node -e "if (!require(process.argv[1]).isDraft) throw new Error('Refusing to modify a published release')" "$RUNNER_TEMP/existing-release.json"
-            gh release edit "$RELEASE_TAG" --draft --title "Go Bot Clients — Desktop $RELEASE_VERSION / Android $ANDROID_RELEASE_VERSION" --notes-file RELEASE_NOTES.md
-          else
-            args=(--verify-tag --draft --title "Go Bot Clients — Desktop $RELEASE_VERSION / Android $ANDROID_RELEASE_VERSION" --notes-file RELEASE_NOTES.md)
-            if [[ "$RELEASE_VERSION" == *-* ]]; then args+=(--prerelease); fi
-            gh release create "$RELEASE_TAG" "${args[@]}"
-          fi
-          gh release upload "$RELEASE_TAG" release-artifacts/* --clobber
+        run: bash scripts/publish-client-release.sh
