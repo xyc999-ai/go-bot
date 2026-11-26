@@ -7,7 +7,7 @@ const config = { version: '0.0.3', versionCode: 3, packageName: 'com.gobot.mobil
 const badging = "package: name='com.gobot.mobile' versionCode='3' versionName='0.0.3' platformBuildVersionName='16'\nnative-code: 'arm64-v8a'\n"
 const digest = 'a'.repeat(64)
 
-test('APK metadata must match independent mobile version, package and ARM64 release', () => {
+test('APK metadata must match mobile version, package and ARM64 release', () => {
   assert.equal(releaseConfig().version, require('../package.json').version)
   validateBadging(badging, config)
   for (const invalid of [badging.replace('0.0.3', '0.3.2'), badging.replace("versionCode='3'", "versionCode='4'"),

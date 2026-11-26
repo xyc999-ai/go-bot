@@ -25,15 +25,24 @@ npm run android
 ### GitHub Actions：与桌面端一起发布
 
 在 **Actions → Client release → Run workflow** 手动运行
-[发布工作流](../.github/workflows/client-release.yml)，输入已经合并到 `main` 的
-`desktop-v<桌面版本>` 标签。保留这个标签格式以兼容桌面发布；一次运行并行构建
+[发布工作流](../.github/workflows/client-release.yml)，选择需要构建的分支，手动填写
+Tag 名称（例如 `v0.0.4` 或 `client-build-2026-11`），无需提前创建 Tag，也不限制
+项目专用格式或要求 Tag 与包版本对应。一次运行并行构建
 macOS、Windows 和 Android，全部成功后才创建或更新同一份**草稿 Release**。
-推送代码或标签不会自动构建，也不会自动公开发布。
+构建固定使用所选分支在运行时的提交；创建草稿 Release 时，GitHub 会为不存在的
+Tag 使用这个提交，已有 Tag 则保留原指向。推送代码或标签不会自动构建，也不会自动公开发布。
 
-Android 使用 `mobile/package.json` 与 `app.json` 中一致的版本号，以及
-`app.json` 的 `android.versionCode`，无需与桌面版本相同。每次 Android 正式升级，
-应同时更新这两处版本号并递增 `versionCode`；不要为了与桌面合并 CI 重置它。
-桌面单独更新时，可以再次构建相同的 Android 版本。
+所有客户端版本保持一致，CI 从 `desktop/package.json` 的 `version` 读取主版本，
+并校验 `mobile/package.json`、`mobile/app.json` 和 `frontend/package.json` 一致。
+更新版本时也要同步三个客户端的 `package-lock.json` 根版本。当前统一为 `0.0.4`，
+Android 的 `android.versionCode` 为 `4`；以后每次 Android 升级还需递增这个整数。
+Expo Prebuild 会将 `expo.version` 同步到 iOS 展示版本和 Android `versionName`，
+将 `android.versionCode` 和 `ios.buildNumber` 写入对应工程，但不会自动递增构建号。
+当前 iOS `ios.buildNumber` 也显式设置为 `"4"`。两端构建号不要求相同；iOS 同一
+展示版本再次上传 TestFlight / App Store 时应使用新的构建号，Android 升级应增加
+`versionCode`。这些构建号与统一展示版本 `0.0.4` 分开管理。
+项目包名分别是 `go-bot-desktop`、`go-bot-mobile`、`go-bot-web`。
+Release 标题自动生成为 `Go Bot v<版本>`，例如 `Go Bot v0.0.4`，与手动输入的 Tag 独立。
 
 CI 使用 Node 24、JDK 17、Android SDK 37 / Build Tools 37.0.0 和
 React Native 0.88 对应的 NDK 27.1.12297006。先运行类型检查和测试，执行

@@ -205,9 +205,18 @@ APPLE_TEAM_ID='YOURTEAMID' npm run verify:mac -- '/path/to/go-bot-release.dmg'
 The [Client release workflow](../.github/workflows/client-release.yml) is
 **manual-only** (`workflow_dispatch`): pushes, pull requests and version tags do
 not automatically start a client release build. It tests and packages macOS,
-Windows and Android in a **single run**, started with an existing
-`desktop-v<version>` tag. The tag must match `desktop/package.json`, and its
-commit must already be merged into `main`.
+Windows and Android in a **single run**. Select the branch to build and enter
+any GitHub-supported tag name, such as `v0.0.4` or `client-build-2026-11`.
+There is no project-specific tag format, tag/version binding or requirement to
+create the tag in advance. Missing tags are created by GitHub when the draft
+Release is created, targeting the exact commit used by every build job. Existing
+tags are reused without moving them.
+
+The version comes from `desktop/package.json`; `mobile/package.json`,
+`mobile/app.json` and `frontend/package.json` must use the same version.
+Package identities remain `go-bot-desktop`, `go-bot-mobile` and `go-bot-web`.
+For version `0.0.4`, the Release title is **Go Bot v0.0.4** and every client
+installer filename uses `0.0.4`, independently of the entered tag.
 
 It builds/signs/notarizes macOS arm64 and x64 on separate compatible runners
 (Xcode 26+), builds an unsigned Windows x64 installer and a signed Android ARM64
@@ -239,8 +248,8 @@ keys. An Apple account password/app-specific password is not used by this workfl
 No Windows signing secrets are needed. Android additionally requires the four
 repository Secrets and existing release certificate fingerprint described in
 [the mobile release guide](../mobile/README.md#github-actions与桌面端一起发布).
-Android keeps its own version and versionCode; the shared release tag continues
-to use the desktop version. Missing Android signing configuration or a failed
+Android shares the client version; its integer versionCode is increased for
+each Android upgrade. Missing Android signing configuration or a failed
 Android job prevents draft Release assembly.
 
 The helper below configures the settings using GitHub CLI. Run it yourself in a
@@ -255,13 +264,13 @@ bash desktop/scripts/configure-macos-ci.sh \
   KEY_ID TEAM_ID 'Developer ID Application: Your Company (TEAM_ID)'
 ```
 
-After merging the source/workflow into `main`, create and push the matching tag
-(for example `desktop-v0.3.2` for version `0.3.2`). This does not start a build.
-In GitHub, open **Actions > Client release > Run workflow**, select `main`,
-enter the existing tag in the `tag` input, and run the workflow. Each
+After merging this workflow into the default branch, open **Actions > Client
+release > Run workflow**, select the branch to build, enter your chosen tag in
+the `tag` input, and run the workflow. You do not need to create or push a tag
+beforehand. Each
 platform/architecture remains a separate download in the same draft Release,
-accompanied by `SHA256SUMS` and macOS/Android verification reports. Android
-filenames and release notes state its independent mobile version.
+accompanied by `SHA256SUMS` and macOS/Android verification reports. All client
+filenames and the Release title use the unified version from package metadata.
 
 The renderer includes font, icon and dependency license notices; the source
 snapshot retains the project's MIT license. Generated files, dependencies,

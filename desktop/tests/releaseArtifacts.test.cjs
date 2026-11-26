@@ -5,7 +5,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { collectArtifacts, macChecks, hashFile } = require('../scripts/collect-desktop-release.cjs')
 
-const android = { version: '0.0.3', versionCode: 3, packageName: 'com.gobot.mobile', certificateSha256: 'a'.repeat(64) }
+const android = { version: '1.2.3', versionCode: 3, packageName: 'com.gobot.mobile', certificateSha256: 'a'.repeat(64) }
 const { checks: androidChecks } = require('../../mobile/scripts/android-release.cjs')
 
 async function fixture(t) {
@@ -26,7 +26,7 @@ async function fixture(t) {
     }))
   }
   await fs.writeFile(path.join(dir, 'go-bot-1.2.3-windows-x64-setup.exe'), 'unsigned installer fixture')
-  const apk = 'go-bot-0.0.3-android-arm64.apk'
+  const apk = 'go-bot-1.2.3-android-arm64.apk'
   await fs.writeFile(path.join(dir, apk), 'signed Android fixture')
   await fs.writeFile(path.join(dir, apk.replace('.apk', '.verification.json')), JSON.stringify({
     ...android, platform: 'android', arch: 'arm64', checks: androidChecks,
@@ -38,7 +38,7 @@ async function fixture(t) {
 test('complete verified releases produce reproducible checksums and explicit unsigned Windows notes', async t => {
   const dir = await fixture(t)
   const notes = await collectArtifacts(dir, '1.2.3', 'ABCDEFGHIJ', android)
-  assert.match(notes, /Android 0\.0\.3 \(versionCode 3\)/)
+  assert.match(notes, /^Go Bot v1\.2\.3/)
   assert.match(notes, /Windows x64: unsigned/)
   assert.match(notes, /127\.0\.0\.1:8080/)
   const first = await fs.readFile(path.join(dir, 'SHA256SUMS'), 'utf8')
@@ -75,13 +75,13 @@ test('wrong signing teams and omitted verification gates prevent publishing', as
 test('Android APK tampering and wrong certificate prevent release assembly', async t => {
   const dir = await fixture(t)
   await assert.rejects(collectArtifacts(dir, '1.2.3', 'ABCDEFGHIJ', { ...android, certificateSha256: 'b'.repeat(64) }), /Android verification/)
-  await fs.appendFile(path.join(dir, 'go-bot-0.0.3-android-arm64.apk'), 'tamper')
+  await fs.appendFile(path.join(dir, 'go-bot-1.2.3-android-arm64.apk'), 'tamper')
   await assert.rejects(collectArtifacts(dir, '1.2.3', 'ABCDEFGHIJ', android), /APK hash mismatch/)
 })
 
 test('Android version drift and missing verification gates prevent release assembly', async t => {
   const dir = await fixture(t)
-  const file = path.join(dir, 'go-bot-0.0.3-android-arm64.verification.json')
+  const file = path.join(dir, 'go-bot-1.2.3-android-arm64.verification.json')
   await assert.rejects(collectArtifacts(dir, '1.2.3', 'ABCDEFGHIJ', { ...android, versionCode: 4 }), /Android verification/)
   const report = JSON.parse(await fs.readFile(file, 'utf8'))
   report.checks = report.checks.filter(check => check !== 'apk-signature')
@@ -89,4 +89,9 @@ test('Android version drift and missing verification gates prevent release assem
   await assert.rejects(collectArtifacts(dir, '1.2.3', 'ABCDEFGHIJ', android), /Android verification/)
   await fs.unlink(file)
   await assert.rejects(collectArtifacts(dir, '1.2.3', 'ABCDEFGHIJ', android), /Missing/)
+})
+
+test('different desktop and Android versions cannot share a release', async t => {
+  const dir = await fixture(t)
+  await assert.rejects(collectArtifacts(dir, '1.2.3', 'ABCDEFGHIJ', { ...android, version: '1.2.4' }), /versions must match/)
 })

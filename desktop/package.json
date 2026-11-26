@@ -1,7 +1,7 @@
 {
   "name": "go-bot-desktop",
   "productName": "Go Bot",
-  "version": "0.3.2",
+  "version": "0.0.4",
   "description": "Go Bot desktop client",
   "author": "Go Bot contributors",
   "license": "MIT",

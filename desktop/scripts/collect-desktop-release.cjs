@@ -2,6 +2,7 @@ const fs = require('node:fs/promises')
 const path = require('node:path')
 const { createReadStream } = require('node:fs')
 const { createHash } = require('node:crypto')
+const { clientReleaseConfig } = require('../../scripts/client-release-config.cjs')
 const { releaseConfig, certificateDigest, checks: androidChecks } = require('../../mobile/scripts/android-release.cjs')
 
 async function hashFile(file) {
@@ -22,6 +23,7 @@ async function collectArtifacts(directory, version, teamId, android) {
       !Number.isSafeInteger(android.versionCode) || android.versionCode < 1 || android.packageName !== 'com.gobot.mobile') {
     throw new Error('Release collection requires valid Android metadata')
   }
+  if (android.version !== version) throw new Error('All client release versions must match')
   const androidDigest = certificateDigest(android.certificateSha256)
   const androidBase = `go-bot-${android.version}-android-arm64`
   const expected = ['arm64', 'x64'].flatMap(arch => {
@@ -64,7 +66,7 @@ async function collectArtifacts(directory, version, teamId, android) {
     throw new Error('Invalid Android verification report or APK hash mismatch')
   }
   await fs.writeFile(path.join(directory, 'SHA256SUMS'), expected.map(name => `${hashes.get(name)}  ${name}\n`).join(''))
-  return `Go Bot Clients — Desktop ${version} / Android ${android.version} (versionCode ${android.versionCode})\n\n` +
+  return `Go Bot v${version}\n\n` +
     `- Android ARM64: signed APK for direct installation. Allow installation from your browser/file manager when prompted. Existing installations require the same signing key and a compatible versionCode. Connect to a reachable Controller address in the app.\n` +
     '- macOS: Developer ID signed and Apple notarized. Choose arm64 for Apple Silicon or x64 for Intel. Open the DMG and drag Go Bot into Applications.\n' +
     '- Windows x64: unsigned installer. Windows may show an unknown publisher or SmartScreen warning; managed devices may block installation.\n' +
@@ -79,7 +81,9 @@ async function collectArtifacts(directory, version, teamId, android) {
 module.exports = { collectArtifacts, macChecks, hashFile }
 
 if (require.main === module) {
-  collectArtifacts(path.resolve(process.argv[2] || 'release-artifacts'), process.env.RELEASE_VERSION, process.env.APPLE_TEAM_ID,
+  const { version } = clientReleaseConfig()
+  if (process.env.RELEASE_VERSION !== version) throw new Error('Release version must match all client packages')
+  collectArtifacts(path.resolve(process.argv[2] || 'release-artifacts'), version, process.env.APPLE_TEAM_ID,
     { ...releaseConfig(), certificateSha256: process.env.ANDROID_SIGNING_CERT_SHA256 })
     .then(notes => fs.writeFile('RELEASE_NOTES.md', notes))
     .catch(error => { console.error(error.message); process.exitCode = 1 })
