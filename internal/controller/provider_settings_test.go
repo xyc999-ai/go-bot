@@ -234,3 +234,59 @@ func TestSearchProviderSaveAndSelectAreSeparate(t *testing.T) {
 		t.Fatal("removing the active key did not disable that provider on Host")
 	}
 }
+
+func TestKeyOptionalSearchProviderActivatesWithoutKey(t *testing.T) {
+	var applied []providersettings.Selection
+	host := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var change providersettings.Selection
+		if err := json.NewDecoder(r.Body).Decode(&change); err != nil {
+			t.Error(err)
+		}
+		applied = append(applied, change)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer host.Close()
+	store := &memoryStore{records: map[string]Account{
+		"alice": {DesiredState: running, HostEndpoint: host.URL, HostToken: "host-token"},
+	}}
+	m := New(config.Default(), nil, store)
+	call := func(method, suffix, body string, status int) map[string]any {
+		t.Helper()
+		r := httptest.NewRequest(method, webSearchSettingsPath+suffix, strings.NewReader(body))
+		r.Host = "127.0.0.1"
+		r.Header.Set(UserHeader, "alice")
+		w := httptest.NewRecorder()
+		m.Handler().ServeHTTP(w, r)
+		if w.Code != status || strings.Contains(w.Body.String(), "-secret") {
+			t.Fatalf("%s %s: unexpected status or credential disclosure: %d %s", method, body, w.Code, w.Body)
+		}
+		var result map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	got := call("GET", "", "", 200)
+	keyOptional := map[string]bool{}
+	for _, p := range got["providers"].([]any) {
+		entry := p.(map[string]any)
+		keyOptional[entry["id"].(string)] = entry["keyOptional"] == true
+	}
+	if got["provider"] != "deepseek" || !keyOptional["keenable"] || keyOptional["tavily"] || keyOptional["deepseek"] {
+		t.Fatalf("catalog does not mark only Keenable as key-optional, or the default moved: %v", got)
+	}
+	// Keyed providers still need a saved key before they can be used.
+	call("PUT", "", `{"provider":"tavily","activate":true}`, 400)
+	got = call("PUT", "", `{"provider":"keenable","activate":true}`, 200)
+	if got["provider"] != "keenable" || len(applied) != 1 || applied[0].Provider != "keenable" || applied[0].APIKey != "" {
+		t.Fatalf("keyless activation was not applied: %v %+v", got, applied)
+	}
+	call("PUT", "", `{"provider":"keenable","apiKey":"keenable-secret","activate":true}`, 200)
+	if len(applied) != 2 || applied[1].APIKey != "keenable-secret" {
+		t.Fatal("a saved Keenable key was not applied")
+	}
+	got = call("DELETE", "?provider=keenable", "", 200)
+	if got["provider"] != "keenable" || len(applied) != 3 || applied[2].Provider != "keenable" || applied[2].APIKey != "" {
+		t.Fatal("removing the Keenable key did not fall back to keyless use")
+	}
+}

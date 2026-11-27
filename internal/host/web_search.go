@@ -59,7 +59,7 @@ func (s *hostWebSearch) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var provider web.SearchProvider
-	if settings.APIKey != "" {
+	if settings.APIKey != "" || webproviders.KeyOptional(settings.Provider) {
 		var err error
 		provider, err = factory(web.Options{APIKey: settings.APIKey})
 		if err != nil {

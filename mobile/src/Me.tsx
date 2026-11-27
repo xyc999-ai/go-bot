@@ -268,11 +268,12 @@ function Providers({ api, page }: { api: Controller; page: ProviderPage }) {
     } finally { setBusy(false) }
   }
   const entry = data?.entries[selected]
+  const keyOptional = !!data?.providers.find(provider => provider.id === selected)?.keyOptional
   return <SheetScroll>
     {data?.providers.map(provider => <Pressable accessibilityRole="button" accessibilityState={{ selected: provider.id === selected }} key={provider.id} onPress={() => select(provider.id, data)}>
       <View style={[s.row, { minHeight: 48, paddingHorizontal: 12, borderRadius: 15, backgroundColor: provider.id === selected ? wash : glass }]}>
         <Text style={[s.body, { flex: 1 }]}>{provider.name}</Text>
-        <Text style={s.caption}>{data.provider === provider.id ? t('当前使用') : data.entries[provider.id]?.hasApiKey ? t('已配置') : ''}</Text>
+        <Text style={s.caption}>{data.provider === provider.id ? t('当前使用') : data.entries[provider.id]?.hasApiKey ? t('已配置') : provider.keyOptional ? t('无需密钥') : ''}</Text>
       </View>
     </Pressable>)}
     {!!selected && <>
@@ -281,7 +282,7 @@ function Providers({ api, page }: { api: Controller; page: ProviderPage }) {
       <Button label={t('保存配置')} disabled={!key.trim() && !entry?.hasApiKey} busy={busy} onPress={() => update(() => api.saveProvider(page, {
         provider: selected, ...(key.trim() && { apiKey: key.trim() }), ...(page === 'image-generation' && model.trim() && { model: model.trim() }), activate: false,
       }))} />
-      <Button primary label={t('保存并使用')} disabled={!key.trim() && !entry?.hasApiKey} busy={busy} onPress={() => update(() => api.saveProvider(page, {
+      <Button primary label={t('保存并使用')} disabled={!key.trim() && !entry?.hasApiKey && !keyOptional} busy={busy} onPress={() => update(() => api.saveProvider(page, {
         provider: selected, ...(key.trim() && { apiKey: key.trim() }), ...(page === 'image-generation' && model.trim() && { model: model.trim() }), activate: true,
       }))} />
       {entry?.hasApiKey && <Button label={t('移除密钥')} dangerTone disabled={busy} onPress={() => update(() => api.removeProvider(page, selected))} />}

@@ -21,6 +21,12 @@ func New(timeout time.Duration) *http.Client {
 
 // Post returns the upstream status without exposing error bodies or credentials.
 func Post(ctx context.Context, client *http.Client, endpoint, authHeader, credential string, input, output any, limit int64) (int, error) {
+	return PostHeaders(ctx, client, endpoint, map[string]string{authHeader: credential}, input, output, limit)
+}
+
+// PostHeaders is Post for a service that needs more than one request header,
+// or none for credentials.
+func PostHeaders(ctx context.Context, client *http.Client, endpoint string, headers map[string]string, input, output any, limit int64) (int, error) {
 	body, err := json.Marshal(input)
 	if err != nil {
 		return 0, err
@@ -30,7 +36,9 @@ func Post(ctx context.Context, client *http.Client, endpoint, authHeader, creden
 		return 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(authHeader, credential)
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
 	res, err := client.Do(req)
 	if err != nil {
 		return 0, err

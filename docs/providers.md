@@ -86,9 +86,11 @@ Host uses that registry to resolve the provider.
 | `tavily` | Tavily Search, Basic depth | Tavily API key from [Tavily dashboard](https://app.tavily.com/). [Official API](https://docs.tavily.com/documentation/api-reference/endpoint/search) |
 | `brave` | Brave Search, LLM Context endpoint | Search API key with LLM Context access from [Brave dashboard](https://api-dashboard.search.brave.com/). [Official API](https://api-dashboard.search.brave.com/documentation/services/llm-context) |
 | `firecrawl` | Firecrawl Search, web results | Firecrawl API key from [Firecrawl dashboard](https://www.firecrawl.dev/app/api-keys). [Official API](https://docs.firecrawl.dev/api-reference/endpoint/search) |
+| `keenable` | Keenable Search | Optional. Works without a key; a key from the [Keenable console](https://keenable.ai/console) raises rate limits. [Official API](https://docs.keenable.ai/api-reference) |
 
 In **Settings → Web search**, set up a service, save its API key, then choose
-**Use provider**. Mobile uses **Me → Web search**, with **Save settings** and
+**Use provider**. A service that needs no key (Keenable) can be chosen with
+**Use provider** right away. Mobile uses **Me → Web search**, with **Save settings** and
 **Save and use**. Saving does not make a search request. The same account catalog
 supplies both clients; no extra environment variables or model names are needed.
 The default provider remains DeepSeek until another saved provider is selected.
@@ -116,13 +118,21 @@ It does not request page content, so each result keeps its URL, title and
 `description` snippet, with no publication date. HTTP 402 (out of Firecrawl
 credits) maps to a quota error and 429 to rate limiting.
 
+Keenable calls `POST https://api.keenable.ai/v1/search/public` without a key, or
+`POST https://api.keenable.ai/v1/search` with `X-API-Key` once a key is saved.
+The key only raises rate limits; the keyless endpoint allows 1,000 requests per
+hour per IP. Requests send `X-Keenable-Title: Go Bot` and at most 50 results.
+Each result's `snippet` is page text, so it becomes the source summary, with no
+publication date. HTTP 429 maps to rate limiting.
+
 Search and extraction remain distinct:
 search-only providers are not forced to fetch pages. Results use URL/title,
 snippet, summary and optional publication time. Preserve empty results and unknown
 fields honestly. Honor context, bound responses, reject credential redirects and
 test 401/429, cancellation, malformed responses and unknown providers.
 
-Each provider receives the account search key. The factory
+Each provider receives the account search key, which is empty for a provider
+registered with `keyOptional` until a key is saved. The factory
 returns a provider implementing `web.SearchProvider`. `harness/tools` owns
 query merging, rendered text and replay metadata for every backend. See the [web tool parity record](web-tools-parity-plan.zh-CN.md).
 

@@ -35,3 +35,24 @@ func TestWebSearchSettingsSwitchLiveProviders(t *testing.T) {
 		t.Fatal("removing the active key kept a live search client")
 	}
 }
+
+func TestWebSearchSettingsInstallKeyOptionalProviderWithoutKey(t *testing.T) {
+	var host hostWebSearch
+	apply := func(body string, status int) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPut, "/internal/host/web-search", strings.NewReader(body))
+		out := httptest.NewRecorder()
+		host.handle(out, req)
+		if out.Code != status {
+			t.Fatalf("apply settings: got HTTP %d, want %d", out.Code, status)
+		}
+	}
+	apply(`{"provider":"keenable","apiKey":""}`, 204)
+	if host.provider == nil || host.provider.Name() != "keenable" {
+		t.Fatal("Keenable was not installed without a key")
+	}
+	apply(`{"provider":"tavily","apiKey":""}`, 204)
+	if host.configured() {
+		t.Fatal("a provider that needs a key was installed without one")
+	}
+}

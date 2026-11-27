@@ -93,7 +93,7 @@ export function getModelSettings(userId: string, signal?: AbortSignal) {
 }
 
 export type ProviderPage = 'web-search' | 'image-generation'
-export type Provider = { id: string; name: string; defaultModel?: string }
+export type Provider = { id: string; name: string; defaultModel?: string; keyOptional?: boolean }
 export type ProviderSettings = {
   provider: string
   defaultProvider: string

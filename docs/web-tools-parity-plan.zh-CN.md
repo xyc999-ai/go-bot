@@ -5,7 +5,7 @@
 ## 工具与供应商
 
 - `web_search` 由 Go 工具系统调度，调用供应商无关的搜索接口，输出来源、链接和摘要。搜索供应商作为 adapter 接入，不由前端实现搜索。
-- 当前供应商为 DeepSeek、智普、豆包、Tavily、Brave 和 Firecrawl。用户在 Web 或移动端保存配置并选择使用的供应商；Controller 保存账号配置并同步到 Host。
+- 当前供应商为 DeepSeek、智普、豆包、Tavily、Brave、Firecrawl 和 Keenable（Keenable 无需密钥，保存密钥只提高限额）。用户在 Web 或移动端保存配置并选择使用的供应商；Controller 保存账号配置并同步到 Host。
 - 搜索凭证使用该账号保存的搜索设置，不复用模型 API Key，不在启动脚本中自动初始化搜索凭证。没有可用配置时，搜索调用应明确报错；不影响普通会话和不需要搜索的工具。
 - DeepSeek adapter 复用当前用户问题作为 `ori_question` 等供应商请求信息；供应商专有字段和 HTTP 逻辑放在对应的 provider / thirdparty 代码中。
 
