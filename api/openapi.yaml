@@ -1045,7 +1045,7 @@ paths:
             schema:
               type: object
               properties:
-                provider: {type: string, default: deepseek, enum: [deepseek, zhipu, doubao, tavily, brave]}
+                provider: {type: string, default: deepseek, enum: [deepseek, zhipu, doubao, tavily, brave, firecrawl]}
                 activate:
                   type: boolean
                   description: Set false to save without changing the active provider. Set true to use this provider with a saved key. Omit for legacy save-and-select behavior.

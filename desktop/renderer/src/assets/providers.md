@@ -85,6 +85,7 @@ Host uses that registry to resolve the provider.
 | `doubao` | Doubao Search Custom, text-to-web | Dedicated Doubao Search Custom key. [Official docs](https://docs.volcengine.com/docs/networked-search/networked-search?lang=zh) |
 | `tavily` | Tavily Search, Basic depth | Tavily API key from [Tavily dashboard](https://app.tavily.com/). [Official API](https://docs.tavily.com/documentation/api-reference/endpoint/search) |
 | `brave` | Brave Search, LLM Context endpoint | Search API key with LLM Context access from [Brave dashboard](https://api-dashboard.search.brave.com/). [Official API](https://api-dashboard.search.brave.com/documentation/services/llm-context) |
+| `firecrawl` | Firecrawl Search, web results | Firecrawl API key from [Firecrawl dashboard](https://www.firecrawl.dev/app/api-keys). [Official API](https://docs.firecrawl.dev/api-reference/endpoint/search) |
 
 In **Settings → Web search**, set up a service, save its API key, then choose
 **Use provider**. Mobile uses **Me → Web search**, with **Save settings** and
@@ -108,6 +109,12 @@ metadata supplies optional titles, descriptions and absolute dates; relative
 ages and content-fetch timestamps are not used as publication dates. The API's
 default country/language preferences apply; the adapter does not infer a locale
 from UI language or rewrite the Agent's query.
+
+Firecrawl calls `POST https://api.firecrawl.dev/v2/search` with Bearer
+authentication, `sources: ["web"]`, `origin: "go-bot"` and at most 50 results.
+It does not request page content, so each result keeps its URL, title and
+`description` snippet, with no publication date. HTTP 402 (out of Firecrawl
+credits) maps to a quota error and 429 to rate limiting.
 
 Search and extraction remain distinct:
 search-only providers are not forced to fetch pages. Results use URL/title,

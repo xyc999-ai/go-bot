@@ -383,6 +383,7 @@
   "File unavailable.": "檔案不可用。",
   "Files": "檔案",
   "Finished": "已完成",
+  "Firecrawl API key": "Firecrawl API 金鑰",
   "First open the authorization link above and approve access in your browser. Then paste the complete Google redirect URL from the address bar.": "先開啟上方授權連結，在瀏覽器中同意授權。完成後，再貼上位址列中的完整 Google 回跳地址。",
   "First open the authorization link above and approve access in your browser. Then paste the complete X redirect URL from the address bar.": "先開啟上方授權連結，在瀏覽器中同意授權。完成後，再貼上位址列中的完整 X 回跳地址。",
   "Fixed interval": "固定間隔",

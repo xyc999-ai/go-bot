@@ -89,7 +89,7 @@ first model of the default endpoint. An individual session can switch models
 during the lifetime of its Host. Child agents inherit the parent turn's route.
 The Host uses a 1,000,000-token context budget.
 
-In **Settings → Web search**, save a key for DeepSeek, Zhipu, Doubao, Tavily or Brave,
+In **Settings → Web search**, save a key for DeepSeek, Zhipu, Doubao, Tavily, Brave or Firecrawl,
 then choose **Use provider** on your preferred service. Chat and page fetching
 work without a search key. For image generation, install and enable **Gemini API CLI**
 in the plugin market and configure its API key in **Accounts and authorization**.

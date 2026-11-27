@@ -162,7 +162,7 @@ They share the account, model setup and chat flow below.
    opens your main chat, with a welcome message.
 2. In **Model settings**, choose **OpenAI Responses** or **Anthropic Messages** in the protocol dropdown, then add the endpoint URL, API key,
    and at least one model ID. Return to the main chat and send a message; **New chat** creates a separate conversation.
-3. For web search, save a key for DeepSeek, Zhipu, Doubao, Tavily, or Brave Search under **Settings → Web search**, then choose **Use provider**. For image generation and other Gemini media capabilities, install and enable **Gemini API CLI** in the plugin market and configure its API key. [Provider setup](docs/providers.md) · [Plugin connection](docs/plugin-account-setup.md#gemini-api-cli)
+3. For web search, save a key for DeepSeek, Zhipu, Doubao, Tavily, Brave Search, or Firecrawl under **Settings → Web search**, then choose **Use provider**. For image generation and other Gemini media capabilities, install and enable **Gemini API CLI** in the plugin market and configure its API key. [Provider setup](docs/providers.md) · [Plugin connection](docs/plugin-account-setup.md#gemini-api-cli)
 
 Choose English, Simplified or Traditional Chinese, Spanish, Japanese, Brazilian Portuguese, French, German or Korean on the account page or in **Settings**. Web, desktop and mobile share these languages and remember your choice. On first launch, the interface follows the first supported system/browser language, falling back to English.
 

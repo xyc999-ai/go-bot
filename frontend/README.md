@@ -3,7 +3,7 @@
 Follow the [local Quickstart](../README.md#quickstart) from the repository root and open
 [http://127.0.0.1:8080/](http://127.0.0.1:8080/). The Controller serves the
 page and relays API calls and SSE to the selected account's Docker or ECI Host.
-Create or open an account by name. Configure OpenAI Responses or Anthropic Messages endpoints using the protocol dropdown in Model settings, and use the model picker in the chat header to change its model. Under **Settings → Web search**, save a key for DeepSeek, Zhipu, Doubao, Tavily, or Brave Search and choose **Use provider**.
+Create or open an account by name. Configure OpenAI Responses or Anthropic Messages endpoints using the protocol dropdown in Model settings, and use the model picker in the chat header to change its model. Under **Settings → Web search**, save a key for DeepSeek, Zhipu, Doubao, Tavily, Brave Search, or Firecrawl and choose **Use provider**.
 
 For a custom mobile, desktop or web interface, use the Controller's
 [HTTP and SSE API](../docs/api.md). The [minimal example](../examples/frontend-minimal/index.html)
