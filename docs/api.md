@@ -10,7 +10,7 @@ and desktop clients can use the same HTTP endpoints and SSE streams. Keep
 access to Controller within a trusted network because account names identify
 users without password authentication.
 
-Serve a custom browser UI from the same origin as the Controller API, or use the loopback development origin described in the [frontend guide](../frontend/README.md). Remote clients can use an HTTPS gateway such as Tailscale Serve. [Controller configuration](configuration.md#runtime-storage-and-entry)
+Serve a custom browser UI from the same origin as the Controller API, or use the loopback development origin described in the [frontend guide](../frontend/README.md). Remote clients can use an HTTPS gateway such as Tailscale Serve. See [Controller configuration](configuration.md#runtime-storage-and-entry).
 
 | Method/path | Purpose |
 |---|---|
