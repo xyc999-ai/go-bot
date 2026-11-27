@@ -229,7 +229,7 @@ the workspace volume; configure it again after replacing the Host container.
 | ECI with `nas` | Account directory on NAS, mounted at `/root/harness` | Releases the instance and keeps NAS files |
 
 Closing the browser leaves the Host running. For ECI, use **Stop Host** when
-you no longer need the instance to stop its compute charges.
+you no longer need the instance, to stop its compute charges.
 
 ## Mobile app
 
