@@ -58,7 +58,7 @@ export const chinese: Readonly<Record<string, string>> = {
   'Set up a model to start chatting.': '请先配置模型，再开始聊天。',
   'The model for this chat is unavailable. Choose another model.': '当前会话的模型不可用，请重新选择。',
   'Your message and attachments are kept in the composer.': '文字和附件已保留在输入框中。',
-  "Brave Search API key": "Brave 搜索 API 密钥", "Tavily API key": "Tavily API 密钥",
+  "Brave Search API key": "Brave 搜索 API 密钥", "Tavily API key": "Tavily API 密钥", "Firecrawl API key": "Firecrawl API 密钥",
   "Approve this plan and leave plan mode?": "确认方案后开始执行，或提出修改意见继续规划。",
   "Approve": "按此方案执行", "Keep planning": "继续完善方案",
   "Leave plan mode; the plan is carried out from the next step.": "退出规划模式，从下一步开始执行方案。",
