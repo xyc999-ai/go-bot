@@ -94,7 +94,7 @@ func (m *Manager) providerSettingsHTTP(w http.ResponseWriter, r *http.Request, i
 					httpError(w, http.StatusBadRequest, "invalid_image_model")
 					return
 				}
-			} else if change.Model != "" || (change.APIKey == nil && entry.APIKey == "") {
+			} else if change.Model != "" || (change.APIKey == nil && entry.APIKey == "" && !catalog[index].KeyOptional) {
 				httpError(w, http.StatusBadRequest, "invalid_web_search_key")
 				return
 			}
@@ -106,7 +106,7 @@ func (m *Manager) providerSettingsHTTP(w http.ResponseWriter, r *http.Request, i
 				}
 			}
 		}
-		if activate && change.Activate != nil && entry.APIKey == "" {
+		if activate && change.Activate != nil && entry.APIKey == "" && !catalog[index].KeyOptional {
 			httpError(w, http.StatusBadRequest, "provider_key_required")
 			return
 		}

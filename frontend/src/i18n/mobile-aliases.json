@@ -176,6 +176,7 @@
   "无法保存供应商设置。": "Could not save provider settings.",
   "当前使用": "In use",
   "已配置": "Configured",
+  "无需密钥": "No API key needed",
   "模型名": "Model name",
   "保存配置": "Save settings",
   "保存并使用": "Save and activate",

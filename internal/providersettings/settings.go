@@ -10,6 +10,7 @@ type Descriptor struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	DefaultModel string `json:"defaultModel,omitempty"`
+	KeyOptional  bool   `json:"keyOptional,omitempty"`
 }
 
 type Credential struct {

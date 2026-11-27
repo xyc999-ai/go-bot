@@ -9,6 +9,7 @@ const keyHelp: Record<string, { label: string; url: string }> = {
   brave: { label: 'Brave Search API key', url: 'https://api-dashboard.search.brave.com/' },
   tavily: { label: 'Tavily API key', url: 'https://app.tavily.com/' },
   firecrawl: { label: 'Firecrawl API key', url: 'https://www.firecrawl.dev/app/api-keys' },
+  keenable: { label: 'Keenable API key', url: 'https://keenable.ai/console' },
   deepseek: { label: 'DeepSeek Search API', url: 'https://platform.deepseek.com/' },
   zhipu: { label: 'BigModel API key', url: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys' },
   doubao: { label: 'Doubao Search Custom API key', url: 'https://docs.volcengine.com/docs/networked-search/networked-search?lang=zh' },
@@ -86,7 +87,7 @@ export function ToolProviders({ userId, page }: { userId: string; page: Provider
   }
 
   const active = settings?.providers.find(provider => provider.id === settings.provider)
-  const activeReady = active && settings?.entries[active.id]?.hasApiKey
+  const activeReady = active && (settings?.entries[active.id]?.hasApiKey || active.keyOptional)
 
   return <div className="provider-settings">
     <div className="provider-settings-intro">
@@ -108,6 +109,7 @@ export function ToolProviders({ userId, page }: { userId: string; page: Provider
         {settings.providers.map(provider => {
           const entry = settings.entries[provider.id]
           const hasKey = !!entry?.hasApiKey
+          const ready = hasKey || !!provider.keyOptional
           const selected = provider.id === settings.provider
           const expanded = editing === provider.id
           const help = keyHelp[provider.id]
@@ -118,11 +120,11 @@ export function ToolProviders({ userId, page }: { userId: string; page: Provider
             <div className="provider-row-main">
               <div className="provider-row-identity">
                 <h3>{provider.name}</h3>
-                <p>{isImage && hasKey ? entry?.model ?? provider.defaultModel : hasKey ? t('API key saved') : t('No API key')}</p>
+                <p>{isImage && hasKey ? entry?.model ?? provider.defaultModel : hasKey ? t('API key saved') : provider.keyOptional ? t('No API key needed') : t('No API key')}</p>
               </div>
               <div className="provider-row-actions">
-                {selected && hasKey && !pending && <span className="provider-active"><Check size={15} aria-hidden="true" /> {t('In use')}</span>}
-                {(pending || (hasKey && !selected)) && <button type="button" className="model-secondary provider-use"
+                {selected && ready && !pending && <span className="provider-active"><Check size={15} aria-hidden="true" /> {t('In use')}</span>}
+                {(pending || (ready && !selected)) && <button type="button" className="model-secondary provider-use"
                   aria-label={t(pending ? 'Retry applying {name}' : 'Use {name}', { name: provider.name })}
                   disabled={!!action || (expanded && dirty)} onClick={() => { void update(provider, pending?.action ?? 'activate') }}>
                   {pending ? t('Retry apply') : t('Use provider')}
