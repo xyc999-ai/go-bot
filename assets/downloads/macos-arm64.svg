@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="163" height="28" viewBox="0 0 163 28" role="img" aria-label="macOS: Apple Silicon">
+  <title>macOS · Apple Silicon</title>
+  <rect width="58" height="28" fill="#555"/>
+  <rect x="58" width="105" height="28" fill="#0078D4"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Arial,sans-serif" font-size="12">
+    <text x="29" y="18">macOS</text>
+    <text x="110.5" y="18">Apple Silicon</text>
+  </g>
+</svg>
