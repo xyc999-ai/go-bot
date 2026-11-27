@@ -1,22 +1,20 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { Languages } from 'lucide-react'
 import { translate, type Language } from './messages'
+import locale from './i18n/languages.cjs'
+
+const { languages, resolveLanguage } = locale
 
 const preferenceKey = 'go-bot.web-language'
-const languages: ReadonlyArray<{ id: Language; label: string }> = [
-  { id: 'en', label: 'English' },
-  { id: 'zh-CN', label: '简体中文' },
-]
 
 function initialLanguage(): Language {
+  let saved: string | null = null
   try {
-    const saved = localStorage.getItem(preferenceKey)
-    if (saved === 'en' || saved === 'zh-CN') return saved
+    saved = localStorage.getItem(preferenceKey)
   } catch {
     // A browser may disable storage for this origin.
   }
-  const preferred = navigator.languages[0] ?? navigator.language
-  return /^zh(?:-|$)/i.test(preferred) ? 'zh-CN' : 'en'
+  return resolveLanguage(navigator.languages?.length ? navigator.languages : [navigator.language], saved)
 }
 
 type Locale = {
@@ -61,11 +59,11 @@ export function LanguagePicker() {
   return <label className="language-picker">
     <Languages size={16} aria-hidden="true" />
     <span className="sr-only">{t('Language')}</span>
-    <select value={language} onChange={event => {
+    <select aria-label={t('Language')} value={language} onChange={event => {
       const next = languages.find(option => option.id === event.currentTarget.value)
       if (next) setLanguage(next.id)
     }}>
-      {languages.map(option => <option key={option.id} value={option.id} lang={option.id}>{option.label}</option>)}
+      {languages.map(option => <option key={option.id} value={option.id} lang={option.id}>{option.name}</option>)}
     </select>
   </label>
 }

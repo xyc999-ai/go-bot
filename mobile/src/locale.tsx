@@ -1,177 +1,17 @@
-import { videoChinese } from '../../frontend/src/chat/video'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { File, Paths } from 'expo-file-system'
 import { getLocales } from 'expo-localization'
-import { extensionChinese } from '../../frontend/src/extensions/messages'
-import { proactiveChinese } from '../../frontend/src/settings/proactiveState'
+import locale from '../../frontend/src/i18n/languages.cjs'
+import { translateMobile, type Language } from '../../frontend/src/i18n/translate'
 
-const extensionEnglish = Object.fromEntries(Object.entries(extensionChinese).map(([en, zh]) => [zh, en]))
-
-const english: Record<string, string> = {
- 'Device connected': 'Connected', '设备': 'Devices', '此设备': 'This device', '其他设备': 'Other devices', '在线': 'Connected', '断开': 'Disconnected',
- '最近在线 {time}': 'Last seen {time}', '正在读取设备…': 'Loading devices…', '无法读取设备，请重试。': 'Could not load devices. Try again.',
- '还没有其他设备': 'No other devices yet', '在其他客户端连接这个账号后，会显示在这里。': 'Connect this account on another client to see it here.',
- '暂无设备记录': 'No devices yet', '建立事件连接后，设备会显示在这里。': 'Devices appear here after their event connection opens.',
-  '重命名会话': 'Rename chat', '会话标题': 'Chat title', '会话操作': 'Chat actions', '无法重命名会话，请重试。': 'Could not rename chat. Try again.',
-  '复制表格': 'Copy table', '复制代码': 'Copy code', '已复制': 'Copied', '复制失败，重试': 'Copy failed. Retry', '代码': 'Code', '表格': 'Table', '表格，可左右滚动': 'Table — scroll horizontally', '代码，可左右滚动': 'Code — scroll horizontally',
-  '主会话': 'Main chat', '配置模型': 'Configure model', '查看插件': 'View plugins',
-  '主会话未能准备完成。': 'The main chat could not be prepared.',
-  '正在准备浏览器与 Office 能力…': 'Preparing browser and Office capabilities…',
-  '部分插件未能准备完成。': 'Some plugins could not be prepared.',
-  '请先配置模型，再开始聊天。': 'Set up a model to start chatting.',
-  '当前会话的模型不可用，请重新选择。': 'The model for this chat is unavailable. Choose another model.',
-  '文字和附件已保留在输入框中。': 'Your message and attachments are kept in the composer.',
-
-  '审阅方案': 'Review the plan',
-  '待审批': 'Approval needed', '待回答': 'Answer needed',
-  '当前会话权限': 'Chat permission', '全权限': 'Full access', '工作区可写': 'Workspace write', '只读': 'Read only',
-  '允许工具在 Host 可访问的范围内写入。': 'Allow writes anywhere the Host tools can access.',
-  '允许写入当前会话工作区。超出范围时需要审批。': 'Allow writes in this chat’s workspace. Ask before widening access.',
-  '允许读取文件。写入前需要审批。': 'Read files and ask before any writes.',
-  '需要执行审批': 'Approval required', '查看执行审批': 'Review approval', '拒绝': 'Deny', '仅允许一次': 'Allow once',
-  '仅允许这一次操作，会话权限保持不变。': 'Allow once applies to this operation only.',
-  '无法切换会话权限。': 'Could not change chat permission.',
-
-  '聊天': 'Chat', '返回聊天': 'Back to chat', '任务': 'Tasks', '会话': 'Chats', '我的': 'Me', '语言': 'Language', '设置': 'Settings',
-  '连接服务器': 'Connect to server', '服务器地址': 'Server address', '账号': 'Account', '输入已有账号': 'Enter an existing account',
-  '正在连接…': 'Connecting…', '连接': 'Connect', '创建账号并连接': 'Create account and connect',
-  '退出登录': 'Sign out',
-  '无法连接。请确认地址、账号和网络，并检查 Controller 是否已启动。': 'Could not connect. Check the address, account, network, and Controller.',
-  '账号使用 1–64 位小写字母、数字、下划线或连字符，以字母或数字开头。': 'Use 1–64 lowercase letters, digits, underscores, or hyphens. Start with a letter or digit.',
-  '请输入完整的 HTTP 或 HTTPS 地址。': 'Enter a full HTTP or HTTPS address.',
-  '服务器地址格式有误。': 'The server address is invalid.',
-  '账号已存在。请直接连接。': 'This account already exists. Choose Connect.',
-  '这个地址未返回 Go Bot 账号数据。': 'This address did not return a Go Bot account.',
-  '找不到这个账号。请检查账号名，或用下方入口创建。': 'Account not found. Check the name or create the account below.',
-  '服务器没有返回事件流。': 'The server did not return an event stream.',
-  '操作未完成，请重试。': 'Something went wrong. Try again.',
-  '请先在「我的 → 模型」设置默认模型。': 'Set a default model in Me → Models first.',
-  '请为当前会话选择可用模型。': 'Choose an available model for this chat.',
-  '设置已保存，但 Host 暂未应用。可重试或重新连接。': 'Settings were saved. Try again or reconnect to apply them on the Host.',
-  '此会话还有关联任务。': 'This chat has linked tasks.',
-  '会话正在执行中。': 'A turn is running in this chat.',
-  '附件超过上传限制。': 'The attachment exceeds the upload limit.',
-  '入口拒绝了请求。请检查服务器地址或代理设置。': 'The request was refused. Check the address or proxy settings.',
-  '文件系统': 'File system', '刷新': 'Refresh', '正在读取目录…': 'Loading folder…',
-  '此目录为空。': 'This folder is empty.', '加载更多': 'Load more', '无法读取目录。': 'Could not open this folder.',
-  '选择模型': 'Choose model', '无法读取模型列表。': 'Could not load models.', '请先添加端点并设置默认模型。': 'Add an endpoint and set the default model first.',
-  '无法切换模型。': 'Could not switch models.', '打开模型设置': 'Open model settings',
-  '图片已存入本地图片库。': 'Images were saved to your local image library.', '导入失败，请重试。': 'Import failed. Try again.',
-  '本地图片': 'Images', '本地文件': 'Files', '从图库导入': 'Import from photo library', '从设备导入': 'Import from device',
-  '还没有导入图片。': 'No images imported yet.', '还没有导入文件。': 'No files imported yet.', '添加到输入框': 'Add to draft',
-  '无法添加附件。': 'Could not add the attachment.', '无法添加图片。': 'Could not add the image.',
-  '助手需要你的确认': 'Question from the assistant', '无法提交，请重试。': 'Could not submit. Try again.',
-  '其他答案': 'Other answer', '你的回答': 'Your answer', '提交答案': 'Submit answers', '取消此次提问': 'Cancel question',
-  '会话已不可用。': 'This chat is unavailable.', '无法读取会话。': 'Could not load chats.', '无法加载更早的消息。': 'Could not load older messages.',
-  '启用中': 'Scheduled', '已暂停': 'Paused', '未启用': 'Inactive', '已结束': 'Ended',
-  '待执行': 'Upcoming', '已完成': 'Completed', '暂无待执行任务': 'No upcoming tasks', '暂无定时任务': 'No scheduled tasks', '暂无已完成任务': 'No completed tasks',
-  '今天': 'Today', '明天': 'Tomorrow', '下次运行': 'Next run',
-  '在会话中让助手安排任务后，任务会出现在这里。': 'Ask the assistant to schedule a task in a chat.',
-  '任务详情': 'Task details', '触发规则': 'Schedule', '触发时间': 'Occurrence time', '上次投递': 'Last delivery',
-  '投递目标': 'Destination', '关联会话': 'Linked chat', '新会话': 'New chat', '打开会话': 'Open chat',
-  '创建新会话': 'Create a chat', '无法创建会话，请重试。': 'Could not create the chat. Try again.',
-  '无法读取任务，请下拉重试。': 'Could not load tasks. Pull down to retry.',
-  '网页搜索': 'Web search', '图片生成': 'Image generation', '无法更新头像。': 'Could not update the avatar.',
-  '无法停止 Host，请重试。': 'Could not stop the Host. Try again.', '更换头像': 'Change avatar',
-  '停止 Host？': 'Stop Host?', '停止后会回到连接页。': 'You will return to the connection screen.',
-  '返回': 'Back', '取消': 'Cancel', '从图库选择': 'Choose from photo library', '拍照': 'Take a photo',
-  '模型': 'Models', '无法读取模型设置。': 'Could not load model settings.',
-  '无法保存。请检查端点地址、密钥与模型名。': 'Could not save. Check the URL, API key, and model names.',
-  '支持 OpenAI 兼容的 Responses 接口。默认端点列表中的第一个模型用于新会话。': 'Supports OpenAI-compatible Responses endpoints. New chats use the first model on the default endpoint.',
-  '放弃未保存的修改？': 'Discard unsaved changes?', '放弃修改': 'Discard changes',
-  '请选择支持的接口协议。': 'Choose a supported API protocol.',
-  '请填写基础地址，不包含 /messages、/responses 或 /chat/completions。': 'Enter a base URL without /messages, /responses, or /chat/completions.',
-  '新地址需要重新填写 API key。': 'Enter an API key for the new address.',
-  '接口协议': 'API protocol', '请求地址': 'Request URL',
-  '按服务商提供的接口格式选择，与模型名称无关。': 'Choose the API format provided by your service, regardless of the model name.',
-  '支持 OpenAI Responses 和 Anthropic Messages 兼容接口。默认端点的第一个模型用于新会话。': 'Supports OpenAI Responses and Anthropic Messages compatible endpoints. New chats use the first model on the default endpoint.',
-  '将在下一轮使用此模型。': 'This model will be used from the next turn.',
-  '默认': 'Default', '添加端点': 'Add endpoint', '名称': 'Name', '端点地址': 'Endpoint URL',
-  '已保存，留空保留当前密钥': 'Saved. Leave blank to keep the current key.', '输入 API key': 'Enter an API key',
-  '模型名（每行一个）': 'Model names (one per line)', '保存端点': 'Save endpoint', '设为默认端点': 'Set as default',
-  '删除端点': 'Delete endpoint', '删除端点？': 'Delete endpoint?', '删除': 'Delete',
-  '无法读取供应商。': 'Could not load providers.', '无法保存供应商设置。': 'Could not save provider settings.',
-  '当前使用': 'In use', '已配置': 'Configured', '模型名': 'Model name', '保存配置': 'Save settings', '保存并使用': 'Save and activate', '移除密钥': 'Remove key',
-  '单张图片最多 50 MB，单个文件最多 32 MB。': 'Images can be up to 50 MB and other files up to 32 MB each.',
-  '每条消息至多添加 20 张图片和 8 个文件。': 'Each message can include up to 20 images and 8 files.',
-  '附件总大小上限为 200 MB。': 'Attachments can total up to 200 MB.',
-  '请在系统设置中允许 Go Bot 访问相机。': 'Allow Go Bot to use the camera in system settings.',
-  '发送失败，输入内容已保留。': 'Could not send. Your draft was kept.', '打开会话列表': 'Open chat list', '移除': 'Remove',
-  '草稿': 'Draft', '消息': 'Message', '问点什么，或交给我一项任务…': 'Ask anything, or give me a task…',
-  '工具栏': 'Toolbar', '停止生成': 'Stop generation', '发送消息': 'Send message',
-  '未命名会话': 'Untitled chat', '归档会话': 'Archive chat', '归档此会话？': 'Archive this chat?', '会话将从列表隐藏。': 'The chat will be hidden from the list.',
-  '归档': 'Archive', '无法归档会话。': 'Could not archive the chat.', '查看更早的会话': 'Older chats',
-  '正在读取会话…': 'Loading chats…', '还没有会话。': 'No chats yet.', '相册': 'Photo gallery', '图片': 'Images', '文件': 'Files',
-  '无法读取本地图片。': 'Could not load local images.', '正在等待回复…': 'Waiting for a reply…', '生成中': 'Generating',
-  '加载更早的消息': 'Load earlier messages', '重新加载': 'Reload', '今天想做什么？': 'What can I help with?',
-  '正在重新连接…': 'Reconnecting…', '引导中': 'Steering', '排队中': 'Queued', '附件': 'Attachment', '引导': 'Steer',
-  '删除排队消息': 'Remove queued message', '回答助手的问题': 'Answer the assistant', '保存图片': 'Save image', '已保存到本地图片和手机图库。': 'Saved to the app and device photo libraries.',
-  '已保存到本地图片。请在系统设置中允许添加到图库。': 'Saved in the app. Allow adding photos in device settings to save to your photo library.',
-  '已保存到本地图片，但无法写入手机图库。': 'Saved in the app. Could not save to the device photo library.', '无法保存图片，请重试。': 'Could not save the image. Try again.',
-  '关闭图片预览': 'Close image preview', '无法显示图片。': 'Could not display the image.',
-  '分享': 'Share', '删除所选项目？': 'Delete selected items?',
-  '将从 App 的本地库中删除所选项目。': 'Remove the selected items from the app library.',
-  '部分项目无法删除，请重试。': 'Some items could not be deleted. Try again.',
-  '无法分享所选项目，请重试。': 'Could not share the selected items. Try again.',
-  '查看图片': 'View images', '生成图片': 'Generate images', '{count} 张': '{count} images', '1 张': '1 image',
-  '图片，可左右滑动': 'Images — scroll horizontally', '正在加载图片': 'Loading image',
-  '没有可显示的图片。': 'No images to display.', '图片暂不可用，重试': 'Image unavailable. Retry',
-  '下载': 'Download', '文件暂不可用。': 'File unavailable.', '工具调用': 'Tool calls', '已交付': 'Delivered',
-  '收起': 'Dismiss', '关闭': 'Close', '保存语言失败，请重试。': 'Could not save the language. Try again.',
-  '任务内容': 'Task content', '需要助手到时做什么？': 'What should the assistant do when it is time?',
-  '执行时间': 'When to run', '每隔': 'Repeat every', '每': 'Every', '天': 'day(s)', '确定': 'Done',
-  '更多选项': 'More options', '任务名称（选填）': 'Task name (optional)', '根据任务内容自动命名': 'Named automatically from the task content',
-  '保留现有时间安排': 'Keep the current schedule', '只修改任务内容或名称，不会改变原来的时间安排。': 'Editing the content or name keeps the existing schedule.',
-  '修改执行时间': 'Change timing', '撤销时间修改': 'Undo timing changes', '请选择新的执行时间。': 'Choose a new time.',
-  '请填写任务内容。': 'Enter the task content.', '任务名称不能超过 120 个字符。': 'Task names can contain up to 120 characters.',
-  '请输入大于零的整数间隔。': 'Enter a positive whole-number interval.', '请选择有效的日期和时间。': 'Choose a valid date and time.',
-  '请选择未来的执行时间。': 'Choose a time in the future.', '请至少选择一天。': 'Select at least one day.', '请检查任务内容和执行时间。': 'Check the task content and timing.',
-  '新建任务': 'New task', '编辑任务': 'Edit task', '创建任务': 'Create task', '任务名称': 'Task name', '任务指令': 'Task instructions',
-  '时间规则': 'Timing rule', '指定时间': 'At a specified time', '延时一次': 'Once after a delay', '固定间隔': 'Fixed interval', '每天': 'Daily', '每周': 'Weekly',
-  '日期': 'Date', '时间': 'Time', '时区': 'Time zone', '间隔秒数': 'Interval in seconds', 'Cron 表达式': 'Cron expression', 'RRULE 规则': 'RRULE expression',
-  '已有会话': 'Existing chat', '首次新建，之后复用': 'Create once and reuse', '每次新建会话': 'New chat for each run', '工作目录': 'Working directory',
-  'Host 默认目录': 'Host default directory', '保存修改': 'Save changes', '全部': 'All',
-  '仅一次': 'Once', '小时': 'hour(s)', '分钟': 'minute(s)', '秒': 'second(s)', '按分钟重复': 'Repeats by minute', '按小时重复': 'Repeats by hour',
-  '按日重复': 'Repeats by day', '按周重复': 'Repeats by week', '按月重复': 'Repeats by month', '按年重复': 'Repeats by year', '自定义规则': 'Custom rule',
-  '排队或执行中': 'Queued or running',
-  '清理已结束任务': 'Clear ended tasks', '清理已结束任务？': 'Clear ended tasks?', '将删除任务和投递历史。会话记录会保留。': 'Delete the tasks and delivery history. Chat history will be kept.',
-  '投递历史': 'Delivery history', '首次投递时创建': 'Created on first delivery', '上一条投递仍在排队或执行。': 'The last delivery is still queued or running.',
-  '下次可立即运行': 'Run now available from', '暂停任务': 'Pause task', '恢复任务': 'Resume task', '立即运行': 'Run now',
-  '删除任务': 'Delete task', '删除任务？': 'Delete task?', '指令已投递到会话。': 'Instructions were delivered to the chat.',
-  '返回任务详情': 'Back to task details', '暂无投递记录。': 'No deliveries yet.', '更早的投递记录已清理。': 'Earlier deliveries were pruned.',
-  '更早的投递记录不可用。': 'Earlier deliveries are unavailable.', '当时的任务指令': 'Instructions at delivery',
-  '投递记录表示指令已进入会话。执行结果请在对应会话中查看。': 'A receipt means the instructions reached the chat. Open the chat to see the result.',
-  '任务刚有变化。请重新打开任务后再修改。': 'The task changed. Reopen it before editing.',
-  '任务仍在排队、执行或投递间隔内。': 'The task is queued, running, or still within the minimum interval.',
-  '此任务已删除。': 'This task was deleted.', '请检查任务指令、时间规则和投递目标。': 'Check the task instructions, timing and destination.',
-  '任务操作未完成，请重试。': 'The task operation failed. Try again.', '停止并归档会话？': 'Stop and archive this chat?',
-  '将停止正在运行的会话和关联的启用中任务。会话记录和文件会保留。': 'This stops the chat and removes its active schedules. Chat history and files will be kept.',
-  '停止并归档': 'Stop and archive',
-  '定时任务': 'Scheduled task', '后台任务': 'Background task', '回复已中断。': 'The reply was interrupted.',
-  '助手未能完成回复。': 'The agent could not finish its reply.',
-}
-const notices: Record<string, string> = {
- 'Device connected': '连接', 'Android Emulator': 'Android 模拟器',
-  ...proactiveChinese,
-  ...videoChinese,
-  'Working': '处理中',
-  'Approve this plan and leave plan mode?': '确认方案后开始执行，或提出修改意见继续规划。',
-  'Approve': '按此方案执行', 'Keep planning': '继续完善方案',
-  'Leave plan mode; the plan is carried out from the next step.': '退出规划模式，从下一步开始执行方案。',
-  'Stay in plan mode; feedback goes back to the model.': '保持规划模式，将修改意见交给助手。',
-
-  'Scheduled task': '定时任务', 'Scheduled tasks': '定时任务',
-  'Background task': '后台任务',
-  'The reply was interrupted.': '回复已中断。',
-  'The agent could not finish its reply.': '助手未能完成回复。',
-}
-export type Language = 'zh-CN' | 'en'
-export const languages: readonly { id: Language; name: string }[] = [{ id: 'zh-CN', name: '简体中文' }, { id: 'en', name: 'English' }]
+export type { Language } from '../../frontend/src/i18n/translate'
+export const { languages } = locale
+const { isLanguage, resolveLanguage } = locale
 const preference = new File(Paths.document, 'ui-language.txt')
-const Locale = createContext({ language: 'zh-CN' as Language, changeLanguage: async (_language: Language) => {}, t: (key: string, _values?: Record<string, string | number>) => key })
+const Locale = createContext({ language: 'en' as Language, changeLanguage: async (_language: Language) => {}, t: (key: string, _values?: Record<string, string | number>) => key })
 
 function deviceLanguage(): Language {
-  return getLocales()[0]?.languageCode === 'zh' ? 'zh-CN' : 'en'
+  return resolveLanguage(getLocales().map(locale => locale.languageTag))
 }
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
@@ -179,7 +19,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   useEffect(() => {
     preference.text().then(value => {
-      if (value === 'en' || value === 'zh-CN') setLanguage(value)
+      if (isLanguage(value)) setLanguage(value)
     }).catch(() => {}).finally(() => setReady(true))
   }, [])
   async function changeLanguage(next: Language) {
@@ -187,12 +27,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     preference.write(next)
     setLanguage(next)
   }
-  const t = (key: string, values?: Record<string, string | number>) => {
-    const dictionary = language === 'en' ? english : notices
-    const fallback = language === 'en' ? extensionEnglish : extensionChinese
-    const text = Object.hasOwn(dictionary, key) ? dictionary[key] : fallback[key] ?? key
-    return text.replace(/\{(\w+)\}/g, (match, name: string) => values?.[name] === undefined ? match : String(values[name]))
-  }
+  const t = (key: string, values?: Record<string, string | number>) => translateMobile(language, key, values)
   return <Locale.Provider value={{ language, changeLanguage, t }}>{ready && children}</Locale.Provider>
 }
 

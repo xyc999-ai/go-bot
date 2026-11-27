@@ -2,8 +2,8 @@ import { request } from './controller'
 export type PackageSource = { type: 'registry' | 'git' | 'directory' | 'tarball' | 'bundled'; spec: string; registry?: string; authRef?: string; username?: string }
 export type PackageInfo = { name: string; version: string; description: string; license: string; source: PackageSource; api: string; title?: string; configSchema?: Record<string, unknown>; present: boolean; availableVersion?: string }
 export type PluginInstance = { id: string; package: string; state: string; error?: string }
-export type Localized = { en: string; 'zh-CN': string }
-export type PluginTutorial = { language: 'en' | 'zh-CN'; title: string; video: string; poster?: string }
+export type Localized = { en: string; 'zh-CN': string; [language: string]: string | undefined }
+export type PluginTutorial = { language: string; title: string; video: string; poster?: string }
 export type CatalogEntry = { pluginId: string; package: string; name: string; description: Localized; version: string; icon: string; maintainer: string; license: string; tutorials?: PluginTutorial[] }
 export type PluginSettings = { packages: Record<string, { catalogId: string; version: string; enabled: boolean }> }
 export type PluginView = { catalog: CatalogEntry[]; settings: PluginSettings; status: { runtime: string; packages: PackageInfo[]; instances: PluginInstance[]; error?: string } }

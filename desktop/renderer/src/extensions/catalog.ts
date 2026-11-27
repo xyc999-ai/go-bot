@@ -1,7 +1,7 @@
 import type { Localized, PluginTutorial } from '../api/extensions'
 
 export function localize(text: Localized, language: string): string {
- return language === 'zh-CN' ? text['zh-CN'] : text.en
+ return text[language] || text.en
 }
 
 

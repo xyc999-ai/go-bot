@@ -39,12 +39,12 @@ export function MessageView({ api, id, message, results, openImage, generating =
 }
 
 function Tools({ tools, results }: { tools: ToolBlock[]; results: Transcript['toolResults'] }) {
-  const { t, language } = useLocale()
+  const { t } = useLocale()
   const [expanded, setExpanded] = useState(false)
   return <View style={styles.tools}>
     <Pressable accessibilityRole="button" accessibilityState={{ expanded }} style={styles.toolHeader} onPress={() => setExpanded(old => !old)}>
       <Layers2 color="#7864b7" size={19} strokeWidth={1.8} />
-      <Text numberOfLines={1} style={[s.caption, { flex: 1 }]}>{tools.length > 1 ? tools.length + (language === 'en' ? ' ' : ' 个') + t('工具调用') : tools[0].name}</Text>
+      <Text numberOfLines={1} style={[s.caption, { flex: 1 }]}>{tools.length > 1 ? t('{count} tool calls', { count: tools.length }) : tools[0].name}</Text>
       <ChevronDown color={muted} size={16} style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }} />
     </Pressable>
     {expanded && tools.map(tool => {

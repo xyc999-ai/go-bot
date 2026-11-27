@@ -155,7 +155,7 @@ docker compose up -d
    返回主会话即可发消息；**New chat** 用于创建独立主题的会话。
 3. 在 **Settings → Web search** 配置 DeepSeek、智谱、豆包、Tavily 或 Brave Search，保存后点击 **Use provider** 选用。需要生图及其他 Gemini 媒体能力时，在插件市场安装并启用 **Gemini API CLI**，然后配置其 API Key。[供应商配置](docs/providers.md) · [插件连接](docs/plugin-account-setup.md#gemini-api-cli)
 
-可在账号页或「设置」选择简体中文或 English。各客户端会记住语言偏好。
+网页端、桌面端和移动端统一支持英文、简体中文、繁体中文、西班牙语、日语、巴西葡萄牙语、法语、德语和韩语。可在账号页或「设置」中切换，各客户端会记住选择；首次启动匹配系统或浏览器的首个受支持语言，无法匹配时使用英文。
 
 新账号会自动安装并启用 **agent-browser** 和 **OfficeCLI**，安装期间可以先配置模型。后续登录复用安装结果，也不会恢复你已停用或卸载的插件；可在侧栏「插件市场」管理。插件包、原始 Skills、图标和教程由独立的[插件仓库](https://github.com/xyc999-ai/go-bot-plugins)发布；刷新市场即可发现新版本，无需重构 Host 镜像。
 
@@ -341,7 +341,6 @@ Compose 负责启动 Redis 和内嵌前端的已发布 Controller。Agent 使用
 对比酒店价格及取消条款，再整理成行程。若要实现预订，可接入供应商 API，并在下单前单独展示日期、
 总价和取消条款，让用户确认。接入方自行提供服务凭证，并将连接权限绑定到已认证的账号。
 
-- **新增 Skill。** 用 `SKILL.md` 把已有工具组合成可重复执行的流程。账号级 Skill 放在 Host 的 `/root/harness/.dsh/skills/` 下。Host 会在这里一次性初始化内置的 `skill-creator`：可以直接要求 Agent 创建或修改 Skill，也可以通过 `/skill-creator` 调用。它保留 OpenAI 上游资源，并适配本项目的保存路径和校验规则。已有文件、后续修改及删除都会跨重启和升级保留；它不属于插件。`agents/openai.yaml` 保留用于兼容，但 Go Bot 不读取它。
 - **新增工具和部分第三方服务。** 在自定义 Host 中实现 Go Tool 接口，并加入 Host 的工具集合。把外部 SDK 和 HTTP 调用放在 `thirdparty/`，运行环境、模型、搜索和生图的适配放在 `providers/`。 [工具接口](harness/agent/native_contract.go) · [Host 工具组装](harness/assembly/native_runtime.go) · [供应商扩展指南](docs/providers.md)
 - **定制产品入口。** 通过 HTTP 和 SSE 接入自己的聊天前端或消息渠道，由产品层处理账号认证、连接权限，以及预订和付款等操作的用户确认。 [API 文档](docs/api.md)
 

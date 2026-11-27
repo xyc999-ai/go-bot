@@ -1,0 +1,14 @@
+{
+  "About Go Bot": "关于 Go Bot", "Services": "服务", "Hide Go Bot": "隐藏 Go Bot",
+  "Hide Others": "隐藏其他", "Show All": "显示全部", "Quit Go Bot": "退出 Go Bot",
+  "File": "文件", "New Chat": "新建会话", "Close Window": "关闭窗口", "Quit": "退出",
+  "Edit": "编辑", "Undo": "撤销", "Redo": "重做", "Cut": "剪切", "Copy": "复制",
+  "Paste": "粘贴", "Paste and Match Style": "粘贴并匹配样式", "Select All": "全选",
+  "View": "视图", "Reload": "重新加载", "Force Reload": "强制重新加载",
+  "Developer Tools": "开发者工具", "Actual Size": "实际大小", "Zoom In": "放大",
+  "Zoom Out": "缩小", "Toggle Full Screen": "切换全屏", "Window": "窗口",
+  "Minimize": "最小化", "Zoom": "缩放", "Bring All to Front": "全部置于前面",
+  "Help": "帮助", "Download Updates": "下载更新", "Open Go Bot": "打开 Go Bot",
+  "A chat needs your approval": "会话需要你的审批", "A chat has a question": "会话有待回答的问题",
+  "A reply is ready": "回复已完成"
+}

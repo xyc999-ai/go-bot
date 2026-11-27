@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, Tray, nativeImage, Notification, ipcMain, prot
 const fs = require('node:fs')
 const path = require('node:path')
 const { APP_ORIGIN, controllerURL, externalURL, gateway } = require('./gateway.cjs')
+const { isLanguage, resolveLanguage, nativeText } = require('./locale.cjs')
 
 // Installer lifecycle events must not create a window or launch an Agent.
 const installerStartup = require('./installer.cjs').installerStartup()
@@ -24,7 +25,7 @@ async function loadConfig() {
   const { computerName, desktopIdentity } = require('./client-identity.cjs')
   identity = desktopIdentity(await computerName())
   delete config.clientId
-  language = config.language === 'zh-CN' || config.language === 'en' ? config.language : /^zh/i.test(app.getLocale()) ? 'zh-CN' : 'en'
+  language = resolveLanguage(app.getPreferredSystemLanguages(), config.language)
   persist()
 }
 function persist() {
@@ -59,10 +60,10 @@ function updateMenus() {
 
 function setupIPC() {
   handle('desktop:language', value => {
-    if (value !== 'en' && value !== 'zh-CN') throw new Error('Invalid language')
+    if (!isLanguage(value)) throw new Error('Invalid language')
     if (value !== language) { language = value; config.language = value; persist(); updateMenus() }
   })
-  handle('desktop:configuration', () => ({ controller, version: app.getVersion(), identity }))
+  handle('desktop:configuration', () => ({ controller, version: app.getVersion(), identity, language }))
   const notifications = new Map()
   handle('desktop:notify', value => {
     if (!Notification.isSupported() || win.isFocused()) return false
@@ -71,8 +72,8 @@ function setupIPC() {
     if (Date.now() - (notifications.get(key) || 0) < 30000) return false
     if (notifications.size > 200) notifications.clear()
     notifications.set(key, Date.now())
-    const texts = { approval: 'A chat needs your approval / 会话需要你的审批', question: 'A chat has a question / 会话有待回答的问题', completed: 'A reply is ready / 回复已完成' }
-    const notice = new Notification({ title: 'Go Bot', body: texts[value.kind] })
+    const texts = { approval: 'A chat needs your approval', question: 'A chat has a question', completed: 'A reply is ready' }
+    const notice = new Notification({ title: 'Go Bot', body: nativeText(language, texts[value.kind]) })
     notice.on('click', () => command({ type: 'navigate', path: '/chat/' + value.sessionId }))
     notice.show(); return true
   })

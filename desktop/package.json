@@ -12,7 +12,8 @@
   },
   "scripts": {
     "dev": "npm run build && electron .",
-    "build": "tsc --project renderer/tsconfig.json --noEmit && vite build",
+    "build": "node scripts/sync-locales.cjs && tsc --project renderer/tsconfig.json --noEmit && vite build",
+    "pretest": "node scripts/sync-locales.cjs",
     "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.cjs",
     "package": "npm run build && electron-forge package",
     "make": "npm run build && electron-forge make",
@@ -21,7 +22,8 @@
     "check": "npm run test && npm run build",
     "smoke": "npm run build && node scripts/smoke.cjs",
     "test:visual": "npm run build && node scripts/visual-parity.cjs",
-    "test:video": "npm run build && node scripts/video-smoke.cjs"
+    "test:video": "npm run build && node scripts/video-smoke.cjs",
+    "test:locale": "npm run build && node --experimental-strip-types scripts/locale-smoke.cjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

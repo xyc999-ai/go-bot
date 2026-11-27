@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { App } from '../App'
 import { setControllerOrigin, setDesktopIdentity } from './bridge'
 import './desktop.css'
+import { useLocale } from '../locale'
 
 export function DesktopRoot() {
+  const { t } = useLocale()
   const [ready, setReady] = useState(false)
   const [error, setError] = useState('')
   useEffect(() => {
@@ -24,6 +26,6 @@ export function DesktopRoot() {
   }, [])
   return <>
     <div className="desktop-titlebar"><span className="desktop-app-name">Go Bot</span></div>
-    <div className="desktop-content">{ready ? <App /> : <main className="account-page">{error && <p role="alert">{error}</p>}</main>}</div>
+    <div className="desktop-content">{ready ? <App /> : <main className="account-page">{error && <p role="alert">{t(error)}</p>}</main>}</div>
   </>
 }

@@ -75,9 +75,13 @@ the name with HTTP 201. Model settings are available before the Host starts.
 
 Account creation reserves one `mainSessionId` and selects OfficeCLI and agent-browser
 for automatic installation. `POST /v1/host/start` accepts an optional
-`{"welcomeLocale":"zh-CN"}` (`en` is the default), and returns HTTP 200 with
+`{"welcomeLocale":"zh-CN"}` (`en` is the default). Supported welcome locales are
+`en`, `zh-CN`, `zh-TW`, `es`, `ja`, `pt-BR`, `fr`, `de` and `ko`.
+It returns HTTP 200 with
 `{"mainSessionId":"<uuid>"}`. The main chat is created without a model call;
 its initial system and assistant greeting are persisted exactly once.
+This parameter chooses only the initial greeting; it does not set the chat's
+language or rewrite an existing greeting when the user changes UI language.
 Clients can open it immediately, then automatically call
 `POST /v1/host/plugins/prepare` while keeping navigation and settings available.
 Preparation reuses matching installed releases and never re-adds a removed default.
