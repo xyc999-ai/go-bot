@@ -1,8 +1,7 @@
 <h1 align="center">go-bot</h1>
 
 <p align="center">
-  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a> ·
-  <strong><a href="https://github.com/xyc999-ai/go-bot/releases/latest">Download Android APK</a></strong>
+  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 <p align="center">
@@ -28,11 +27,26 @@ persistent storage, and room for their own frontends and service integrations.
 - **Long-term memory and cross-session recall.** Save user preferences and agent notes per account, and search past conversations when a task needs earlier context.
 - **Proactive discovery and follow-up.** Enable proactive assistance to let the agent gather and connect relevant information, explore new leads, and share useful findings and suggestions when it judges the timing is right.
 
-The included web UI is a lightweight test client for chat, file browsing, and
-downloads. Use the Controller's HTTP and server-sent events (SSE) API to
+Use the Web, desktop, or mobile client for chat, file browsing, and downloads.
+Use the Controller's HTTP and server-sent events (SSE) API to
 build your own mobile, desktop, or messaging interface. [HTTP API](docs/api.md) · [Minimal frontend example](examples/frontend-minimal/index.html)
 
-[Configuration](docs/configuration.md) · [Deployment](docs/deployment.md) · [HTTP API](docs/api.md) · [Architecture](docs/architecture.md)
+[Configuration](docs/configuration.md) · [Deployment](docs/deployment.md) · [HTTP API](docs/api.md) · [Architecture](docs/architecture.md) · [Plugins](https://github.com/xyc999-ai/go-bot-plugins)
+
+## Clients and downloads
+
+<p align="center">
+  <a href="https://github.com/xyc999-ai/go-bot/releases/latest"><img src="assets/downloads/macos-arm64.svg" alt="Download Go Bot for macOS Apple Silicon (ARM64)"></a>
+  <a href="https://github.com/xyc999-ai/go-bot/releases/latest"><img src="assets/downloads/macos-x64.svg" alt="Download Go Bot for macOS Intel (x64)"></a>
+  <a href="https://github.com/xyc999-ai/go-bot/releases/latest"><img src="assets/downloads/windows-x64.svg" alt="Download Go Bot for Windows x64"></a>
+  <a href="https://github.com/xyc999-ai/go-bot/releases/latest"><img src="assets/downloads/android-arm64.svg" alt="Download Go Bot for Android ARM64"></a>
+</p>
+
+Each badge opens the latest Release. Choose your platform's installer under
+**Assets**. Desktop clients connect to a Controller running on the same computer;
+Android connects to a reachable Controller URL. Start Controller with the
+[Quickstart](#quickstart). The [Web client](#web-and-desktop) is included with Controller
+and opens in your browser without a separate download.
 
 ## Demos
 
@@ -74,9 +88,10 @@ build your own mobile, desktop, or messaging interface. [HTTP API](docs/api.md) 
   </tr>
 </table>
 
-### Web demos
+### Web / Desktop demos
 
-These demos use the English web UI and a local Docker Host. The agent checks the
+The Web and desktop clients share a similar interface and chat experience.
+These recordings use the English Web client and a local Docker Host. The agent checks the
 economic findings in Chromium and uses OfficeCLI to create and revise a Word brief
 and a PowerPoint deck. [Stanford HAI 2026 AI Index](https://hai.stanford.edu/ai-index/2026-ai-index-report/economy)
 
@@ -133,17 +148,23 @@ start services or create `.env.eci`. Compose starts Controller and Redis; each
 account's Host is a separate container created by Controller. Images support
 AMD64 and ARM64, selected automatically by Docker. [Source development](docs/deployment.md#source-checkout)
 
-### Web browser
+### Web and desktop
 
-Open the browser after startup. Controller already serves the web app.
+After starting Controller, use either the desktop app or the Web client.
+They share the account, model setup and chat flow below.
 
-1. Open [http://127.0.0.1:8080](http://127.0.0.1:8080) and create an account by
-   name. Opening the account starts its Host in a separate Docker container and opens your main chat, with a welcome message.
+1. **Open a client.** For desktop, download and install the macOS or Windows app
+   from the [latest Release](https://github.com/xyc999-ai/go-bot/releases/latest),
+   then open **Go Bot**; it connects to the local Controller automatically.
+   For Web, visit [http://127.0.0.1:8080](http://127.0.0.1:8080) in your browser;
+   Controller already serves the Web app. In either client, create an account by
+   name. Opening the account starts its Host in a separate Docker container and
+   opens your main chat, with a welcome message.
 2. In **Model settings**, choose **OpenAI Responses** or **Anthropic Messages** in the protocol dropdown, then add the endpoint URL, API key,
    and at least one model ID. Return to the main chat and send a message; **New chat** creates a separate conversation.
 3. For web search, save a key for DeepSeek, Zhipu, Doubao, Tavily, or Brave Search under **Settings → Web search**, then choose **Use provider**. For image generation and other Gemini media capabilities, install and enable **Gemini API CLI** in the plugin market and configure its API key. [Provider setup](docs/providers.md) · [Plugin connection](docs/plugin-account-setup.md#gemini-api-cli)
 
-Choose **English** or **简体中文** on the account page or in **Settings**. The browser remembers your choice.
+Choose **English** or **简体中文** on the account page or in **Settings**. Each client remembers your choice.
 
 New accounts automatically install and enable **agent-browser** and **OfficeCLI**. First installation downloads their official CLI dependencies while you can configure your model. Later logins reuse the installation and respect plugins you disable or uninstall. Manage them from the sidebar **Plugin market**. Plugin packages, original Skills, icons and tutorials are published in the independent [plugin repository](https://github.com/xyc999-ai/go-bot-plugins). Refresh the market to discover newly published releases without rebuilding the Host image.
 
@@ -345,6 +366,18 @@ image. New accounts automatically install and enable agent-browser and OfficeCLI
 including their official CLI dependencies and Skills; first-time installation
 requires network access. Manage them later through the plugin market.
 
+## Plugins
+
+Plugins live in the separate [go-bot-plugins repository](https://github.com/xyc999-ai/go-bot-plugins).
+It contains the plugin packages, display resources, upstream Skills and versioned
+market catalog. Plugin releases are independent of Controller and Host images.
+Browse integrations such as agent-browser, OfficeCLI, Google Workspace, X and
+Gemini API CLI, then install and enable them from **Plugin market** in Go Bot.
+
+To add an integration or improve an existing plugin, submit your pull request to
+the plugin repository. The [plugin contribution guide](CONTRIBUTING.md#contributing-plugins)
+explains where to put code, the package rules and the checks to run.
+
 ## Develop and extend
 
 Build workflows around the tools the Host already provides, or add a connector
@@ -357,10 +390,20 @@ credentials and bind access to the authenticated account.
 
 - **Add a Skill** with a `SKILL.md` file to describe a repeatable workflow that uses existing tools. Put account-level skills under `/root/harness/.dsh/skills/` on the Host. The Host initializes the built-in `skill-creator` there once: ask the agent to create or update a skill, or invoke `/skill-creator`. Its original OpenAI resources are retained with Go Bot path and validation adaptations. Existing files and later edits or deletion survive restarts and upgrades; it is not a plugin. `agents/openai.yaml` is retained for compatibility but is not read by Go Bot.
 - **Add tools and selected third-party services** in a custom Host build. Implement the Go tool contract and include the tool in the Host's tool set. Keep external SDK and HTTP calls in `thirdparty/`, and use `providers/` for adapters to the runtime, model, search, or image provider contracts. [Tool interface](harness/agent/native_contract.go) · [Host tool assembly](harness/assembly/native_runtime.go) · [Provider guide](docs/providers.md)
-- **Add business plugins** with native Cordis and asynchronous `ctx.host` APIs for tools, Skills, prompts, credentials, authorization and MCP. The Harness core stays in Go. [Plugin SDK](extensions/sdk/README.md) · [Examples](examples/plugins/README.md)
+- **Add plugins** in [go-bot-plugins](https://github.com/xyc999-ai/go-bot-plugins), using native Cordis and asynchronous `ctx.host` APIs for tools, Skills, prompts, credentials, authorization and MCP. The Harness core stays in Go. [Plugin SDK](extensions/sdk/README.md) · [Examples](examples/plugins/README.md) · [Plugin contributions](CONTRIBUTING.md#contributing-plugins)
 - **Build the product interface** on HTTP and SSE. Connect your own chat frontend or messaging channel and handle account authentication, connection permissions, and user approval for actions such as booking or payment. [API guide](docs/api.md)
 
 [Documentation](docs/README.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [MIT License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+
+## Support and contribute
+
+If Go Bot is useful to you, please give the project a [Star on GitHub](https://github.com/xyc999-ai/go-bot).
+It helps others discover the project.
+
+Ideas, experiments and pull requests are welcome: new features, bug fixes,
+plugins, documentation, translations and examples all help. You can contribute
+directly without opening an issue first. See [Contributing](CONTRIBUTING.md), or
+explore the [plugin repository](https://github.com/xyc999-ai/go-bot-plugins).
 
 ## Community and contact
 

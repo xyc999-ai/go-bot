@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="164" height="28" viewBox="0 0 164 28" role="img" aria-label="Android: ARM64 APK">
+  <title>Android · ARM64 APK</title>
+  <rect width="72" height="28" fill="#555"/>
+  <rect x="72" width="92" height="28" fill="#3DDC84"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Arial,sans-serif" font-size="12">
+    <text x="36" y="18">Android</text>
+    <text x="118" y="18">ARM64 APK</text>
+  </g>
+</svg>

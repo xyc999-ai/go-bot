@@ -1,8 +1,7 @@
 <h1 align="center">go-bot</h1>
 
 <p align="center">
-  <a href="README.md">English</a> · <strong>简体中文</strong> ·
-  <strong><a href="https://github.com/xyc999-ai/go-bot/releases/latest">下载 Android APK</a></strong>
+  <a href="README.md">English</a> · <strong>简体中文</strong>
 </p>
 
 <p align="center">
@@ -25,9 +24,22 @@ Go Bot 会记住与你交流的背景，持续关注你关心的事，并主动�
 - **长期记忆和跨会话检索。** 按账号保存用户偏好和 Agent 笔记，任务需要时可以查找同账号的历史会话。
 - **主动发现与跟进。** 启用主动服务后，AI 会结合对你的了解收集和梳理相关信息，探索值得关注的新线索，并在它认为合适的时候，主动与你分享新的发现和建议。
 
-内置网页是用于测试的轻量界面，提供聊天、浏览文件和下载交付物。你可以通过 Controller 的 HTTP接口接入自己的移动端、桌面端或消息渠道。 [HTTP API](docs/api.md) · [最小前端示例](examples/frontend-minimal/index.html)
+可以使用网页端、桌面端或移动端聊天、浏览文件和下载交付物，也可以通过 Controller 的 HTTP 和 SSE 接口接入自己的前端或消息渠道。 [HTTP API](docs/api.md) · [最小前端示例](examples/frontend-minimal/index.html)
 
-[配置](docs/configuration.md) · [部署](docs/deployment.md) · [HTTP API](docs/api.md) · [架构](docs/architecture.md)
+[配置](docs/configuration.md) · [部署](docs/deployment.md) · [HTTP API](docs/api.md) · [架构](docs/architecture.md) · [插件仓库](https://github.com/xyc999-ai/go-bot-plugins)
+
+## 客户端与下载
+
+<p align="center">
+  <a href="https://github.com/xyc999-ai/go-bot/releases/latest"><img src="assets/downloads/macos-arm64.svg" alt="下载 macOS Apple Silicon（ARM64）版 Go Bot"></a>
+  <a href="https://github.com/xyc999-ai/go-bot/releases/latest"><img src="assets/downloads/macos-x64.svg" alt="下载 macOS Intel（x64）版 Go Bot"></a>
+  <a href="https://github.com/xyc999-ai/go-bot/releases/latest"><img src="assets/downloads/windows-x64.svg" alt="下载 Windows x64 版 Go Bot"></a>
+  <a href="https://github.com/xyc999-ai/go-bot/releases/latest"><img src="assets/downloads/android-arm64.svg" alt="下载 Android ARM64 版 Go Bot"></a>
+</p>
+
+点击任一徽章进入最新 Release，在 **Assets** 中选择对应平台的安装包。
+桌面客户端连接同一台电脑上运行的 Controller；Android 通过手机可访问的 URL 连接 Controller。
+请先按[快速开始](#快速开始)启动服务。[网页端](#网页端与桌面端)随 Controller 提供，在浏览器中打开即可，无需单独下载。
 
 ## 演示
 
@@ -69,9 +81,9 @@ Go Bot 会记住与你交流的背景，持续关注你关心的事，并主动�
   </tr>
 </table>
 
-### 网页端演示
+### 网页端 / 桌面端演示
 
-演示通过内置网页和本地 Docker Host 运行，所有会话均用中文提问。Agent 用 Chromium 查阅
+网页端和桌面端有相近的界面与聊天体验。以下录屏使用内置网页和本地 Docker Host，所有会话均用中文提问。Agent 用 Chromium 查阅
 [斯坦福 HAI《2026 AI Index》经济章节](https://hai.stanford.edu/ai-index/2026-ai-index-report/economy)，
 再用 OfficeCLI 把查到的资料整理成 Word 行业报告和 PPT，并根据后续消息修改两份文件。
 
@@ -130,17 +142,20 @@ docker compose up -d
 是独立容器。应用镜像提供 AMD64 和 ARM64，Docker 自动选择匹配架构。
 [源码开发启动](docs/deployment.md#source-checkout)
 
-### 浏览器
+### 网页端与桌面端
 
-启动后直接打开浏览器即可，Controller 已经提供网页。
+启动 Controller 后，可以选择桌面客户端或网页端，两者共用下面的账号、模型配置和聊天流程。
 
-1. 打开 [http://127.0.0.1:8080](http://127.0.0.1:8080)，输入账号名创建账号。
-   打开账号时，Controller 会启动独立的 Docker Host 容器，并直接进入带有欢迎消息的主会话。
+1. **打开客户端。** 桌面端从[最新 Release](https://github.com/xyc999-ai/go-bot/releases/latest)
+   下载并安装 macOS 或 Windows 版本，打开 **Go Bot**，它会自动连接本机 Controller。
+   网页端在浏览器访问 [http://127.0.0.1:8080](http://127.0.0.1:8080)，Controller 已经提供网页。
+   在任一客户端输入账号名创建账号；打开账号时，Controller 会启动独立的 Docker Host 容器，
+   并直接进入带有欢迎消息的主会话。
 2. 在 **Model settings** 通过协议下拉框选择 **OpenAI Responses** 或 **Anthropic Messages**，填写端点地址、API Key 和至少一个模型 ID，
    返回主会话即可发消息；**New chat** 用于创建独立主题的会话。
 3. 在 **Settings → Web search** 配置 DeepSeek、智谱、豆包、Tavily 或 Brave Search，保存后点击 **Use provider** 选用。需要生图及其他 Gemini 媒体能力时，在插件市场安装并启用 **Gemini API CLI**，然后配置其 API Key。[供应商配置](docs/providers.md) · [插件连接](docs/plugin-account-setup.md#gemini-api-cli)
 
-可在账号页或「设置」选择简体中文或 English。浏览器会记住语言偏好。
+可在账号页或「设置」选择简体中文或 English。各客户端会记住语言偏好。
 
 新账号会自动安装并启用 **agent-browser** 和 **OfficeCLI**，安装期间可以先配置模型。后续登录复用安装结果，也不会恢复你已停用或卸载的插件；可在侧栏「插件市场」管理。插件包、原始 Skills、图标和教程由独立的[插件仓库](https://github.com/xyc999-ai/go-bot-plugins)发布；刷新市场即可发现新版本，无需重构 Host 镜像。
 
@@ -309,9 +324,18 @@ ECI 模式在上述命令前加 `GO_BOT_ENV_FILE=.env.eci` 选择配置。命令
 Compose 负责启动 Redis 和内嵌前端的已发布 Controller。Agent 使用的 Python、Node.js、Chromium 和通用文档环境已包含在 Host 镜像中。
 新账号会自动安装并启用 agent-browser 和 OfficeCLI，包括官方 CLI 依赖及 Skills；首次安装需要联网，后续可以通过插件市场管理。
 
+## 插件
+
+插件维护在独立的 [go-bot-plugins 仓库](https://github.com/xyc999-ai/go-bot-plugins)，
+包含插件包、展示资源、上游 Skills 和按版本发布的市场目录。插件发布独立于 Controller 和 Host 镜像，
+可在 Go Bot 的**插件市场**中安装并启用 agent-browser、OfficeCLI、Google Workspace、X、Gemini API CLI 等集成。
+
+新增集成或改进现有插件，请向插件仓库提交 PR。
+[插件贡献指南](CONTRIBUTING.md#contributing-plugins)说明了代码归属、包结构、版本规则和检查命令。
+
 ## 开发与扩展
 
-业务插件使用原生 Cordis 和异步 `ctx.host` 接口，可贡献工具、Skills、附加提示及接入凭证、授权和 MCP；Harness 核心仍由 Go 内置实现。[插件 SDK](extensions/sdk/README.md) · [示例](examples/plugins/README.md)
+**添加插件**：在 [go-bot-plugins](https://github.com/xyc999-ai/go-bot-plugins) 中使用原生 Cordis 和异步 `ctx.host` 接口，可贡献工具、Skills、附加提示及接入凭证、授权和 MCP；Harness 核心仍由 Go 内置实现。[插件 SDK](extensions/sdk/README.md) · [示例](examples/plugins/README.md) · [插件贡献](CONTRIBUTING.md#contributing-plugins)
 
 可以用 Host 已有工具组合工作流，也可以接入第三方服务。例如，旅行助手可以查询火车票和机票、
 对比酒店价格及取消条款，再整理成行程。若要实现预订，可接入供应商 API，并在下单前单独展示日期、
@@ -322,6 +346,14 @@ Compose 负责启动 Redis 和内嵌前端的已发布 Controller。Agent 使用
 - **定制产品入口。** 通过 HTTP 和 SSE 接入自己的聊天前端或消息渠道，由产品层处理账号认证、连接权限，以及预订和付款等操作的用户确认。 [API 文档](docs/api.md)
 
 [文档索引](docs/README.md) · [贡献指南](CONTRIBUTING.md) · [安全报告](SECURITY.md) · [MIT 许可证](LICENSE) · [第三方声明](THIRD_PARTY_NOTICES.md)
+
+## 支持与贡献
+
+如果 Go Bot 对你有帮助，欢迎在 [GitHub 上点一个 Star](https://github.com/xyc999-ai/go-bot)，让更多人发现这个项目。
+
+欢迎带着任何想法参与贡献：新功能、问题修复、插件、文档、翻译和使用示例都可以。
+可以直接提交 PR，无需先提 Issue。请参考[贡献指南](CONTRIBUTING.md)，
+也欢迎到[插件仓库](https://github.com/xyc999-ai/go-bot-plugins)贡献新的集成。
 
 ## 社区与联系
 
