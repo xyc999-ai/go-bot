@@ -155,7 +155,7 @@ docker compose up -d
    返回主会话即可发消息；**New chat** 用于创建独立主题的会话。
 3. 在 **Settings → Web search** 配置 DeepSeek、智谱、豆包、Tavily 或 Brave Search，保存后点击 **Use provider** 选用。需要生图及其他 Gemini 媒体能力时，在插件市场安装并启用 **Gemini API CLI**，然后配置其 API Key。[供应商配置](docs/providers.md) · [插件连接](docs/plugin-account-setup.md#gemini-api-cli)
 
-可在账号页或「设置」选择简体中文或 English。各客户端会记住语言偏好。
+网页端、桌面端和移动端统一支持英文、简体中文、繁体中文、西班牙语、日语、巴西葡萄牙语、法语、德语和韩语。可在账号页或「设置」中切换，各客户端会记住选择；首次启动匹配系统或浏览器的首个受支持语言，无法匹配时使用英文。
 
 新账号会自动安装并启用 **agent-browser** 和 **OfficeCLI**，安装期间可以先配置模型。后续登录复用安装结果，也不会恢复你已停用或卸载的插件；可在侧栏「插件市场」管理。插件包、原始 Skills、图标和教程由独立的[插件仓库](https://github.com/xyc999-ai/go-bot-plugins)发布；刷新市场即可发现新版本，无需重构 Host 镜像。
 

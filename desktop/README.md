@@ -281,3 +281,12 @@ Chat/composer widths follow in real time; double-click resets the width and
 keyboard arrows/Home/End provide fine control. Width persists independently
 from Web. The application and tray menus follow the in-app language immediately,
 including native role items such as Copy, Quit and Full Screen.
+
+## Interface languages
+
+Desktop shares nine interface languages with Web and mobile: English, Simplified
+and Traditional Chinese, Spanish, Japanese, Brazilian Portuguese, French, German
+and Korean. The first launch matches system language preferences; a manual choice
+is saved and also updates the application menu, tray and notifications. Unknown
+messages fall back to English. Chat content keeps its original language.
+See the [shared locale guide](../frontend/src/i18n/README.md) for translation changes.

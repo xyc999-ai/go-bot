@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"go-bot/internal/clientlocale"
 	"go-bot/internal/hostruntime"
 	"go-bot/internal/httpapi"
 	"net/http/httptest"
@@ -14,6 +15,41 @@ import (
 	"github.com/google/uuid"
 	sessionformat "go-bot/harness/session"
 )
+
+func TestMainWelcomeUsesChosenLanguageOnlyWhenCreated(t *testing.T) {
+	for _, language := range []string{"en", "zh-CN", "zh-TW", "es", "ja", "pt-BR", "fr", "de", "ko"} {
+		t.Run(language, func(t *testing.T) {
+			root, id := t.TempDir(), uuid.NewString()
+			claims := (&sessionformat.ProcessClaims{}).Acquire
+			if err := ensureMainJournal(t.Context(), root, id, language, claims); err != nil {
+				t.Fatal(err)
+			}
+			store := sessionformat.FileStore{Root: sessionLogRoot(root), ProjectCWD: defaultSessionWorkspace(root, id)}
+			artifact, err := store.ReadArtifact(t.Context(), id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var event struct {
+				Message struct{ Content []struct{ Text string } }
+			}
+			if err := json.Unmarshal(artifact.Events[1].Data, &event); err != nil {
+				t.Fatal(err)
+			}
+			if len(event.Message.Content) != 1 || event.Message.Content[0].Text != clientlocale.Welcome(language) {
+				t.Fatalf("wrong welcome for %s: %+v", language, event)
+			}
+			file, _ := store.Path(id)
+			before, _ := os.ReadFile(file)
+			if err := ensureMainJournal(t.Context(), root, id, "en", claims); err != nil {
+				t.Fatal(err)
+			}
+			after, _ := os.ReadFile(file)
+			if string(before) != string(after) {
+				t.Fatal("a later language choice rewrote the existing main chat")
+			}
+		})
+	}
+}
 
 func TestMainJournalWithoutModelIsAtomicAndReused(t *testing.T) {
 	root, id := t.TempDir(), uuid.NewString()

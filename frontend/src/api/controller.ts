@@ -134,7 +134,7 @@ export function saveSessionModel(userId: string, id: string, model: ModelSelecti
   return request<SessionModel>(sessionPath(id) + '/model', write('PUT', model), userId)
 }
 
-export function openAccount(userId: string, welcomeLocale: 'en' | 'zh-CN' = 'en') {
+export function openAccount(userId: string, welcomeLocale: string = 'en') {
   return request<{ mainSessionId: string }>('/v1/host/start', write('POST', { welcomeLocale }), userId)
 }
 

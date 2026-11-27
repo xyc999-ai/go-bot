@@ -103,7 +103,7 @@ export class Controller {
     return response.status === 204 ? undefined as T : await response.json() as T
   }
 
-  async connect(create = false, welcomeLocale: 'en' | 'zh-CN' = 'en') {
+  async connect(create = false, welcomeLocale: string = 'en') {
     await this.response('/readyz', undefined, 8000)
     if (create) {
       try { await this.request('/v1/accounts', json('POST', { userId: this.profile.account })) }

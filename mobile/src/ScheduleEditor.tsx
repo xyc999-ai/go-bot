@@ -4,6 +4,7 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { CalendarDays, ChevronDown, ChevronUp, Clock3 } from 'lucide-react-native'
 import { ApiError, Controller, type Schedule, type ScheduleCreate, type ScheduleKind, type ScheduleTarget } from './api'
 import { useLocale, type Language } from './locale'
+import { weekdayLabels, intervalLabel } from '../../frontend/src/i18n/format'
 import { automaticTaskTitle, initialScheduleForm, scheduleSubmission, ScheduleFormError, type ScheduleField, type ScheduleForm, type SimpleScheduleKind } from './scheduleForm'
 import { Button, Field, Hint, SheetScroll, accent, edge, glass, ink, muted, s, wash } from './ui'
 
@@ -25,8 +26,7 @@ export function scheduleError(error: unknown) {
   return '任务操作未完成，请重试。'
 }
 export function WeekdayLabels(language: Language) {
-  return Array.from({ length: 7 }, (_, index) => new Intl.DateTimeFormat(language, { weekday: 'short', timeZone: 'UTC' })
-    .format(new Date(Date.UTC(2026, 0, 5 + index))))
+  return weekdayLabels(language)
 }
 const kinds: { kind: SimpleScheduleKind; label: string }[] = [
   { kind: 'at', label: '仅一次' }, { kind: 'daily', label: '每天' }, { kind: 'weekly', label: '每周' }, { kind: 'every', label: '固定间隔' },
@@ -47,14 +47,13 @@ export function ScheduleEditor({ api, task, onSaved, onCancel }: {
     setForm(previous => ({ ...previous, ...patch, ...(timing && { timingChanged: true }) }))
     setFieldError(undefined); setError('')
   }
-  const locale = language === 'zh-CN' ? 'zh-CN' : 'en-US'
+  const locale = language
   const timeLabel = form.when.toLocaleTimeString(locale, { timeZone: form.zone, hour: '2-digit', minute: '2-digit', hour12: false })
   const dateLabel = form.when.toLocaleDateString(locale, { timeZone: form.zone, year: 'numeric', month: 'short', day: 'numeric' })
   const days = WeekdayLabels(language)
-  const intervalUnit = language === 'en' ? { minutes: 'minute', hours: 'hour', days: 'day' }[form.unit] + (Number(form.interval) === 1 ? '' : 's') : unitLabels[form.unit]
   const summary = form.kind === 'at' ? `${dateLabel} ${timeLabel}` : form.kind === 'daily' ? `${t('每天')} ${timeLabel}`
-    : form.kind === 'weekly' ? `${t('每周')} ${form.weekdays.slice().sort((a,b) => a-b).map(day => days[day - 1]).join(language === 'en' ? ', ' : '、')} ${timeLabel}`
-    : form.kind === 'every' ? `${t('每')} ${form.interval || '—'} ${intervalUnit}` : ''
+    : form.kind === 'weekly' ? `${t('每周')} ${form.weekdays.slice().sort((a,b) => a-b).map(day => days[day - 1]).join(' · ')} ${timeLabel}`
+    : form.kind === 'every' ? intervalLabel(language, Number(form.interval) || 0, { minutes: 'minute', hours: 'hour', days: 'day' }[form.unit] as 'minute' | 'hour' | 'day') : ''
   function chooseKind(kind: SimpleScheduleKind) {
     if (form.kind === kind) return
     setPicker(undefined)

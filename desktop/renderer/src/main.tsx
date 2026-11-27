@@ -5,4 +5,9 @@ import { ThemeProvider } from './layout/Theme'
 import '@fontsource-variable/inter/wght.css'
 import './styles/app.css'
 
-createRoot(document.getElementById('root')!).render(<LocaleProvider><ThemeProvider><DesktopRoot /></ThemeProvider></LocaleProvider>)
+const root = createRoot(document.getElementById('root')!)
+void window.desktop.configuration().then(configuration => {
+  root.render(<LocaleProvider initial={configuration.language}><ThemeProvider><DesktopRoot /></ThemeProvider></LocaleProvider>)
+}, () => {
+  root.render(<LocaleProvider><ThemeProvider><DesktopRoot /></ThemeProvider></LocaleProvider>)
+})

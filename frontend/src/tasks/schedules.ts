@@ -1,3 +1,5 @@
+import { weekdayLabels } from '../i18n/format.ts'
+
 export type Schedule = {
   record: { id: string; title: string; prompt: string; kind: 'after' | 'at' | 'every' | 'daily' | 'weekly' | 'cron' | 'rrule'; scheduledAt: string; time?: string; timeZone?: string; weekdays?: number[]; expression?: string; everySeconds?: number; rrule?: string }
   status: 'active' | 'paused' | 'ended'
@@ -25,7 +27,7 @@ export function scheduleRule(task: Schedule, language: string, t: (value: string
     return t('Every') + ' ' + seconds / unit[1] + ' ' + t(unit[0])
   }
   if (rule.kind === 'daily' || rule.kind === 'weekly') {
-    const dayNames = language === 'zh-CN' ? ['一', '二', '三', '四', '五', '六', '日'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    const dayNames = weekdayLabels(language)
     return [t(rule.kind === 'daily' ? 'Daily' : 'Weekly'), rule.weekdays?.map(day => dayNames[day - 1]).join(' · '), rule.time?.slice(0, 5)].filter(Boolean).join(' · ')
   }
   return t('Custom rule')

@@ -60,7 +60,9 @@
           "granularPermissions": []
         }
       ],
-      "expo-localization",
+      ["expo-localization", {
+        "supportedLocales": ["en", "zh-CN", "zh-TW", "es", "ja", "pt-BR", "fr", "de", "ko"]
+      }],
       "expo-video",
       "@react-native-community/datetimepicker"
     ],

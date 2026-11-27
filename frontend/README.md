@@ -20,7 +20,8 @@ account menu at the bottom for **Stop Host**. Use **File system** to browse the 
 copy its absolute path, or refresh the selected directory. The panel keeps
 its position when you switch chats.
 
-Choose **English** or **简体中文** on the account page or in the workspace header.
+Choose English, Simplified or Traditional Chinese, Spanish, Japanese, Brazilian
+Portuguese, French, German or Korean on the account page or in the workspace header.
 The preference is saved per browser. When no preference is saved, the app uses
 the first supported browser language, with English as the fallback. Messages
 and Agent responses keep their original language.

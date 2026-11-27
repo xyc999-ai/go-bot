@@ -11,23 +11,12 @@ import (
 	"go-bot/harness/agentpreset"
 	"go-bot/harness/assembly"
 	"go-bot/harness/session"
+	"go-bot/internal/clientlocale"
 	"go-bot/internal/durablefs"
 )
 
 func mainWelcome(locale string) string {
-	mediaName := "Gemini API CLI"
-	if locale == "zh-CN" {
-		text := "你好，我是 Go Bot，你的个人 AI 助手。\n\n日常事务或工作上的事情，都可以交给我一起处理：查找资料、操作浏览器，或者制作和编辑 Word、PPT、Excel 文件。你可以直接说想完成什么，我们再一起把细节理清楚。"
-		if mediaName != "" {
-			text += "\n\n想生成图片或视频？可以到插件市场安装并启用 **" + mediaName + "**，配置自己的 API Key 后再交给我处理。你也可以连接更多插件，扩展我能帮你做的事情。"
-		}
-		return text + "\n\n今天有什么想让我帮忙的？"
-	}
-	text := "Hi, I'm Go Bot, your personal AI assistant.\n\nI can help with everyday tasks and work—researching a topic, using the browser, or creating and editing Word documents, presentations, and spreadsheets. Tell me what you'd like to get done, and we can work through the details together."
-	if mediaName != "" {
-		text += "\n\nWant to create images or videos? Install and enable **" + mediaName + "** from the plugin market, then connect your own API key. You can connect more plugins whenever you want to expand what I can help with."
-	}
-	return text + "\n\nWhat would you like a hand with today?"
+	return clientlocale.Welcome(locale)
 }
 
 func ensureMainJournal(ctx context.Context, root, id, locale string, claim sessionformat.OwnerClaim, presetIDs ...string) error {

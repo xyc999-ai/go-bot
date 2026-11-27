@@ -21,6 +21,7 @@ __pycache__/
 *.env.*
 !/.env.example
 /.local/
+/desktop/electron/locales/
 /configs/local.yaml
 /.go-harness/
 controller.lock

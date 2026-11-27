@@ -3,6 +3,7 @@ import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } 
 import { CalendarDays, ChartNoAxesColumnIncreasing, ChevronRight, Clock3, FileText, FolderOpen, MessageSquare, Plus, Send, type LucideIcon } from 'lucide-react-native'
 import { Controller, problem, type Schedule, type ScheduleState } from './api'
 import { useLocale, type Language } from './locale'
+import { intervalLabel } from '../../frontend/src/i18n/format'
 import type { TranscriptCache } from '../../frontend/src/chat/transcriptCache'
 import { ScheduleEditor, WeekdayLabels, scheduleError, targetLabels, timingLabels } from './ScheduleEditor'
 import { accent, Button, Hint, IconButton, ink, muted, Panel, s, success, Sheet, SheetScroll, TintIcon, type PageChrome } from './ui'
@@ -22,7 +23,7 @@ function ruleSummary(task: Schedule, language: Language, t: (label: string) => s
   if (record.kind === 'every') {
     const seconds = record.everySeconds ?? 0
     const unit = seconds % 3600 === 0 ? ['小时', 3600] as const : seconds % 60 === 0 ? ['分钟', 60] as const : ['秒', 1] as const
-    return language === 'en' ? 'Every ' + seconds / unit[1] + ' ' + t(unit[0]) : '每 ' + seconds / unit[1] + ' ' + unit[0]
+    return intervalLabel(language, seconds / unit[1], unit[0] === '小时' ? 'hour' : unit[0] === '分钟' ? 'minute' : 'second')
   }
   if (record.kind === 'daily' || record.kind === 'weekly') {
     const days = record.weekdays?.map(day => WeekdayLabels(language)[day - 1]).join(' · ')

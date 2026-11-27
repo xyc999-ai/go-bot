@@ -1,6 +1,7 @@
 export type DesktopCommand = { type: 'new-chat' | 'resume' | 'navigate'; path?: string }
 import type { ClientIdentity } from '../clients/identity'
-export type Configuration = { controller: string; version: string; identity: ClientIdentity }
+import type { Language } from '../messages'
+export type Configuration = { controller: string; version: string; identity: ClientIdentity; language: Language }
 let device: ClientIdentity
 export function setDesktopIdentity(value: ClientIdentity) { device = value }
 export function desktopClientIdentity(): ClientIdentity { return device }
@@ -13,7 +14,7 @@ declare global {
   interface Window {
     desktop: {
       platform: string
-      setLanguage(value: 'en' | 'zh-CN'): Promise<void>
+      setLanguage(value: Language): Promise<void>
       configuration(): Promise<Configuration>
       notify(value: { sessionId: string; kind: 'approval' | 'question' | 'completed' }): Promise<boolean>
       onCommand(listener: (command: DesktopCommand) => void): () => void

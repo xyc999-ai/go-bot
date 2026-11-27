@@ -164,7 +164,7 @@ They share the account, model setup and chat flow below.
    and at least one model ID. Return to the main chat and send a message; **New chat** creates a separate conversation.
 3. For web search, save a key for DeepSeek, Zhipu, Doubao, Tavily, or Brave Search under **Settings → Web search**, then choose **Use provider**. For image generation and other Gemini media capabilities, install and enable **Gemini API CLI** in the plugin market and configure its API key. [Provider setup](docs/providers.md) · [Plugin connection](docs/plugin-account-setup.md#gemini-api-cli)
 
-Choose **English** or **简体中文** on the account page or in **Settings**. Each client remembers your choice.
+Choose English, Simplified or Traditional Chinese, Spanish, Japanese, Brazilian Portuguese, French, German or Korean on the account page or in **Settings**. Web, desktop and mobile share these languages and remember your choice. On first launch, the interface follows the first supported system/browser language, falling back to English.
 
 New accounts automatically install and enable **agent-browser** and **OfficeCLI**. First installation downloads their official CLI dependencies while you can configure your model. Later logins reuse the installation and respect plugins you disable or uninstall. Manage them from the sidebar **Plugin market**. Plugin packages, original Skills, icons and tutorials are published in the independent [plugin repository](https://github.com/xyc999-ai/go-bot-plugins). Refresh the market to discover newly published releases without rebuilding the Host image.
 

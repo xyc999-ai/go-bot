@@ -45,6 +45,7 @@ func TestMainStartWithoutLLMAndSendChecks(t *testing.T) {
 	revision := int64(0)
 	accepted := 0
 	prepared := ""
+	preparedLocale := ""
 	m := newTestManager(t, "docker", &fakeDriver{}, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case modelsettings.InternalPath:
@@ -57,9 +58,10 @@ func TestMainStartWithoutLLMAndSendChecks(t *testing.T) {
 				fmt.Fprintf(w, `{"revision":%d}`, revision)
 			}
 		case "/internal/host/sessions/main":
-			var input struct{ SessionID string }
+			var input struct{ SessionID, Locale string }
 			_ = json.NewDecoder(r.Body).Decode(&input)
 			prepared = input.SessionID
+			preparedLocale = input.Locale
 			w.WriteHeader(200)
 		default:
 			if strings.HasPrefix(r.URL.Path, modelsettings.ScheduledSelectionPrefix) {
@@ -87,6 +89,15 @@ func TestMainStartWithoutLLMAndSendChecks(t *testing.T) {
 	out := controllerCall(m, "POST", "/v1/host/start", "first", `{"welcomeLocale":"zh-CN"}`)
 	if out.Code != 200 || prepared != a.MainSessionID || !strings.Contains(out.Body.String(), a.MainSessionID) {
 		t.Fatalf("start: %d %s", out.Code, out.Body)
+	}
+	for _, language := range []string{"en", "zh-CN", "zh-TW", "es", "ja", "pt-BR", "fr", "de", "ko"} {
+		out := controllerCall(m, "POST", "/v1/host/start", "first", fmt.Sprintf(`{"welcomeLocale":%q}`, language))
+		if out.Code != 200 || preparedLocale != language {
+			t.Fatalf("locale %s was not forwarded: status %d, Host locale %s", language, out.Code, preparedLocale)
+		}
+	}
+	if out := controllerCall(m, "POST", "/v1/host/start", "first", `{"welcomeLocale":"invalid"}`); out.Code != 400 {
+		t.Fatalf("unsupported welcome locale: %d %s", out.Code, out.Body)
 	}
 	path := "/v1/sessions/" + a.MainSessionID + "/messages"
 	if got := controllerCall(m, "POST", path, "first", `{"content":"draft"}`); got.Code != 409 || accepted != 0 {

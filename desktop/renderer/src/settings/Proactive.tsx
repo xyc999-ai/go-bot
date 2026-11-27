@@ -14,7 +14,7 @@ export function Proactive({ userId, onModels }: { userId: string; onModels: () =
   const [modelIssue, setModelIssue] = useState('')
   const generation = useRef(0)
   const saving = useRef(false)
-  const date = (at: number) => new Date(at).toLocaleString(language === 'zh-CN' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const date = (at: number) => new Date(at).toLocaleString(language, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
   async function refresh(signal?: AbortSignal) {
     if (saving.current) return

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/google/uuid"
+	"go-bot/internal/clientlocale"
 	"go-bot/internal/modelsettings"
 	proactive "go-bot/internal/proactivesettings"
 	mcpconfig "go-bot/mcp"
@@ -217,7 +218,7 @@ func (m *Manager) hostHTTP(w http.ResponseWriter, r *http.Request, id string) {
 				return
 			}
 		}
-		if input.WelcomeLocale != "" && input.WelcomeLocale != "en" && input.WelcomeLocale != "zh-CN" {
+		if input.WelcomeLocale != "" && !clientlocale.Supported(input.WelcomeLocale) {
 			httpError(w, 400, "invalid_welcome_locale")
 			return
 		}
