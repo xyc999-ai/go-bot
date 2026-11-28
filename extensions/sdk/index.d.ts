@@ -46,7 +46,7 @@ export interface CredentialDescription { configured: boolean; kind?: CredentialR
 export interface CredentialSummary { key: string; kind: CredentialRecord['kind'] }
 export interface AuthorizationMethod { id: string; label: string }
 export interface AuthorizationNotice { message: string; url?: string; code?: string }
-export type AuthorizationPrompt = { kind: 'text' | 'secret'; message: string; placeholder?: string; webInput?: 'json-file' }
+export type AuthorizationPrompt = { kind: 'text' | 'secret'; message: string; placeholder?: string; webInput?: 'json-file'; loopback?: { authorizationUrl: string; redirectUri: string; state: string } }
   | { kind: 'select'; message: string; options: { id: string; label: string; description?: string }[] }
 export interface AuthorizationSession {
   readonly method: string; readonly signal: AbortSignal

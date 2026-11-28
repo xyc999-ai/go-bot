@@ -1,0 +1,58 @@
+const assert = require('node:assert/strict')
+const fs = require('node:fs/promises')
+const path = require('node:path')
+const os = require('node:os')
+const http = require('node:http')
+const { _electron } = require('playwright')
+const { startOAuthFixture } = require('./oauth-loopback-fixture.cjs')
+async function run() {
+ const fixture = await startOAuthFixture(), profile = await fs.mkdtemp(path.join(os.tmpdir(), 'gobot-oauth-smoke-'))
+ const output = path.resolve('../test-results/oauth'); await fs.mkdir(output, { recursive: true })
+ let app, page
+ try {
+  app = await _electron.launch({ args: [path.resolve('.')], env: { ...process.env, GOBOT_DESKTOP_USER_DATA: profile, GOBOT_DESKTOP_CONTROLLER: fixture.origin } })
+  page = await app.firstWindow(); page.setDefaultTimeout(15000)
+  await page.locator('input[autocomplete=username]').waitFor()
+  await page.locator('.language-picker select').selectOption('en')
+  await page.locator('input[autocomplete=username]').fill('oauth-fixture')
+  await page.locator('button.account-submit').click()
+  await page.getByRole('button', { name: 'Plugin market', exact: true }).click()
+  await page.getByText('OAuth receiver test', { exact: true }).first().click()
+  await page.locator('.extension-authorization-list summary').click()
+  await page.getByRole('button', { name: 'Connect account', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Continue in browser', exact: true }).waitFor()
+  assert.equal(await dialog.locator('input').count(), 0, 'native callback must not show manual paste')
+  // Replace only the OS browser opener; use the production Electron listener,
+  // preload IPC, UI and Controller answer API for the entire callback flow.
+  await app.evaluate(({ shell }) => { global.oauthOpened = []; shell.openExternal = async url => { global.oauthOpened.push(url) } })
+  await dialog.getByRole('button', { name: 'Continue in browser', exact: true }).click()
+  await page.waitForFunction(() => document.body.innerText.includes('Waiting for browser authorization…'))
+  const captured = await app.evaluate(() => global.oauthOpened[0]); assert.equal(captured, fixture.current.prompts[0].loopback.authorizationUrl)
+  const config = fixture.current.prompts[0].loopback
+  const callback = config.redirectUri + '?' + new URLSearchParams({ code: 'synthetic-code', state: config.state })
+  await new Promise((resolve, reject) => http.get(callback, res => { res.resume(); res.on('end', resolve) }).on('error', reject))
+  await dialog.getByText('Authorization is ready.', { exact: true }).waitFor()
+  assert.equal(fixture.answers.length, 1)
+  await page.screenshot({ path: path.join(output, 'desktop-authorized.png') })
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click()
+  await page.getByRole('button', { name: 'Authorize again', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Continue in browser', exact: true }).waitFor()
+  const oldId = fixture.current.id
+  await dialog.getByRole('button', { name: 'Cancel authorization', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Restart authorization', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Continue in browser', exact: true }).waitFor()
+  assert.notEqual(fixture.current.id, oldId)
+  fixture.failNextSubmission()
+  await dialog.getByRole('button', { name: 'Continue in browser', exact: true }).click()
+  await page.waitForFunction(() => document.body.innerText.includes('Waiting for browser authorization…'))
+  const next = fixture.current.prompts[0].loopback
+  await new Promise((resolve, reject) => http.get(next.redirectUri + '?' + new URLSearchParams({ code: 'synthetic-code', state: next.state }), res => { res.resume(); res.on('end', resolve) }).on('error', reject))
+  await dialog.getByRole('button', { name: 'Restart authorization', exact: true }).waitFor()
+  await dialog.getByText('Could not submit the callback. Start authorization again.', { exact: true }).waitFor()
+  await page.screenshot({ path: path.join(output, 'desktop-retry.png') })
+  assert.equal(fixture.answers.length, 1, 'failed submission must not appear authorized')
+  console.log('Desktop OAuth UI → production receiver → attempt/prompt submission passed; cancellation, retry, failed submission passed.')
+ } catch (error) { if (page) { await page.screenshot({path:path.join(output,'desktop-error.png')}); console.error((await page.locator('body').innerText()).slice(-4000)); console.error(fixture.events) }; throw error } finally { await app?.close(); await fixture.close(); await fs.rm(profile, { recursive: true, force: true }) }
+}
+run().catch(error => { console.error(error); process.exitCode = 1 })

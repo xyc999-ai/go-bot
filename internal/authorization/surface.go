@@ -3,6 +3,8 @@ package authorization
 import (
 	"context"
 	"encoding/json"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -83,6 +85,10 @@ func (s *Surface) copy(a *surfaceAttempt) View {
 			continue
 		}
 		copy := p.view
+		if copy.Loopback != nil {
+			value := *copy.Loopback
+			copy.Loopback = &value
+		}
 		copy.Options = append([]Option(nil), p.view.Options...)
 		v.Prompts = append(v.Prompts, copy)
 	}
@@ -183,6 +189,13 @@ func (s *Surface) prompt(ctx context.Context, a *surfaceAttempt, p Prompt) (stri
 	if (p.Kind != "text" && p.Kind != "secret" && p.Kind != "select") ||
 		(p.WebInput != "" && (p.WebInput != "json-file" || p.Kind == "select")) {
 		return "", failure("INVALID_PROMPT", "Unsupported authorization prompt")
+	}
+	if p.Loopback != nil {
+		if p.Kind != "text" || p.WebInput != "" || !validLoopback(*p.Loopback) {
+			return "", failure("INVALID_PROMPT", "Unsupported loopback authorization prompt")
+		}
+		value := *p.Loopback
+		p.Loopback = &value
 	}
 	pending := &pendingPrompt{PendingPrompt{uuid.NewString(), p}, make(chan answer, 1)}
 	s.mu.Lock()
@@ -323,4 +336,22 @@ func (s *Surface) removePrompt(a *surfaceAttempt, id string) {
 			break
 		}
 	}
+}
+
+func validLoopback(p Loopback) bool {
+	redirect, err := url.Parse(p.RedirectURI)
+	if err != nil || redirect.Scheme != "http" || redirect.User != nil || redirect.Port() == "" || redirect.RawQuery != "" || redirect.Fragment != "" {
+		return false
+	}
+	port, err := strconv.Atoi(redirect.Port())
+	if err != nil || port < 1 || port > 65535 {
+		return false
+	}
+	switch redirect.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+	default:
+		return false
+	}
+	login, err := url.Parse(p.AuthorizationURL)
+	return err == nil && login.Scheme == "https" && login.Hostname() != "" && login.User == nil && p.State != "" && len(login.Query()["redirect_uri"]) == 1 && login.Query().Get("redirect_uri") == p.RedirectURI && len(login.Query()["state"]) == 1 && login.Query().Get("state") == p.State
 }

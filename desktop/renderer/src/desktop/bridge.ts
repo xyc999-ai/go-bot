@@ -14,6 +14,7 @@ declare global {
   interface Window {
     desktop: {
       platform: string
+      oauth: import('../extensions/useLoopbackAuthorization').LoopbackReceiver
       setLanguage(value: Language): Promise<void>
       configuration(): Promise<Configuration>
       notify(value: { sessionId: string; kind: 'approval' | 'question' | 'completed' }): Promise<boolean>

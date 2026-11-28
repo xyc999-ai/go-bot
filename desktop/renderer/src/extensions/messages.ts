@@ -122,7 +122,7 @@ export const extensionChinese: Readonly<Record<string, string>> = {
   "Video guide": "视频指引",
   "Play video guide": "播放视频指引",
   "Could not load this video. Try again.": "无法加载视频，请重试。",
-  "Create your X Developer App and enable OAuth 2.0. Register http://localhost:8080/callback as its callback URL. API usage is billed to your developer account.": "创建自己的 X 开发者应用并启用 OAuth 2.0，登记回调地址 http://localhost:8080/callback。API 调用由你的开发者账户计费。",
+  "Create your X Developer App and enable OAuth 2.0. Register http://localhost:8082/callback as its callback URL. API usage is billed to your developer account.": "创建自己的 X 开发者应用并启用 OAuth 2.0，登记回调地址 http://localhost:8082/callback。API 调用由你的开发者账户计费。",
   "Enter your X app Client ID.": "填写你的 X 应用 Client ID。",
   'Native App (no Client Secret)': 'Native App（无需 Client Secret）',
   'Web App / confidential client': 'Web App／机密客户端',

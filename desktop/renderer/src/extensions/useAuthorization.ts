@@ -31,11 +31,12 @@ export function useAuthorization(api: AuthorizationAPI, cache: TranscriptCache) 
     return () => request.abort()
   }, [api, id, version, adopt])
   async function run(work: () => Promise<AuthorizationAttempt>, message: string, closeMissing = false) {
-    if (locked.current) return
+    if (locked.current) return false
     locked.current = true; setBusy(true); setError('')
     try {
       const next = await work()
       if (alive.current) { adopt(next); reload() }
+      return true
 
     } catch (error) {
       if (alive.current) {
@@ -43,6 +44,7 @@ export function useAuthorization(api: AuthorizationAPI, cache: TranscriptCache) 
         else setError(message)
         reload()
       }
+      return false
     }
     finally { locked.current = false; if (alive.current) setBusy(false) }
   }
@@ -74,7 +76,11 @@ export function useAuthorization(api: AuthorizationAPI, cache: TranscriptCache) 
     const value = current.current
     return value && run(() => api.cancel(value.id), 'Could not cancel authorization. Refresh to check the current state.', true)
   }
-  return { entries, attempt, error, busy, reload, start, answer, close, open, cancel, cancelKey, disconnect }
+  const restart = () => {
+    const value = current.current
+    return value && run(async () => { await api.cancelKey(value.key); return api.start(value.key, value.method) }, 'Could not start authorization. Refresh the account state and try again.')
+  }
+  return { entries, attempt, error, busy, reload, start, answer, close, open, cancel, cancelKey, disconnect, restart }
 
 }
 

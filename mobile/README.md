@@ -103,3 +103,24 @@ npx expo export --platform ios --platform android
 ```
 
 移动端与 Web 共用会话事件投影，并复用 [Controller HTTP API](../docs/api.md)。定时任务的状态、规则和历史由 [Host Schedule](../docs/schedule-parity-plan.zh-CN.md) 管理。设计参考与原型见 [设计说明](design/README.md)。
+
+### Plugin OAuth callback reception
+
+Native builds automatically link `modules/oauth-loopback`. Desktop and Mobile
+receive X/GWS callbacks locally and submit them through the Host authorization
+API. Web and Expo Go retain manual submission. Update the Host and clients together
+with these plugin versions so they can render the new callback prompt. The local module requires a new native build, not just a JS update.
+
+For local regressions, build the simulator app and run
+`node mobile/scripts/oauth-ios-smoke.cjs` from the repository root. Set
+`OAUTH_IOS_APP` if the `.app` lives elsewhere. This uses a booted **QA simulator**,
+sets its Go Bot connection to a synthetic local fixture, and requires CocoaPods'
+`xcodeproj` gem (`OAUTH_RUBY`/`OAUTH_GEM_HOME` can select its Ruby installation).
+No personal account or model is used.
+
+For Android, install the built APK on a dedicated emulator and run the local
+fixture with `node desktop/scripts/oauth-loopback-fixture.cjs`, then
+`node mobile/scripts/oauth-android-smoke.cjs`. The Android script intentionally
+clears Go Bot's data on the selected QA emulator (`OAUTH_ANDROID_SERIAL`, default
+`emulator-5580`); it refuses a physical-device serial. Both flows cover automatic
+submission, browser cancellation, retry and a root-path callback used by GWS.

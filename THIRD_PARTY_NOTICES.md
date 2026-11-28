@@ -178,3 +178,10 @@ SOFTWARE.
 https://github.com/expo/expo. Its original MIT notice is retained in the
 installed package and mobile dependency tree. It provides the native copy
 operation for Markdown table and code source.
+
+## Android OAuth browser
+
+The native mobile OAuth receiver uses AndroidX Browser 1.10.0 for system Custom
+Tabs, under Apache-2.0. Its upstream license is retained in the dependency AAR and is packaged in the
+Android app at `assets/licenses/androidx-browser.txt`.
+Project: https://developer.android.com/jetpack/androidx/releases/browser

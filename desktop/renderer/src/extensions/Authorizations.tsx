@@ -6,6 +6,7 @@ import { useLocale } from '../locale'
 import { authorizationLabel, authorizationURL, useAuthorization } from './useAuthorization'
 import { useReturnFocus } from './shared'
 import { readAuthorizationJSON } from './authorizationFile'
+import { useLoopbackAuthorization } from './useLoopbackAuthorization'
 import { useMCPAuthorization } from './useMCPAuthorization'
 import { authorizationEntryLabels, connectionLabel, connectionTitle, mcpAuthorizationLabel, mcpAuthorizationRunning } from './connections'
 
@@ -45,6 +46,7 @@ function AuthorizationRow({ entry, busy, onStart, onCancel, onView, onDisconnect
 function AuthorizationDialog({ state }: { state: ReturnType<typeof useAuthorization> }) {
   const { t } = useLocale(), dialog = useRef<HTMLDialogElement>(null)
   const attempt = state.attempt!
+  const local = useLoopbackAuthorization(state, window.desktop.oauth)
   useReturnFocus()
   useEffect(() => { dialog.current?.showModal(); dialog.current?.querySelector<HTMLInputElement>('input')?.focus() }, [])
   return <dialog ref={dialog} className="extension-auth-dialog" aria-labelledby="authorization-title" onCancel={event => { event.preventDefault(); void state.close() }} onClick={event => {
@@ -54,13 +56,15 @@ function AuthorizationDialog({ state }: { state: ReturnType<typeof useAuthorizat
   }}>
     <header className="extension-auth-heading"><KeyRound size={21} strokeWidth={1.6} /><div><h2 id="authorization-title">{attempt.label}</h2><p>{t(authorizationLabel[attempt.status])}</p></div><button type="button" className="extension-icon" aria-label={t('Close')} disabled={state.busy} onClick={() => { void state.close() }}><X size={19} /></button></header>
     <div className="extension-auth-content">
-      {attempt.notices.map((notice, index) => <div className="extension-auth-notice" key={index}><p>{t(notice.message)}</p>{attempt.status === 'running' && notice.code && <code tabIndex={0}>{notice.code}</code>}{attempt.status === 'running' && authorizationURL(notice.url) && <a href={authorizationURL(notice.url)} target="_blank" rel="noopener noreferrer">{t('Continue in browser')}<ExternalLink size={14} /></a>}</div>)}
-      {attempt.prompts.map(prompt => <AuthorizationQuestion key={prompt.id} prompt={prompt} busy={state.busy} onAnswer={(answer, decline) => { void state.answer(prompt.id, answer, decline) }} />)}
+      {attempt.notices.filter(notice => notice.url !== local.authorizationUrl || !notice.url).map((notice, index) => <div className="extension-auth-notice" key={index}><p>{t(notice.message)}</p>{attempt.status === 'running' && notice.code && <code tabIndex={0}>{notice.code}</code>}{attempt.status === 'running' && authorizationURL(notice.url) && <a href={authorizationURL(notice.url)} target="_blank" rel="noopener noreferrer">{t('Continue in browser')}<ExternalLink size={14} /></a>}</div>)}
+      {local.prompt && <div className="extension-auth-notice"><p>{t('Complete authorization in your browser. Go Bot will receive the result automatically.')}</p><button className="account-submit" type="button" disabled={state.busy || local.phase !== 'idle'} onClick={() => { void local.begin() }}>{local.phase === 'waiting' || local.phase === 'submitting' ? <LoaderCircle size={16} className="extension-auth-spinner" /> : <ExternalLink size={16} />}{t(local.phase === 'submitting' ? 'Submitting authorization…' : local.phase === 'waiting' ? 'Waiting for browser authorization…' : 'Continue in browser')}</button></div>}
+      {local.error && <p role="alert" className="extension-diagnostic">{t(local.error)}</p>}
+      {attempt.prompts.filter(prompt => prompt.id !== local.prompt?.id).map(prompt => <AuthorizationQuestion key={prompt.id} prompt={prompt} busy={state.busy} onAnswer={(answer, decline) => { void state.answer(prompt.id, answer, decline) }} />)}
       {attempt.status === 'running' && !attempt.prompts.length && <p className="extension-auth-wait" role="status"><LoaderCircle size={17} className="extension-auth-spinner" />{t('Waiting for authorization to finish…')}</p>}
       {attempt.status === 'authorized' && <p className="extension-auth-complete" role="status"><Check size={19} />{t('Authorization is ready.')}</p>}
       {attempt.status === 'running' && <p className="model-muted">{t('Closing this panel keeps the authorization running. You can return to it from this plugin.')}</p>}
       {(state.error || attempt.error) && <p role="alert" className="extension-diagnostic">{state.error ? t(state.error) : attempt.error ? t(attempt.error) : undefined}</p>}
-      <div className="extension-actions"><button className="model-secondary" type="button" disabled={state.busy} onClick={() => { if (attempt.status === 'running') void state.cancel(); else state.close() }}>{t(attempt.status === 'running' ? 'Cancel authorization' : 'Done')}</button><button type="button" className="extension-text" disabled={state.busy} onClick={state.reload}>{t('Refresh')}</button></div>
+      <div className="extension-actions">{(attempt.status === 'failed' || attempt.status === 'cancelled') && <button className="account-submit" type="button" disabled={state.busy} onClick={() => { void state.restart() }}>{t('Restart authorization')}</button>}<button className="model-secondary" type="button" disabled={state.busy} onClick={() => { if (attempt.status === 'running') void state.cancel(); else state.close() }}>{t(attempt.status === 'running' ? 'Cancel authorization' : 'Done')}</button><button type="button" className="extension-text" disabled={state.busy} onClick={state.reload}>{t('Refresh')}</button></div>
     </div>
   </dialog>
 }
@@ -70,6 +74,7 @@ function AuthorizationQuestion({ prompt, busy, onAnswer }: { prompt: Authorizati
   const jsonFile = prompt.kind !== 'select' && prompt.webInput === 'json-file'
   useEffect(() => { fields.current?.querySelector<HTMLElement>(jsonFile ? 'button' : 'input')?.focus() }, [])
   return <form className="extension-auth-question model-form" onSubmit={event => { event.preventDefault(); if (jsonFile) return; onAnswer(answer); setAnswer('') }}>
+    {prompt.kind === 'text' && prompt.loopback && authorizationURL(prompt.loopback.authorizationUrl) && <a href={authorizationURL(prompt.loopback.authorizationUrl)} target="_blank" rel="noopener noreferrer">{t('Continue in browser')}<ExternalLink size={14} /></a>}
     <fieldset ref={fields} disabled={busy || fileBusy}><legend>{t(jsonFile ? 'Select a JSON configuration file.' : prompt.message)}</legend>
       {jsonFile ? <div className="extension-auth-file">
         <Upload size={23} strokeWidth={1.5} /><p>{t('Choose the client JSON downloaded from your provider. It will be parsed and submitted automatically.')}</p>

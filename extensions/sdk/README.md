@@ -158,3 +158,14 @@ plugin assets, for example `/assets/plugins/x/account-setup.zh-CN.mp4`. Only
 publish a tutorial entry once its video exists and has been reviewed for exposed
 credentials. Web and mobile choose the local interface language, then English,
 then the first supplied tutorial. The clients do not hardcode provider media.
+
+### Native loopback authorization callbacks
+
+A `text` prompt can include `loopback: { authorizationUrl, redirectUri, state }`,
+using the values from the CLI's current login URL. Desktop and Mobile bind a
+temporary loopback receiver before opening the browser, validate the path/state,
+and submit the complete callback URL through the normal attempt/prompt answer
+API. Web retains the ordinary text prompt. The CLI still owns token exchange, refresh and persistence, including its
+existing PKCE implementation where provided. The receiver expires after five minutes and closes on
+cancel or panel disposal. Failed or cancelled attempts can be restarted with a
+fresh login URL. Do not put codes, callback answers or tokens in notices or logs.

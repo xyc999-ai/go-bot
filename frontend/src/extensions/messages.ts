@@ -1,5 +1,16 @@
 // Shared with Expo; Android's bundle inputs include this external source tree.
 export const extensionChinese: Readonly<Record<string, string>> = {
+  "Complete authorization in your browser. Go Bot will receive the result automatically.": "请在浏览器中完成授权，Go Bot 会自动接收结果。",
+  "Submitting authorization…": "正在提交授权…",
+  "Waiting for browser authorization…": "等待浏览器授权…",
+  "Restart authorization": "重新授权",
+  "The authorization port is already in use. Close the other authorization and try again.": "授权端口已被占用，请关闭其他授权后重试。",
+  "Authorization timed out. Start again to get a new login link.": "授权已超时，请重新开始以获取新的登录链接。",
+  "Access was denied. You can start authorization again.": "访问被拒绝，你可以重新发起授权。",
+  "Authorization was cancelled. You can start again.": "授权已取消，你可以重新开始。",
+  "Could not submit the callback. Start authorization again.": "回调提交失败，请重新授权。",
+  "Could not receive the authorization callback. Start authorization again.": "无法接收授权回调，请重新授权。",
+
   'Configure API Key': '配置 API Key', 'Update API Key': '更新 API Key', 'Remove API Key': '移除 API Key', 'Configured': '已配置',
   'Enter your Gemini API key from Google AI Studio.': '请输入从 Google AI Studio 获取的 Gemini API Key。',
   'Enter a valid Gemini API key without spaces or line breaks.': '请输入有效的 Gemini API Key，不要包含空格或换行。',
@@ -122,7 +133,7 @@ export const extensionChinese: Readonly<Record<string, string>> = {
   "Video guide": "视频指引",
   "Play video guide": "播放视频指引",
   "Could not load this video. Try again.": "无法加载视频，请重试。",
-  "Create your X Developer App and enable OAuth 2.0. Register http://localhost:8080/callback as its callback URL. API usage is billed to your developer account.": "创建自己的 X 开发者应用并启用 OAuth 2.0，登记回调地址 http://localhost:8080/callback。API 调用由你的开发者账户计费。",
+  "Create your X Developer App and enable OAuth 2.0. Register http://localhost:8082/callback as its callback URL. API usage is billed to your developer account.": "创建自己的 X 开发者应用并启用 OAuth 2.0，登记回调地址 http://localhost:8082/callback。API 调用由你的开发者账户计费。",
   "Enter your X app Client ID.": "填写你的 X 应用 Client ID。",
   'Native App (no Client Secret)': 'Native App（无需 Client Secret）',
   'Web App / confidential client': 'Web App／机密客户端',
