@@ -2193,6 +2193,14 @@ components:
               message: {type: string}
               placeholder: {type: string}
               webInput: {type: string, enum: [json-file], description: "Optional Web file chooser hint; native clients retain the declared text/secret input."}
+              loopback:
+                type: object
+                description: Optional native-client loopback receiver metadata for a text prompt. Web keeps manual submission; answers use the existing attempt/prompt endpoint.
+                required: [authorizationUrl, redirectUri, state]
+                properties:
+                  authorizationUrl: {type: string, format: uri}
+                  redirectUri: {type: string, format: uri, description: HTTP loopback URL with an explicit port}
+                  state: {type: string}
               options:
                 type: array
                 items:

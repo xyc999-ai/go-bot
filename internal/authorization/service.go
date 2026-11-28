@@ -32,12 +32,20 @@ type Option struct {
 	Label       string `json:"label"`
 	Description string `json:"description,omitempty"`
 }
+
+// Loopback describes a native-client receiver; CLI exchange remains on the Host.
+type Loopback struct {
+	AuthorizationURL string `json:"authorizationUrl"`
+	RedirectURI      string `json:"redirectUri"`
+	State            string `json:"state"`
+}
 type Prompt struct {
-	Kind        string   `json:"kind"`
-	Message     string   `json:"message"`
-	Placeholder string   `json:"placeholder,omitempty"`
-	WebInput    string   `json:"webInput,omitempty"`
-	Options     []Option `json:"options,omitempty"`
+	Kind        string    `json:"kind"`
+	Message     string    `json:"message"`
+	Placeholder string    `json:"placeholder,omitempty"`
+	WebInput    string    `json:"webInput,omitempty"`
+	Options     []Option  `json:"options,omitempty"`
+	Loopback    *Loopback `json:"loopback,omitempty"`
 }
 type Interaction struct {
 	Notify       func(context.Context, Notice) error

@@ -37,10 +37,15 @@ after the Host container is replaced. Redis and chat history do not store it.
 
 ## X
 
+Your X Developer App supplies the Client ID, permissions and billing identity.
+Go Bot, through xurl, is the software client performing authorization; you do not
+need Cursor or Grok. Their callback addresses in the X docs are examples for
+those products, not addresses to use with Go Bot.
+
 1. Open the [X Developer Console](https://developer.x.com/), create an app and
    enable OAuth 2.0 user authentication. Select the app permissions you need.
    Use **Native App (public client)** for the default connection flow.
-2. Register `http://localhost:8080/callback` exactly as a callback URL. Obtain your
+2. Register `http://localhost:8082/callback` exactly as a callback URL. Obtain your
    **Client ID**. A Native App is a public client and does not need a Secret.
    If you use a **Web App / confidential client**, obtain its **Client Secret**
    as well; this application type requires it.
@@ -54,7 +59,8 @@ after the Host container is replaced. Redis and chat history do not store it.
    only that method asks for a Client Secret. Use the method matching your saved
    application when authorizing again.
 4. Open the authorization link in your own browser, sign in to X and approve
-   access. Copy the **complete redirect URL** from the address bar into the panel,
+   access. Desktop and Mobile receive the callback automatically after **Continue in browser**.
+   On Web, copy the **complete redirect URL** from the address bar into the panel,
    even if its localhost page cannot open. Submit it immediately: X documents a
    **30-second authorization-code lifetime**. An expired/used code requires a new
    authorization attempt.
@@ -93,7 +99,8 @@ plugin's default permission request.
    only in your native Host directory; later connections reuse it.
 3. Choose read-only or read-and-write permissions. Open the link in your own
    browser, sign in to Google and approve access.
-4. Copy the complete localhost redirect URL from your browser address bar into
+4. Desktop and Mobile automatically receive the callback after **Continue in browser**.
+   On Web, copy the complete localhost redirect URL from your browser address bar into
    the panel, even if that local page cannot open.
 
 There is no shared project OAuth application. The plugin runs native
@@ -130,3 +137,13 @@ users may also revoke provider access from their X/Google account settings.
 Retrieved service content enters the Agent context and may be processed by the
 model provider selected by the user. Application credentials, callback answers and
 tokens collected in the authorization panel are not added to chat/model context.
+
+## Native callback retry
+
+Desktop and Mobile listen only on the current login link's loopback port, for up
+to five minutes. Closing the panel stops local reception. If authorization times
+out, the port is busy, access is denied, or callback submission fails, select
+**Restart authorization** to cancel the old CLI and create a fresh login link.
+Do not reuse an old code. Existing saved accounts are retained on cancellation.
+A native app build with the receiver is required; Web and Expo Go retain manual submission. Update the Host and clients together
+with these plugin versions. Existing X apps must register `http://localhost:8082/callback`.

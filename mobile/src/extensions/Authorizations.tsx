@@ -6,6 +6,8 @@ import { authorizationLabel, authorizationURL, useAuthorization } from '../../..
 import { useLocale } from '../locale'
 import { accent, Button, edge, Field, Hint, ink, muted, Panel, s, success } from '../ui'
 import { authorizationAPI, mcpAuthorizationAPI } from './api'
+import { useLoopbackAuthorization } from '../../../frontend/src/extensions/useLoopbackAuthorization'
+import { loopbackReceiver } from './loopbackReceiver'
 import { useMCPAuthorization } from '../../../frontend/src/extensions/useMCPAuthorization'
 import { authorizationEntryLabels, connectionLabel, connectionTitle, mcpAuthorizationLabel, mcpAuthorizationRunning } from '../../../frontend/src/extensions/connections'
 import { Choice } from './Choice'
@@ -23,19 +25,23 @@ export function usePluginAuthorizations({ api, cache }: Pick<ScreenProps, 'api' 
 }
 export function Authorizations({ connections, onBusyChange, onBack }: Pick<ScreenProps, 'onBusyChange'> & { connections: ReturnType<typeof usePluginAuthorizations>; onBack: () => void }) {
   const { state, mcp, entries, busy, reload } = connections, { t } = useLocale(), attempt = state.attempt
+  const local = useLoopbackAuthorization(state, loopbackReceiver)
   useEffect(() => { onBusyChange(busy); return () => onBusyChange(false) }, [busy, onBusyChange])
   return <>
     <Toolbar title={attempt ? attempt.label : mcp.selected ? connectionTitle(mcp.selected) : 'Accounts and authorization'} busy={busy} onBack={() => { if (attempt) state.close(); else if (mcp.attempt) mcp.close(); else onBack() }} onRefresh={reload} />
     {attempt ? <>
       <View style={a.status}><KeyRound size={19} color={muted} strokeWidth={1.6} /><Text style={s.meta}>{t(authorizationLabel[attempt.status])}</Text></View>
-      {attempt.notices.map((notice, index) => <Panel key={index} style={a.panel}>
+      {attempt.notices.filter(notice => notice.url !== local.authorizationUrl || !notice.url).map((notice, index) => <Panel key={index} style={a.panel}>
         <Text selectable style={a.message}>{t(notice.message)}</Text>
         {attempt.status === 'running' && notice.code && <Text selectable style={a.code}>{notice.code}</Text>}
         {attempt.status === 'running' && authorizationURL(notice.url) && <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(authorizationURL(notice.url)!).catch(() => {}) }} style={a.link}><Text style={a.linkText}>{t('Continue in browser')}</Text><ExternalLink size={15} color={accent} /></Pressable>}
       </Panel>)}
-      {attempt.prompts.map(prompt => <Question key={prompt.id} prompt={prompt} busy={state.busy} onAnswer={(answer, decline) => { void state.answer(prompt.id, answer, decline) }} />)}
+      {local.prompt && <Panel style={a.panel}><Text style={a.message}>{t('Complete authorization in your browser. Go Bot will receive the result automatically.')}</Text><Button primary label={t(local.phase === 'submitting' ? 'Submitting authorization…' : local.phase === 'waiting' ? 'Waiting for browser authorization…' : 'Continue in browser')} busy={local.phase === 'waiting' || local.phase === 'submitting'} disabled={state.busy || local.phase !== 'idle'} onPress={() => { void local.begin() }} /></Panel>}
+      <Hint error>{local.error ? t(local.error) : undefined}</Hint>
+      {attempt.prompts.filter(prompt => prompt.id !== local.prompt?.id).map(prompt => <Question key={prompt.id} prompt={prompt} busy={state.busy} onAnswer={(answer, decline) => { void state.answer(prompt.id, answer, decline) }} />)}
       {attempt.status === 'running' && !attempt.prompts.length && <View style={a.status}><ActivityIndicator color={accent} size="small" /><Text style={[s.meta, { flex: 1 }]}>{t('Waiting for authorization to finish…')}</Text></View>}
       {attempt.status === 'authorized' && <View style={a.status}><Check size={20} color={success} /><Text style={[s.body, { color: success, flex: 1 }]}>{t('Authorization is ready.')}</Text></View>}
+      {(attempt.status === 'failed' || attempt.status === 'cancelled') && <Button primary label={t('Restart authorization')} disabled={state.busy} onPress={() => { void state.restart() }} />}
       <Hint error>{attempt.error ? t(attempt.error) : undefined}</Hint><Button label={t(attempt.status === 'running' ? 'Cancel authorization' : 'Done')} disabled={state.busy} onPress={() => { if (attempt.status === 'running') void state.cancel(); else state.close() }} />
       {attempt.status === 'running' && <Hint>{t('Closing this panel keeps the authorization running. You can return to it from this plugin.')}</Hint>}
     </> : mcp.attempt && mcp.selected ? <MCPDetails state={mcp} /> : <>
@@ -75,6 +81,7 @@ function MCPDetails({ state }: { state: ReturnType<typeof useMCPAuthorization> }
 function Question({ prompt, busy, onAnswer }: { prompt: AuthorizationPrompt; busy: boolean; onAnswer: (answer?: string, decline?: boolean) => void }) {
   const { t } = useLocale(), [answer, setAnswer] = useState('')
   return <Panel style={a.panel}>
+    {prompt.kind === 'text' && prompt.loopback && authorizationURL(prompt.loopback.authorizationUrl) && <Pressable accessibilityRole="link" style={a.link} onPress={() => { void Linking.openURL(authorizationURL(prompt.loopback!.authorizationUrl)!).catch(() => {}) }}><Text style={a.linkText}>{t('Continue in browser')}</Text><ExternalLink size={15} color={accent} /></Pressable>}
     {prompt.kind === 'select' ? <>
       <Text style={a.question}>{t(prompt.message)}</Text>
       {prompt.options.map(option => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: answer === option.id, disabled: busy }} disabled={busy} onPress={() => setAnswer(option.id)} style={({ pressed }) => [a.option, answer === option.id && a.selected, pressed && s.pressed]}>

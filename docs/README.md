@@ -19,6 +19,8 @@
 
 ## Design documents
 
+- [Plugin OAuth callback reception](plugin-oauth-loopback-plan.zh-CN.md): native client reception, expiry and retry; Web keeps manual submission.
+
 Design documents describe responsibilities, data contracts and interactions. Their
 status notes distinguish implemented behavior from proposals. For current setup
 commands, use the guides above.

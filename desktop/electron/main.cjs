@@ -9,6 +9,7 @@ const installerStartup = require('./installer.cjs').installerStartup()
 if (process.env.GOBOT_DESKTOP_USER_DATA) app.setPath('userData', path.resolve(process.env.GOBOT_DESKTOP_USER_DATA))
 protocol.registerSchemesAsPrivileged([{ scheme: 'gobot', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }])
 
+const oauth = require('./oauth-loopback.cjs').createLoopbackReceiver({ openExternal: url => shell.openExternal(url) })
 let win, tray, config = {}, quitting = false
 let identity
 let language = 'en'
@@ -59,6 +60,8 @@ function updateMenus() {
 }
 
 function setupIPC() {
+  handle('desktop:oauth-open', (id, value) => oauth.open(id, value))
+  handle('desktop:oauth-cancel', id => oauth.cancel(id))
   handle('desktop:language', value => {
     if (!isLanguage(value)) throw new Error('Invalid language')
     if (value !== language) { language = value; config.language = value; persist(); updateMenus() }
@@ -90,6 +93,8 @@ function createWindow() {
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 12 } } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, backgroundThrottling: false },
   })
+  win.webContents.on('render-process-gone', () => { void oauth.cancel() })
+  win.webContents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if (mainFrame) void oauth.cancel() })
   win.webContents.setWindowOpenHandler(({ url }) => { openExternal(url); return { action: 'deny' } })
   win.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith(APP_ORIGIN + '/')) { event.preventDefault(); openExternal(url) }
@@ -106,7 +111,7 @@ function createWindow() {
 if (installerStartup || !app.requestSingleInstanceLock()) app.quit()
 else {
   app.on('second-instance', show)
-  app.on('before-quit', () => { quitting = true })
+  app.on('before-quit', () => { quitting = true; void oauth.cancel() })
   app.on('activate', show)
   // Closing a window never quits the app; only an explicit Quit does.
   app.on('window-all-closed', () => {})

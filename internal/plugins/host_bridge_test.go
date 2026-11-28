@@ -303,3 +303,26 @@ func TestHostBridgeCredentialQueriesUseActualStoreAndInstanceAddresses(t *testin
 		t.Fatal("remove did not update Go store", err)
 	}
 }
+
+func TestHostBridgePassesNativeLoopbackPromptToItsOwnAuthorization(t *testing.T) {
+	r := bridgeFixture(t, `export const inject=['host'];export async function apply(ctx){await ctx.host.authorization.register({key:'account',title:'Native account',methods:[{id:'oauth',label:'Connect'}],async run(session){const value=await session.prompt({kind:'text',message:'Paste callback',loopback:{authorizationUrl:'https://example.test/login?redirect_uri=http%3A%2F%2Flocalhost%3A8082%2Fcallback&state=one-state',redirectUri:'http://localhost:8082/callback',state:'one-state'}});if(value!=='http://localhost:8082/callback?code=fixture&state=one-state')throw Error('Wrong callback answer');await session.commit({kind:'grant',payload:{access_token:'synthetic-only'}})}})}`)
+	if _, err := r.Apply(t.Context(), []hostPluginInstance{{ID: "native-plugin", Package: "fixture", Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := r.config.Authorization.Begin(t.Context(), "native-plugin/account", "oauth", authorization.Interaction{Prompt: func(_ context.Context, p authorization.Prompt) (string, error) {
+		if p.Loopback == nil || p.Loopback.RedirectURI != "http://localhost:8082/callback" || p.Loopback.State != "one-state" {
+			t.Fatalf("native callback metadata lost: %+v", p)
+		}
+		return "http://localhost:8082/callback?code=fixture&state=one-state", nil
+	}})
+	if err != nil || result.Status != "authorized" {
+		t.Fatalf("native callback: %+v %v", result, err)
+	}
+	record, err := r.config.Credentials.ReadRecord("native-plugin/account")
+	if err != nil || record == nil {
+		t.Fatalf("grant missing: %v", err)
+	}
+	if other, _ := r.config.Credentials.ReadRecord("other-plugin/account"); other != nil {
+		t.Fatal("callback reached another plugin")
+	}
+}

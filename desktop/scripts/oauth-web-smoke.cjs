@@ -1,0 +1,31 @@
+const assert = require('node:assert/strict')
+const fs = require('node:fs/promises')
+const path = require('node:path')
+const { chromium } = require('playwright')
+const { startOAuthFixture } = require('./oauth-loopback-fixture.cjs')
+async function run() {
+ const fixture = await startOAuthFixture({ webRoot: path.resolve(__dirname, '../../frontend/dist') })
+ const browser = await chromium.launch({ channel: 'chrome', headless: true })
+ try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 960 } }); page.setDefaultTimeout(15000)
+  await page.goto(fixture.origin)
+  await page.locator('.language-picker select').selectOption('en')
+  await page.locator('input[autocomplete=username]').fill('oauth-fixture')
+  await page.locator('button.account-submit').click()
+  await page.getByRole('button', { name: 'Plugin market', exact: true }).click()
+  await page.getByText('OAuth receiver test', { exact: true }).first().click()
+  await page.locator('.extension-authorization-list summary').click()
+  await page.getByRole('button', { name: 'Connect account', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.locator('input').waitFor()
+  const config = fixture.current.prompts[0].loopback
+  assert.equal(await dialog.getByRole('link', {name:'Continue in browser'}).getAttribute('href'),config.authorizationUrl)
+  await dialog.locator('input').fill(config.redirectUri + '?' + new URLSearchParams({code:'synthetic-web-code',state:config.state}))
+  await dialog.getByRole('button', {name:'Continue',exact:true}).click()
+  await dialog.getByText('Authorization is ready.', {exact:true}).waitFor()
+  assert.equal(fixture.answers.length,1)
+  const out=path.resolve(__dirname,'../../test-results/oauth');await fs.mkdir(out,{recursive:true});await page.screenshot({path:path.join(out,'web-manual-authorized.png')})
+  console.log('Web retains its login link and manual callback form, and submits through the same attempt/prompt API.')
+ } finally {await browser.close();await fixture.close()}
+}
+run().catch(error=>{console.error(error);process.exitCode=1})

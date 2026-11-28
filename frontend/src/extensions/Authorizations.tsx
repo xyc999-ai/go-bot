@@ -60,7 +60,7 @@ function AuthorizationDialog({ state }: { state: ReturnType<typeof useAuthorizat
       {attempt.status === 'authorized' && <p className="extension-auth-complete" role="status"><Check size={19} />{t('Authorization is ready.')}</p>}
       {attempt.status === 'running' && <p className="model-muted">{t('Closing this panel keeps the authorization running. You can return to it from this plugin.')}</p>}
       {(state.error || attempt.error) && <p role="alert" className="extension-diagnostic">{state.error ? t(state.error) : attempt.error ? t(attempt.error) : undefined}</p>}
-      <div className="extension-actions"><button className="model-secondary" type="button" disabled={state.busy} onClick={() => { if (attempt.status === 'running') void state.cancel(); else state.close() }}>{t(attempt.status === 'running' ? 'Cancel authorization' : 'Done')}</button><button type="button" className="extension-text" disabled={state.busy} onClick={state.reload}>{t('Refresh')}</button></div>
+      <div className="extension-actions">{(attempt.status === 'failed' || attempt.status === 'cancelled') && <button className="account-submit" type="button" disabled={state.busy} onClick={() => { void state.restart() }}>{t('Restart authorization')}</button>}<button className="model-secondary" type="button" disabled={state.busy} onClick={() => { if (attempt.status === 'running') void state.cancel(); else state.close() }}>{t(attempt.status === 'running' ? 'Cancel authorization' : 'Done')}</button><button type="button" className="extension-text" disabled={state.busy} onClick={state.reload}>{t('Refresh')}</button></div>
     </div>
   </dialog>
 }
@@ -70,6 +70,7 @@ function AuthorizationQuestion({ prompt, busy, onAnswer }: { prompt: Authorizati
   const jsonFile = prompt.kind !== 'select' && prompt.webInput === 'json-file'
   useEffect(() => { fields.current?.querySelector<HTMLElement>(jsonFile ? 'button' : 'input')?.focus() }, [])
   return <form className="extension-auth-question model-form" onSubmit={event => { event.preventDefault(); if (jsonFile) return; onAnswer(answer); setAnswer('') }}>
+    {prompt.kind === 'text' && prompt.loopback && authorizationURL(prompt.loopback.authorizationUrl) && <a href={authorizationURL(prompt.loopback.authorizationUrl)} target="_blank" rel="noopener noreferrer">{t('Continue in browser')}<ExternalLink size={14} /></a>}
     <fieldset ref={fields} disabled={busy || fileBusy}><legend>{t(jsonFile ? 'Select a JSON configuration file.' : prompt.message)}</legend>
       {jsonFile ? <div className="extension-auth-file">
         <Upload size={23} strokeWidth={1.5} /><p>{t('Choose the client JSON downloaded from your provider. It will be parsed and submitted automatically.')}</p>

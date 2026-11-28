@@ -19,7 +19,7 @@ export const setPluginEnabled = (user: string, name: string, enabled: boolean) =
 export const restartPlugins = (user: string) => request<PluginView>('/v1/host/plugins/runtime/restart', body('POST'), user)
 
 export type AuthorizationEntry = { key: string; label: string; methods: { id: string; label: string }[]; inFlight: boolean; configured: boolean; canDisconnect?: boolean; accountLabel?: string; attemptId?: string; attemptStatus?: AuthorizationAttempt['status'] }
-export type AuthorizationPrompt = { id: string; message: string } & ({ kind: 'text' | 'secret'; placeholder?: string; webInput?: 'json-file' } | { kind: 'select'; options: { id: string; label: string; description?: string }[] })
+export type AuthorizationPrompt = { id: string; message: string } & ({ kind: 'text' | 'secret'; placeholder?: string; webInput?: 'json-file'; loopback?: { authorizationUrl: string; redirectUri: string; state: string } } | { kind: 'select'; options: { id: string; label: string; description?: string }[] })
 export type AuthorizationAttempt = { id: string; key: string; label: string; method: string; status: 'running' | 'authorized' | 'cancelled' | 'failed'; notices: { message: string; url?: string; code?: string }[]; prompts: AuthorizationPrompt[]; error?: string }
 export type AuthorizationAPI = {
   list(signal?: AbortSignal): Promise<AuthorizationEntry[]>

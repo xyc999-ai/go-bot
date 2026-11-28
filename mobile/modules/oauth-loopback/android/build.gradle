@@ -1,0 +1,9 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+group = 'com.gobot.oauth'
+version = '1.0.0'
+android { namespace 'com.gobot.oauth' }
+
+dependencies { implementation "androidx.browser:browser:1.10.0" }
